@@ -105,6 +105,18 @@ cofania bazy.
 
 Każda nowa migracja = też lokalna baza: `pnpm db:migrate` (inaczej lokalny `next dev` zwróci 500).
 
+## Pliki (załączniki)
+
+Bilety, rezerwacje i paragony leżą na wolumenie `planer_uploads` (`/data/uploads` w `planer-web`),
+po jednym katalogu na wyjazd. Obecny `/srv/scripts/backup.sh` robi tylko `pg_dumpall` — **pliki trzeba
+dopisać do kopii** (etap 8), np.:
+
+```bash
+docker run --rm -v planer_uploads:/data:ro -v /srv/data/backups:/out alpine tar czf /out/planer-uploads_$(date +%F).tar.gz -C /data .
+```
+
+Limit pliku: 20 MB (aplikacja), Cloudflare przepuszcza do 100 MB.
+
 ## Sprawdzenie
 
 ```bash
@@ -125,6 +137,7 @@ Oczekiwane: `migracje zastosowane`, w logu web `✓ Ready` bez `Error`.
 - Dwa telefony w tym samym wyjeździe: w nagłówku zielona kropka i awatar drugiej osoby; zmiana karty
   na jednym pojawia się na drugim w ciągu sekundy.
 - Chrome na telefonie → menu → „Zainstaluj aplikację”.
+- Karta → „+ plik” → PDF biletu; potem tryb samolotowy → ta sama karta → bilet się otwiera.
 
 ## Wycofanie [S]
 

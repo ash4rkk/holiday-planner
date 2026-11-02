@@ -30,6 +30,9 @@ FROM node:26-alpine AS web
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN addgroup -S planer && adduser -S planer -G planer
+# Katalog załączników (UPLOAD_DIR) należy do planer; pusty nazwany wolumen montowany tutaj
+# przejmuje właściciela z obrazu przy pierwszym montowaniu.
+RUN mkdir -p /data/uploads && chown planer:planer /data/uploads
 COPY --from=web-build --chown=planer:planer /repo/apps/web/.next/standalone ./
 COPY --from=web-build --chown=planer:planer /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=web-build --chown=planer:planer /repo/apps/web/public ./apps/web/public

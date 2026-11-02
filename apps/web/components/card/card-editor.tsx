@@ -9,14 +9,17 @@ import { type Editor, EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useEffect } from 'react'
 import type * as Y from 'yjs'
+import { takePendingMarkdown } from '@/lib/card-templates'
 import { useTrip } from '@/lib/yjs/trip-doc'
 
 /** WYSIWYG treści karty; stan żyje w Y.XmlFragment karty (współedycja w etapie 3 bez zmian tutaj). */
 export function CardEditor({
+  cardId,
   fragment,
   autoFocus,
   onEditor,
 }: {
+  cardId: string
   fragment: Y.XmlFragment
   autoFocus?: boolean
   onEditor?: (editor: Editor | null) => void
@@ -50,6 +53,16 @@ export function CardEditor({
     },
     [fragment, provider],
   )
+
+  // Nowa karta z szablonu: treść Markdown wchodzi przez parser Tiptapa prosto do fragmentu Yjs.
+  useEffect(() => {
+    if (!editor) return
+    const markdown = takePendingMarkdown(cardId)
+    if (markdown && fragment.length === 0) {
+      editor.commands.setContent(markdown, { contentType: 'markdown' })
+      editor.commands.focus('end')
+    }
+  }, [editor, cardId, fragment])
 
   useEffect(() => {
     onEditor?.(editor)

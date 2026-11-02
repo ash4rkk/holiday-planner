@@ -29,6 +29,11 @@ services:
     build: { context: ., target: web }
     image: planer-web:local
     container_name: planer-web
+    environment:
+      # Załączniki (bilety, rezerwacje, paragony) na wolumenie — przetrwają przebudowę obrazu.
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
     depends_on:
       migrate: { condition: service_completed_successfully }
     healthcheck:
@@ -80,4 +85,6 @@ networks:
     external: true
 
 volumes:
+  # Załączniki; nazwa na serwerze: planer_uploads. Do kopii zapasowej (docs/deploy.md).
+  uploads:
   pg-planer:

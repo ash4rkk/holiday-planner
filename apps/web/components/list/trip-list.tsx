@@ -28,13 +28,17 @@ import { useNavHidden } from '@/components/nav/nav-context'
 import { TopBar } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
+import { countByCard } from '@/lib/attachment-counts'
+import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
 import { useCardSheet } from '@/lib/use-card-sheet'
-import { useCards, useTrip } from '@/lib/yjs/trip-doc'
+import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function TripList() {
-  const { trip, doc, ready } = useTrip()
+  const { trip, doc, ready, templates } = useTrip()
   const cards = useCards()
+  const attachments = useAttachments()
+  const fileCounts = useMemo(() => countByCard(attachments), [attachments])
   const { openId, isNew, open, close } = useCardSheet()
   const [types, setTypes] = useState<Set<CardType>>(new Set())
   const [statuses, setStatuses] = useState<Set<CardStatus>>(new Set())
@@ -65,7 +69,9 @@ export function TripList() {
     update(next)
   }
 
-  const tile = (c: CardSnapshot) => <CardTile key={c.id} card={c} onOpen={() => open(c.id)} />
+  const tile = (c: CardSnapshot) => (
+    <CardTile key={c.id} card={c} files={fileCounts.get(c.id)} onOpen={() => open(c.id)} />
+  )
   const live = cards.filter((c) => !c.deletedAt).length
 
   return (
@@ -222,6 +228,8 @@ export function TripList() {
         <AddButton
           hidden={hidden}
           onNew={() => add()}
+          templates={templates}
+          onTemplate={(t) => open(createFromTemplate(doc, t), true)}
           onPaste={async () => {
             const id = await pasteAsCard(doc)
             if (id) open(id)

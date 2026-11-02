@@ -17,16 +17,17 @@ import {
 import { Pin, PinOff, SquarePen, Trash2 } from 'lucide-react'
 import { memo } from 'react'
 import { fieldsSummary } from '@/components/card/card-fields'
+import { CardMetaLine } from '@/components/card/card-tile'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { cx } from '@/components/ui'
 import { useBoard } from './board-context'
 import { useHoldDrag } from './use-hold-drag'
 
-export type CardNodeType = Node<{ card: CardSnapshot }, 'card'>
+export type CardNodeType = Node<{ card: CardSnapshot; files: number }, 'card'>
 
 export const CardNode = memo(function CardNode({
   id,
-  data: { card },
+  data: { card, files },
   selected,
 }: NodeProps<CardNodeType>) {
   const board = useBoard()
@@ -117,9 +118,7 @@ export const CardNode = memo(function CardNode({
             )}
           </div>
         )}
-        {card.location?.name && (
-          <span className="truncate text-xs text-subtle">⌖ {card.location.name}</span>
-        )}
+        <CardMetaLine card={card} files={files} />
         {card.preview && (
           <span className="line-clamp-3 text-[13px] leading-snug text-muted">{card.preview}</span>
         )}

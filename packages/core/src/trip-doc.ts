@@ -49,7 +49,10 @@ export function createCard(
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) card.set(key, value)
     }
-    const content = new Y.XmlFragment()
+    card.set('content', new Y.XmlFragment())
+    cards.set(id, card)
+    // Treść dopiero po dołączeniu do dokumentu (odczyt typu przed tym Yjs zgłasza jako błąd).
+    const content = card.get('content') as Y.XmlFragment
     for (const line of (text ?? '').split('\n').filter((l) => l.trim())) {
       const paragraph = new Y.XmlElement('paragraph')
       const t = new Y.XmlText()
@@ -57,8 +60,6 @@ export function createCard(
       paragraph.insert(0, [t])
       content.push([paragraph])
     }
-    card.set('content', content)
-    cards.set(id, card)
   })
   return id
 }

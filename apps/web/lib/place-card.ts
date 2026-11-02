@@ -1,4 +1,4 @@
-import { type CardType, createCard } from '@planer/core'
+import { type CardType, createCard, findUrls, type LinkPreview } from '@planer/core'
 import type * as Y from 'yjs'
 
 export type Place = {
@@ -61,5 +61,28 @@ export async function pasteAsCard(
   if (!text) return null
   const place = await resolvePastedPlace(text).catch(() => null)
   if (place) return createPlaceCard(doc, place, at)
+  const url = findUrls(text)[0]
+  if (url) return createLinkCard(doc, url, at)
   return createCard(doc, { type: 'note', ...at }, new Date(), text)
+}
+
+/** Karta z linku: podgląd Open Graph z serwera (bez sieci — sam adres, podgląd przy następnej okazji). */
+export async function createLinkCard(
+  doc: Y.Doc,
+  url: string,
+  at?: { x: number; y: number },
+): Promise<string> {
+  const preview: LinkPreview = await fetch('/api/link-preview', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+    .then((r): Promise<LinkPreview> | LinkPreview => (r.ok ? r.json() : { url }))
+    .catch((): LinkPreview => ({ url }))
+  return createCard(
+    doc,
+    { type: 'note', linkPreview: preview, ...at },
+    new Date(),
+    [preview.title ?? new URL(url).hostname, preview.description].filter(Boolean).join('\n'),
+  )
 }

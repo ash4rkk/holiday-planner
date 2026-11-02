@@ -1,6 +1,12 @@
 /// <reference lib="webworker" />
 import { defaultCache } from '@serwist/turbopack/worker'
-import { type PrecacheEntry, Serwist, type SerwistGlobalConfig } from 'serwist'
+import {
+  CacheableResponsePlugin,
+  CacheFirst,
+  type PrecacheEntry,
+  Serwist,
+  type SerwistGlobalConfig,
+} from 'serwist'
 import { randomId, shareStore } from '../lib/share-store'
 
 // Service worker Planera: precache zasobów builda, strony i dane RSC odwiedzonych ekranów
@@ -19,7 +25,19 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: defaultCache,
+  runtimeCaching: [
+    // Załączniki są niezmienne (nowa wersja = nowe id): z pamięci, sieć tylko za pierwszym razem.
+    // Tę samą pamięć wypełnia z góry lib/offline-files.ts. Tylko 200 — przekierowanie Access nie trafi do cache.
+    {
+      matcher: ({ url, sameOrigin }) =>
+        sameOrigin && /^\/api\/attachments\/[0-9a-f-]{36}$/.test(url.pathname),
+      handler: new CacheFirst({
+        cacheName: 'attachments',
+        plugins: [new CacheableResponsePlugin({ statuses: [200] })],
+      }),
+    },
+    ...defaultCache,
+  ],
   fallbacks: {
     entries: [{ url: '/offline', matcher: ({ request }) => request.destination === 'document' }],
   },

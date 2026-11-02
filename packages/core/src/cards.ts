@@ -26,6 +26,15 @@ export type CardLocation = {
   mapsUrl?: string
 }
 
+/** Podgląd linku (Open Graph) dla kart z wklejonego adresu. */
+export type LinkPreview = {
+  url: string
+  title?: string
+  description?: string
+  image?: string
+  siteName?: string
+}
+
 /** Pola karty trzymane w Y.Map (poza treścią, która jest Y.XmlFragment pod kluczem `content`). */
 export type CardFields = {
   type: CardType
@@ -41,6 +50,7 @@ export type CardFields = {
   remindMin?: number
   status?: CardStatus
   location?: CardLocation
+  linkPreview?: LinkPreview
   attachmentIds: string[]
   pinned: boolean
   templateId?: string
@@ -61,6 +71,8 @@ export type EditableCardFields = Pick<
   | 'remindMin'
   | 'status'
   | 'location'
+  | 'linkPreview'
+  | 'templateId'
   | 'pinned'
 >
 

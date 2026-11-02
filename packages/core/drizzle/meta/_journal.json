@@ -22,6 +22,13 @@
       "when": 1793647412406,
       "tag": "0002_first_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793648246727,
+      "tag": "0003_even_zodiak",
+      "breakpoints": true
     }
   ]
 }

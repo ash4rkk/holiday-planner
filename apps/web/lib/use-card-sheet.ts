@@ -10,6 +10,8 @@ import { useRef, useState } from 'react'
  * Natywne history.pushState zamiast routera Next: zmiana parametru nie idzie do serwera, więc
  * karty otwierają się także offline (Next synchronizuje to z useSearchParams).
  */
+let pendingBack: Promise<void> = Promise.resolve()
+
 export function useCardSheet() {
   const pathname = usePathname()
   const openId = useSearchParams().get('card')
@@ -18,14 +20,23 @@ export function useCardSheet() {
 
   const open = (id: string, isNew = false) => {
     if (isNew) setNewId(id)
-    openedHere.current = true
-    window.history.pushState(null, '', `${pathname}?card=${encodeURIComponent(id)}`)
+    // history.back() z zamknięcia kończy się asynchronicznie — gdyby nowa karta weszła wcześniej,
+    // spóźnione „wstecz” zdjęłoby właśnie ją.
+    void pendingBack.then(() => {
+      openedHere.current = true
+      window.history.pushState(null, '', `${pathname}?card=${encodeURIComponent(id)}`)
+    })
   }
 
   const close = () => {
     setNewId(null)
     if (openedHere.current) {
       openedHere.current = false
+      pendingBack = new Promise<void>((resolve) => {
+        window.addEventListener('popstate', () => resolve(), { once: true })
+        // Zapas, gdyby popstate nie przyszło (np. brak wpisu w historii).
+        setTimeout(resolve, 500)
+      })
       window.history.back()
     } else window.history.replaceState(null, '', pathname)
   }

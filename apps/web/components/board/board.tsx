@@ -40,9 +40,11 @@ import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
+import { countByCard } from '@/lib/attachment-counts'
+import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
 import { useCardSheet } from '@/lib/use-card-sheet'
-import { useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
+import { useAttachments, useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
 import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
 import { CardNode } from './card-node'
 import { FrameNode } from './frame-node'
@@ -71,7 +73,7 @@ function readViewport(tripId: string): Viewport | undefined {
 }
 
 function BoardCanvas() {
-  const { trip, doc, ready, provider } = useTrip()
+  const { trip, doc, ready, provider, templates } = useTrip()
   const cards = useCards()
   const frames = useFrames()
   const edges = useEdges()
@@ -93,6 +95,8 @@ function BoardCanvas() {
   } | null>(null)
 
   const live = useMemo(() => cards.filter((c) => !c.deletedAt), [cards])
+  const attachments = useAttachments()
+  const fileCounts = useMemo(() => countByCard(attachments), [attachments])
 
   // Węzły z dokumentu; zachowują zmierzone rozmiary, a przeciągane — lokalną pozycję.
   useEffect(() => {
@@ -123,7 +127,7 @@ function BoardCanvas() {
             zIndex: 1,
             selectable: false,
             draggable: false,
-            data: { card: c },
+            data: { card: c, files: fileCounts.get(c.id) ?? 0 },
           }),
         ),
       ]
@@ -143,7 +147,7 @@ function BoardCanvas() {
         }
       })
     })
-  }, [live, frames])
+  }, [live, frames, fileCounts])
 
   const shownNodes = useMemo(
     () =>
@@ -457,6 +461,10 @@ function BoardCanvas() {
 
         <AddButton
           onNew={() => addCard(viewportCenter())}
+          templates={templates}
+          onTemplate={(t) =>
+            sheet.open(createFromTemplate(doc, t, centered(viewportCenter())), true)
+          }
           onPaste={async () => {
             const id = await pasteAsCard(doc, centered(viewportCenter()))
             if (id) setSelection({ kind: 'card', id })

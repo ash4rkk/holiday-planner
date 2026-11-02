@@ -1,9 +1,19 @@
 import { CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot } from '@planer/core'
+import { Paperclip } from 'lucide-react'
 import { cx } from '@/components/ui'
 import { fieldsSummary } from './card-fields'
 import { TYPE_STYLE } from './type-style'
 
-export function CardTile({ card, onOpen }: { card: CardSnapshot; onOpen: () => void }) {
+export function CardTile({
+  card,
+  files = 0,
+  onOpen,
+}: {
+  card: CardSnapshot
+  /** Liczba załączników karty. */
+  files?: number
+  onOpen: () => void
+}) {
   const style = TYPE_STYLE[card.type]
   const Icon = style.icon
   const summary = fieldsSummary(card)
@@ -53,17 +63,52 @@ export function CardTile({ card, onOpen }: { card: CardSnapshot; onOpen: () => v
             </span>
           )}
         </span>
-        {(summary || card.location?.name) && (
-          <span className="truncate text-xs text-subtle italic">
-            {[summary, card.location?.name && `⌖ ${card.location.name}`]
-              .filter(Boolean)
-              .join(' · ')}
-          </span>
-        )}
+        <CardMetaLine card={card} summary={summary} files={files} />
         {card.preview && (
           <span className="line-clamp-2 text-[13px] text-muted">{card.preview}</span>
         )}
       </span>
     </button>
   )
+}
+
+/** Wiersz metadanych: godzina i czas, miejsce, domena linku, liczba plików. */
+export function CardMetaLine({
+  card,
+  summary,
+  files,
+}: {
+  card: CardSnapshot
+  summary?: string
+  files: number
+}) {
+  const domain = card.linkPreview?.url && hostOf(card.linkPreview.url)
+  const parts = [
+    summary,
+    card.location?.name && `⌖ ${card.location.name}`,
+    domain && `↗ ${domain}`,
+  ].filter(Boolean)
+  if (!parts.length && !files) return null
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 text-xs text-subtle italic">
+      <span className="truncate">{parts.join(' · ')}</span>
+      {files > 0 && (
+        <span
+          className="flex shrink-0 items-center gap-0.5 text-teal not-italic"
+          title={`załączniki: ${files}`}
+        >
+          <Paperclip className="size-3" aria-hidden="true" />
+          {files}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return undefined
+  }
 }

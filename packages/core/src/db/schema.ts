@@ -4,6 +4,8 @@ import {
   date,
   doublePrecision,
   index,
+  integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -69,8 +71,42 @@ export const inboxItems = pgTable(
   (t) => [index('inbox_items_trip_idx').on(t.tripId, t.usedAt)],
 )
 
+/** Pliki wyjazdu (bilety, rezerwacje, paragony) na dysku serwera; metadane widzi też dokument Yjs. */
+export const attachments = pgTable(
+  'attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    filename: text('filename').notNull(),
+    mime: text('mime').notNull(),
+    size: integer('size').notNull(),
+    // Ścieżka względem UPLOAD_DIR: <tripId>/<id>
+    path: text('path').notNull(),
+    sha256: text('sha256').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('attachments_trip_sha_idx').on(t.tripId, t.sha256)],
+)
+
+/** Szablony kart, np. „Lot” z polami na numer i terminal. Treść w Markdown. */
+export const cardTemplates = pgTable('card_templates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  type: text('type').notNull(),
+  markdown: text('markdown').notNull(),
+  // Pola karty ustawiane przy tworzeniu, np. { "remindMin": 180, "status": "booked" }
+  defaultFields: jsonb('default_fields').$type<Record<string, unknown>>().notNull().default({}),
+  sortOrder: integer('sort_order').notNull().default(100),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Trip = typeof trips.$inferSelect
 export type NewTrip = typeof trips.$inferInsert
 export type InboxItem = typeof inboxItems.$inferSelect
+export type Attachment = typeof attachments.$inferSelect
+export type CardTemplate = typeof cardTemplates.$inferSelect

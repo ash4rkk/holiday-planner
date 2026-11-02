@@ -10,7 +10,13 @@ export function OutboxFlusher() {
   useEffect(() => {
     const flush = () =>
       void flushOutbox()
-        .then((sent) => sent > 0 && router.refresh())
+        // Bez odświeżania przy otwartej karcie (?card=) — psuje to późniejsze zmiany adresu przez history API.
+        .then(
+          (sent) =>
+            sent > 0 &&
+            !new URLSearchParams(window.location.search).has('card') &&
+            router.refresh(),
+        )
         .catch(() => {})
     flush()
     window.addEventListener('online', flush)

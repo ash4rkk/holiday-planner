@@ -1,5 +1,6 @@
 import { daysBetween, todayLocal } from '@planer/core'
 import Link from 'next/link'
+import { OfflinePrefetch } from '@/components/offline-prefetch'
 import { TopBar } from '@/components/top-bar'
 import { TripRow } from '@/components/trips/trip-row'
 import { buttonClass, SectionLabel } from '@/components/ui'
@@ -29,6 +30,8 @@ export default async function PulpitPage() {
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
       <TopBar title="dziś" subtitle={header} />
+      {/* Bilety trwającego albo najbliższego wyjazdu mają być na telefonie bez czekania. */}
+      <OfflinePrefetch tripId={(now ?? next)?.id} />
 
       <section className="island border-t-2 border-t-accent p-4">
         <p className="text-xl font-bold">cześć, {user.name}</p>

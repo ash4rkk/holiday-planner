@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: fileURLToPath(new URL('../..', import.meta.url)),
   transpilePackages: ['@planer/core'],
   poweredByHeader: false,
+  // proxy.ts buforuje ciało żądania; uploady plików do 20 MB (lib/attachments.ts).
+  experimental: { proxyClientMaxBodySize: '21mb' },
 }
 
 export default withSerwist(nextConfig)

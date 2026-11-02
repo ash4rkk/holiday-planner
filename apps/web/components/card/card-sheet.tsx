@@ -3,6 +3,7 @@
 import {
   CARD_TYPE_LABELS,
   CARD_TYPES,
+  type CardSnapshot,
   cardsOf,
   contentOf,
   type EditableCardFields,
@@ -13,11 +14,13 @@ import {
 import type { Editor } from '@tiptap/react'
 import { ChevronDown, Pin, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { CardAttachments } from '@/components/attachments/card-attachments'
 import { cx } from '@/components/ui'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { CardEditor } from './card-editor'
 import { CardFields } from './card-fields'
 import { FormatToolbar } from './format-toolbar'
+import { LinkPreviewBlock } from './link-preview'
 import { TYPE_STYLE } from './type-style'
 
 /** Pełnoekranowy arkusz edycji karty. Pusta karta (bez treści i pól) znika przy zamknięciu. */
@@ -130,13 +133,66 @@ export function CardSheet({
         >
           <div className={cx('h-0.5', TYPE_STYLE[card.type].bar)} />
           <CardFields card={card} onChange={change} />
+          {card.linkPreview && <LinkPreviewBlock preview={card.linkPreview} />}
+          <CardAttachments cardId={cardId} />
           <div className="border-t border-line">
-            <CardEditor fragment={contentOf(cardMap)} autoFocus={isNew} onEditor={setEditor} />
+            <CardEditor
+              cardId={cardId}
+              fragment={contentOf(cardMap)}
+              autoFocus={isNew}
+              onEditor={setEditor}
+            />
           </div>
         </div>
+        <SaveAsTemplate card={card} editor={editor} />
       </div>
 
       {editor && <FormatToolbar editor={editor} />}
     </div>
+  )
+}
+
+/** „Zapisz jako szablon”: treść karty jako Markdown + typ i część pól (bez dat i miejsca). */
+function SaveAsTemplate({ card, editor }: { card: CardSnapshot; editor: Editor | null }) {
+  const { addTemplate } = useTrip()
+  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  if (!editor) return null
+
+  const save = async () => {
+    const name = window.prompt('nazwa szablonu', card.title || 'szablon')?.trim()
+    if (!name) return
+    setState('saving')
+    const res = await fetch('/api/templates', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        type: card.type,
+        markdown: editor.getMarkdown(),
+        defaultFields: {
+          ...(card.remindMin && { remindMin: card.remindMin }),
+          ...(card.durationMin && { durationMin: card.durationMin }),
+          ...(card.status && { status: card.status }),
+        },
+      }),
+    }).catch(() => null)
+    setState(res?.ok ? 'saved' : 'error')
+    // Bez router.refresh: przy otwartej karcie (?card=) psuje późniejsze zmiany adresu przez history API.
+    if (res?.ok) addTemplate(await res.json())
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={save}
+      disabled={state === 'saving'}
+      className="mt-2 min-h-11 px-3 text-xs text-subtle italic hover:text-accent"
+    >
+      {state === 'saved'
+        ? '• zapisano jako szablon'
+        : state === 'error'
+          ? '● nie udało się zapisać szablonu'
+          : 'zapisz jako szablon ›'}
+    </button>
   )
 }

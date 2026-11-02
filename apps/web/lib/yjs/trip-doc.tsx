@@ -2,10 +2,12 @@
 
 import { HocuspocusProvider, WebSocketStatus } from '@hocuspocus/provider'
 import {
+  type AttachmentMeta,
   type CardSnapshot,
   type EdgeSnapshot,
   type FrameSnapshot,
   purgeTrash,
+  readAttachments,
   readCards,
   readEdges,
   readFrames,
@@ -20,6 +22,8 @@ import {
 } from 'react'
 import { IndexeddbPersistence } from 'y-indexeddb'
 import * as Y from 'yjs'
+import { OfflinePrefetch } from '@/components/offline-prefetch'
+import type { Template } from '@/lib/card-templates'
 
 // Jeden dokument Yjs na wyjazd: kopia w IndexedDB urządzenia (pełna praca offline) i sync na żywo
 // przez WebSocket z serwerem Hocuspocus (apps/sync). Dokumenty i połączenia żyją przez całą sesję,
@@ -120,6 +124,8 @@ export type TripMeta = {
   archived: boolean
   /** Miejsca w skrzynce do rozdzielenia (z serwera przy renderze). */
   inboxCount: number
+  /** Szablony kart (z serwera; w zapisanej stronie działają też offline). */
+  templates: Template[]
 }
 
 type Ctx = {
@@ -128,6 +134,9 @@ type Ctx = {
   doc: Y.Doc
   provider: HocuspocusProvider | null
   ready: boolean
+  /** Szablony kart: z serwera plus zapisane w tej sesji (bez router.refresh przy otwartej karcie). */
+  templates: Template[]
+  addTemplate: (t: Template) => void
 }
 const TripContext = createContext<Ctx | null>(null)
 
@@ -153,12 +162,24 @@ export function TripProvider({
     }
   }, [entry])
 
+  const [templates, setTemplates] = useState(trip.templates)
+  useEffect(() => setTemplates(trip.templates), [trip.templates])
+
   // Na serwerze (SSR) pusty dokument; prawdziwy powstaje dopiero w przeglądarce.
   const [ssrDoc] = useState(() => new Y.Doc())
   return (
     <TripContext.Provider
-      value={{ trip, user, doc: entry?.doc ?? ssrDoc, provider: entry?.provider ?? null, ready }}
+      value={{
+        trip,
+        user,
+        doc: entry?.doc ?? ssrDoc,
+        provider: entry?.provider ?? null,
+        ready,
+        templates,
+        addTemplate: (t) => setTemplates((list) => [...list, t]),
+      }}
     >
+      <OfflinePrefetch tripId={trip.id} />
       {children}
     </TripContext.Provider>
   )
@@ -205,8 +226,13 @@ export function usePresence<T = Record<string, unknown>>(): (T & { clientId: num
 
 // Migawki map dokumentu (karty, ramki, strzałki) przeliczane przy zmianie; ta sama referencja
 // między zmianami, więc useSyncExternalStore nie renderuje bez potrzeby.
-type Key = 'cards' | 'frames' | 'edges'
-const READERS = { cards: readCards, frames: readFrames, edges: readEdges }
+type Key = 'cards' | 'frames' | 'edges' | 'attachments'
+const READERS = {
+  cards: readCards,
+  frames: readFrames,
+  edges: readEdges,
+  attachments: readAttachments,
+}
 const snapshots = new WeakMap<Y.Doc, Partial<Record<Key, unknown>>>()
 const EMPTY: never[] = []
 
@@ -250,4 +276,8 @@ export function useFrames(): FrameSnapshot[] {
 
 export function useEdges(): EdgeSnapshot[] {
   return useDocMap('edges')
+}
+
+export function useAttachments(): AttachmentMeta[] {
+  return useDocMap('attachments')
 }
