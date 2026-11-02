@@ -1,0 +1,19 @@
+{
+  "name": "@planer/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@planer/core": "workspace:*",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "6.0.3"
+  }
+}

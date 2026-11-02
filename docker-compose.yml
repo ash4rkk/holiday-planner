@@ -1,0 +1,77 @@
+# Serwer (/srv/planer): /srv/scripts/deploy.sh planer  → docker compose build && up -d
+# Lokalnie tylko baza: docker compose --profile local up -d postgres
+#
+# Układ jak w portfolio: aplikacja wisi w zewnętrznej sieci `edge`, gdzie są już wspólne
+# `caddy`, `cloudflared` i `postgres`. Żaden port nie jest wystawiony na hosta, ruch wchodzi
+# wyłącznie przez Cloudflare Tunnel → Caddy (docs/deploy.md).
+
+x-app: &app
+  env_file: .env
+  restart: unless-stopped
+  networks: [edge]
+  # Logi przetrwają odtworzenie kontenera tylko do rotacji — bez tego rosną bez końca.
+  logging:
+    driver: local
+    options: { max-size: 10m, max-file: "5" }
+
+services:
+  # Migracje Drizzle przy każdym deployu, przed startem aplikacji. Drizzle stosuje tylko brakujące,
+  # więc bez nowych migracji to sekunda pracy. Błąd migracji = stare kontenery zostają.
+  migrate:
+    <<: *app
+    build: { context: ., target: migrate }
+    image: planer-migrate:local
+    container_name: planer-migrate
+    restart: "no"
+
+  web:
+    <<: *app
+    build: { context: ., target: web }
+    image: planer-web:local
+    container_name: planer-web
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  sync:
+    <<: *app
+    build: { context: ., target: sync }
+    image: planer-sync:local
+    container_name: planer-sync
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    <<: *app
+    build: { context: ., target: worker }
+    image: planer-worker:local
+    container_name: planer-worker
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  # Tylko lokalny dev (profil `local`): gołe `docker compose up -d` na serwerze go pomija.
+  # Port 5433, bo 5432 zajmuje lokalny pg-portfolio.
+  postgres:
+    image: postgres:17-alpine
+    container_name: pg-planer
+    profiles: ["local"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: planer_app
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: planer
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pg-planer:/var/lib/postgresql/data
+
+networks:
+  edge:
+    external: true
+
+volumes:
+  pg-planer:

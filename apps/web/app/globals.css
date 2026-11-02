@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/* Motyw Vague — źródło: docs/plan.md, sekcja „Motyw: Vague”. */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f1ed; --panel: #fbfaf7; --raised: #ebe8e3;
+  --line: #dcd8d1; --sel: #cfcac2;
+  --text: #2b2a30; --muted: #55555f; --subtle: #66667a; --dim: #a7a5ae;
+  --accent: #9c5859; --accent-hover: #874a4b; --on-accent: #fbfaf7;
+  --plum: #85638a; --blue: #3f6b8c; --lavender: #62629a; --teal: #3f7480;
+  --amber: #9a6a34; --orange: #a3621f; --green: #4f7637; --red: #ad3f58;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1e1e22; --panel: #26262b; --raised: #2c2c32;
+  --line: #36363f; --sel: #44444e;
+  --text: #dedede; --muted: #a8a8b6; --subtle: #8f8fa8; --dim: #5a5a6c;
+  --accent: #c48282; --accent-hover: #d49a9a; --on-accent: #1e1e22;
+  --plum: #bb9dbd; --blue: #6e94b2; --lavender: #aeaed1; --teal: #9bb4bc;
+  --amber: #e8b589; --orange: #e0a363; --green: #7fa563; --red: #d8647e;
+}
+
+:root {
+  --radius-island: 12px;
+  --radius-small: 6px;
+}
+
+/* Komponenty używają wyłącznie tych kolorów (bg-panel, text-muted, border-line…). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-sel: var(--sel);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-dim: var(--dim);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-plum: var(--plum);
+  --color-blue: var(--blue);
+  --color-lavender: var(--lavender);
+  --color-teal: var(--teal);
+  --color-amber: var(--amber);
+  --color-orange: var(--orange);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --radius-island: var(--radius-island);
+  --radius-small: var(--radius-small);
+  --font-sans: var(--font-atkinson), system-ui, sans-serif;
+}
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Tło „mgła”: Pulpit, Lista i przestrzeń między wysepkami. */
+.app {
+  min-height: 100dvh;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 12% 10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 42%),
+    radial-gradient(circle at 92% 34%, color-mix(in srgb, var(--blue) 15%, transparent), transparent 45%),
+    radial-gradient(circle at 20% 78%, color-mix(in srgb, var(--plum) 15%, transparent), transparent 45%),
+    radial-gradient(circle at 88% 94%, color-mix(in srgb, var(--amber) 11%, transparent), transparent 40%);
+  background-attachment: fixed;
+}
+
+.island {
+  background-color: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-island);
+}
+
+* {
+  transition-duration: 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
