@@ -5,12 +5,14 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 ## Stan
 
 - Etap 0 (fundament) — zrobiony: monorepo, Postgres + Drizzle, proxy JWT Cloudflare Access, motyw Vague, Docker Compose pod układ serwera z portfolio.
-- Następny: Etap 1 (wyjazdy CRUD, dokument Yjs w IndexedDB, karta z Tiptap, widok Lista).
+- Etap 1 (karty i Lista) — zrobiony na gałęzi `etap-1`: wyjazdy (Postgres, server actions), dokument Yjs wyjazdu w IndexedDB (`lib/yjs/trip-doc.tsx`, model w `packages/core/src/trip-doc.ts`), arkusz karty z Tiptap (`components/card/`), Lista z dniami, filtrami i koszem. Karty są na razie tylko na urządzeniu — sync w etapie 3.
+- Następny: Etap 2 (Tablica: React Flow, ramki, strzałki rough.js).
 
 ## Stos
 
 Node 26 · pnpm monorepo · Next.js 16 (App Router, Turbopack) · React 19 · TypeScript 6 · Tailwind v4 · next-themes · Drizzle ORM + postgres-js · PostgreSQL 17 · jose · Vitest · Biome · Docker Compose (na serwerze w sieci `edge` ze wspólnymi `caddy`, `cloudflared`, `postgres`).
-Planowane (kolejne etapy): shadcn/ui, Yjs + Hocuspocus + y-indexeddb, Tiptap, React Flow + rough.js, Serwist, MapLibre, web-push, Anthropic API, Playwright.
+Etap 1: Yjs + y-indexeddb, Tiptap 3 (Collaboration na Y.XmlFragment karty, @tiptap/markdown), zod, lucide-react; własne proste komponenty w `components/ui.tsx` zamiast shadcn/ui.
+Planowane (kolejne etapy): Hocuspocus, React Flow + rough.js, Serwist, MapLibre, web-push, Anthropic API, Playwright.
 
 ## Struktura
 

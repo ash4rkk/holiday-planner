@@ -12,12 +12,24 @@
   },
   "dependencies": {
     "@planer/core": "workspace:*",
+    "@tiptap/extension-collaboration": "3.32.0",
+    "@tiptap/extension-list": "3.32.0",
+    "@tiptap/extensions": "3.32.0",
+    "@tiptap/markdown": "3.32.0",
+    "@tiptap/pm": "3.32.0",
+    "@tiptap/react": "3.32.0",
+    "@tiptap/starter-kit": "3.32.0",
+    "@tiptap/y-tiptap": "3.0.10",
     "jose": "6.2.13",
+    "lucide-react": "1.61.0",
     "next": "16.4.3",
     "next-themes": "0.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "server-only": "0.0.1"
+    "server-only": "0.0.1",
+    "y-indexeddb": "9.0.12",
+    "yjs": "13.6.33",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",

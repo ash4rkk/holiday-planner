@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
-    "postgres": "3.4.9"
+    "nanoid": "6.0.2",
+    "postgres": "3.4.9",
+    "yjs": "13.6.33"
   },
   "devDependencies": {
     "@types/node": "26.6.5",
