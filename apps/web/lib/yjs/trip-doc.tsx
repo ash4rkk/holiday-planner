@@ -1,6 +1,14 @@
 'use client'
 
-import { type CardSnapshot, cardsOf, purgeTrash, readCards } from '@planer/core'
+import {
+  type CardSnapshot,
+  type EdgeSnapshot,
+  type FrameSnapshot,
+  purgeTrash,
+  readCards,
+  readEdges,
+  readFrames,
+} from '@planer/core'
 import {
   createContext,
   type ReactNode,
@@ -71,34 +79,51 @@ export function useTrip(): Ctx {
   return ctx
 }
 
-// Migawka kart przeliczana przy każdej zmianie dokumentu; ta sama referencja między zmianami.
-const snapshots = new WeakMap<Y.Doc, CardSnapshot[]>()
-const EMPTY: CardSnapshot[] = []
+// Migawki map dokumentu (karty, ramki, strzałki) przeliczane przy zmianie; ta sama referencja
+// między zmianami, więc useSyncExternalStore nie renderuje bez potrzeby.
+type Key = 'cards' | 'frames' | 'edges'
+const READERS = { cards: readCards, frames: readFrames, edges: readEdges }
+const snapshots = new WeakMap<Y.Doc, Partial<Record<Key, unknown>>>()
+const EMPTY: never[] = []
 
-function subscribe(doc: Y.Doc, onChange: () => void) {
-  const cards = cardsOf(doc)
+function subscribe(doc: Y.Doc, key: Key, onChange: () => void) {
+  const map = doc.getMap(key)
   const handler = () => {
-    snapshots.delete(doc)
+    const cache = snapshots.get(doc)
+    if (cache) delete cache[key]
     onChange()
   }
-  cards.observeDeep(handler)
-  return () => cards.unobserveDeep(handler)
+  map.observeDeep(handler)
+  return () => map.unobserveDeep(handler)
 }
 
-function getSnapshot(doc: Y.Doc): CardSnapshot[] {
-  let snap = snapshots.get(doc)
-  if (!snap) {
-    snap = readCards(doc)
-    snapshots.set(doc, snap)
+function getSnapshot<K extends Key>(doc: Y.Doc, key: K): ReturnType<(typeof READERS)[K]> {
+  let cache = snapshots.get(doc)
+  if (!cache) {
+    cache = {}
+    snapshots.set(doc, cache)
   }
-  return snap
+  if (!(key in cache)) cache[key] = READERS[key](doc)
+  return cache[key] as ReturnType<(typeof READERS)[K]>
+}
+
+function useDocMap<K extends Key>(key: K): ReturnType<(typeof READERS)[K]> {
+  const { doc } = useTrip()
+  return useSyncExternalStore(
+    (cb) => subscribe(doc, key, cb),
+    () => getSnapshot(doc, key),
+    () => EMPTY as ReturnType<(typeof READERS)[K]>,
+  )
 }
 
 export function useCards(): CardSnapshot[] {
-  const { doc } = useTrip()
-  return useSyncExternalStore(
-    (cb) => subscribe(doc, cb),
-    () => getSnapshot(doc),
-    () => EMPTY,
-  )
+  return useDocMap('cards')
+}
+
+export function useFrames(): FrameSnapshot[] {
+  return useDocMap('frames')
+}
+
+export function useEdges(): EdgeSnapshot[] {
+  return useDocMap('edges')
 }

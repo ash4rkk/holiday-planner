@@ -18,24 +18,20 @@ import {
 } from '@planer/core'
 import { Plus, Settings2 } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { useNavHidden } from '@/components/nav/nav-context'
 import { TopBar } from '@/components/top-bar'
 import { cx, SectionLabel } from '@/components/ui'
+import { useCardSheet } from '@/lib/use-card-sheet'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function TripList() {
   const { trip, doc, ready } = useTrip()
   const cards = useCards()
-  const router = useRouter()
-  const pathname = usePathname()
-  const openId = useSearchParams().get('card')
-  const openedHere = useRef(false)
-  const [newId, setNewId] = useState<string | null>(null)
+  const { openId, isNew, open, close } = useCardSheet()
   const [types, setTypes] = useState<Set<CardType>>(new Set())
   const [statuses, setStatuses] = useState<Set<CardStatus>>(new Set())
   const [showTrash, setShowTrash] = useState(false)
@@ -53,22 +49,9 @@ export function TripList() {
   )
   const groups = useMemo(() => groupCardsByDay(filtered, trip), [filtered, trip])
 
-  const open = (id: string) => {
-    openedHere.current = true
-    router.push(`${pathname}?card=${id}`, { scroll: false })
-  }
-  const close = () => {
-    setNewId(null)
-    // Otwarta stąd → wstecz (Android „wstecz” też zamyka); z linku → bez parametru.
-    if (openedHere.current) {
-      openedHere.current = false
-      router.back()
-    } else router.replace(pathname, { scroll: false })
-  }
   const add = (date?: string) => {
     const id = createCard(doc, { type: 'note', ...(date && { date }) })
-    setNewId(id)
-    open(id)
+    open(id, true)
   }
 
   const toggle = <T,>(set: Set<T>, value: T, update: (s: Set<T>) => void) => {
@@ -240,9 +223,7 @@ export function TripList() {
           <Plus className="size-6" aria-hidden="true" />
         </button>
       </main>
-      {openId && (
-        <CardSheet key={openId} cardId={openId} isNew={openId === newId} onClose={close} />
-      )}
+      {openId && <CardSheet key={openId} cardId={openId} isNew={isNew} onClose={close} />}
     </>
   )
 }

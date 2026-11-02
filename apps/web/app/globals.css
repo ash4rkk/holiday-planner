@@ -126,3 +126,21 @@ body {
   height: 0;
   pointer-events: none;
 }
+
+/* Tablica (React Flow): kolory z motywu, własne tło zamiast „mgły”. */
+.planer-board {
+  --xy-background-color: var(--bg);
+  --xy-background-pattern-color: var(--sel);
+  --xy-connectionline-stroke: var(--accent);
+  --xy-connectionline-stroke-width: 2;
+  --xy-handle-background-color: var(--accent);
+  touch-action: none;
+}
+/* Węzły bez wbudowanego zaznaczania/przeciągania React Flow wyłącza z gestów; karty obsługują je same
+   (use-hold-drag), a w ramce gesty łapie tylko nazwa i uchwyty. */
+.planer-board .react-flow__node-card,
+.planer-board .react-flow__node-frame {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}

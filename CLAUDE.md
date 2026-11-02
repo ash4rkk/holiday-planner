@@ -6,13 +6,15 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 
 - Etap 0 (fundament) — zrobiony: monorepo, Postgres + Drizzle, proxy JWT Cloudflare Access, motyw Vague, Docker Compose pod układ serwera z portfolio.
 - Etap 1 (karty i Lista) — zrobiony na gałęzi `etap-1`: wyjazdy (Postgres, server actions), dokument Yjs wyjazdu w IndexedDB (`lib/yjs/trip-doc.tsx`, model w `packages/core/src/trip-doc.ts`), arkusz karty z Tiptap (`components/card/`), Lista z dniami, filtrami i koszem. Karty są na razie tylko na urządzeniu — sync w etapie 3.
-- Następny: Etap 2 (Tablica: React Flow, ramki, strzałki rough.js).
+- Etap 2 (Tablica) — zrobiony na gałęzi `etap-2`: React Flow (`components/board/`), ramki i strzałki w dokumencie Yjs (`packages/core/src/board.ts`), gesty: tap zaznacza, tap w zaznaczoną otwiera, przytrzymanie przeciąga (`use-hold-drag.ts`), przytrzymanie tła = menu, kropka na krawędzi = strzałka; „ułóż wg dni” z jednym cofnij.
+- Następny: Etap 3 (sync Hocuspocus, kursory, PWA).
 
 ## Stos
 
 Node 26 · pnpm monorepo · Next.js 16 (App Router, Turbopack) · React 19 · TypeScript 6 · Tailwind v4 · next-themes · Drizzle ORM + postgres-js · PostgreSQL 17 · jose · Vitest · Biome · Docker Compose (na serwerze w sieci `edge` ze wspólnymi `caddy`, `cloudflared`, `postgres`).
 Etap 1: Yjs + y-indexeddb, Tiptap 3 (Collaboration na Y.XmlFragment karty, @tiptap/markdown), zod, lucide-react; własne proste komponenty w `components/ui.tsx` zamiast shadcn/ui.
-Planowane (kolejne etapy): Hocuspocus, React Flow + rough.js, Serwist, MapLibre, web-push, Anthropic API, Playwright.
+Etap 2: @xyflow/react 12 + roughjs.
+Planowane (kolejne etapy): Hocuspocus, Serwist, MapLibre, web-push, Anthropic API, Playwright.
 
 ## Struktura
 
@@ -40,6 +42,12 @@ pnpm db:generate         # po zmianie schema.ts → nowa migracja w packages/cor
 pnpm db:migrate          # wymaga DATABASE_URL
 /srv/scripts/deploy.sh planer   # na serwerze, po git pull --ff-only (docs/deploy.md)
 ```
+
+## Pułapki
+
+- Nie uruchamiaj `next build` przy działającym `next dev` — dzielą `apps/web/.next`, a dev wpada w pętlę przeładowań („HMR hash mismatch”). Naprawa: zatrzymaj dev, `rm -rf apps/web/.next`.
+- React Flow wyłącza zdarzenia wskaźnika na węzłach bez wbudowanego zaznaczania/przeciągania — elementy, które mają reagować, potrzebują `pointer-events-auto`.
+- W zsh nie używaj zmiennej `path` w skryptach (to tablica powiązana z `PATH`).
 
 ## Auth
 

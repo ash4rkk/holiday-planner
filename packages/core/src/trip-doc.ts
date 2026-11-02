@@ -27,8 +27,9 @@ export function contentOf(card: CardMap): Y.XmlFragment {
 /** Nowa karta; zwraca jej id. Pozycję na tablicy dostaje w siatce, żeby etap 2 miał co pokazać. */
 export function createCard(
   doc: Y.Doc,
-  init: { type: CardType } & Partial<EditableCardFields>,
+  init: { type: CardType } & Partial<EditableCardFields> & { x?: number; y?: number },
   now = new Date(),
+  text?: string,
 ): string {
   const cards = cardsOf(doc)
   const id = nanoid(12)
@@ -48,7 +49,15 @@ export function createCard(
     for (const [key, value] of Object.entries(fields)) {
       if (value !== undefined) card.set(key, value)
     }
-    card.set('content', new Y.XmlFragment())
+    const content = new Y.XmlFragment()
+    for (const line of (text ?? '').split('\n').filter((l) => l.trim())) {
+      const paragraph = new Y.XmlElement('paragraph')
+      const t = new Y.XmlText()
+      t.insert(0, line)
+      paragraph.insert(0, [t])
+      content.push([paragraph])
+    }
+    card.set('content', content)
     cards.set(id, card)
   })
   return id
@@ -92,7 +101,20 @@ export function purgeTrash(doc: Y.Doc, now = new Date(), days = TRASH_DAYS): num
       return typeof deletedAt === 'string' && Date.parse(deletedAt) < limit
     })
     .map(([id]) => id)
-  if (stale.length) doc.transact(() => stale.forEach((id) => cards.delete(id)))
+  if (stale.length) {
+    const edges = doc.getMap<Y.Map<unknown>>('edges')
+    doc.transact(() => {
+      for (const id of stale) cards.delete(id)
+      for (const [edgeId, edge] of [...edges.entries()]) {
+        if (
+          stale.includes(edge.get('from') as string) ||
+          stale.includes(edge.get('to') as string)
+        ) {
+          edges.delete(edgeId)
+        }
+      }
+    })
+  }
   return stale.length
 }
 
