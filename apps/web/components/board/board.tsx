@@ -36,12 +36,14 @@ import { Columns3, Plus, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CardSheet } from '@/components/card/card-sheet'
 import { TopBar } from '@/components/top-bar'
+import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
 import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
 import { CardNode } from './card-node'
 import { FrameNode } from './frame-node'
+import { RemotePointers } from './remote-pointers'
 import { SketchEdge } from './sketch-edge'
 
 const nodeTypes = { card: CardNode, frame: FrameNode }
@@ -66,7 +68,7 @@ function readViewport(tripId: string): Viewport | undefined {
 }
 
 function BoardCanvas() {
-  const { trip, doc, ready } = useTrip()
+  const { trip, doc, ready, provider } = useTrip()
   const cards = useCards()
   const frames = useFrames()
   const edges = useEdges()
@@ -253,6 +255,21 @@ function BoardCanvas() {
     },
   }
 
+  // ---------- kursor dla drugiej osoby (awareness, co najwyżej co 50 ms) ----------
+  const lastShare = useRef(0)
+  const sharePointer = (x: number | null, y?: number) => {
+    const awareness = provider?.awareness
+    if (!awareness) return
+    if (x === null || y === undefined) {
+      awareness.setLocalStateField('pointer', null)
+      return
+    }
+    const now = performance.now()
+    if (now - lastShare.current < 50) return
+    lastShare.current = now
+    awareness.setLocalStateField('pointer', rf.screenToFlowPosition({ x, y }))
+  }
+
   // ---------- menu przytrzymania tła ----------
   const hold = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null)
   const pointers = useRef(0)
@@ -323,12 +340,14 @@ function BoardCanvas() {
           hold.current = { x, y, timer: setTimeout(() => openMenu(x, y), HOLD_MENU_MS) }
         }}
         onPointerMove={(e) => {
+          sharePointer(e.clientX, e.clientY)
           if (
             hold.current &&
             Math.hypot(e.clientX - hold.current.x, e.clientY - hold.current.y) > 8
           )
             cancelHold()
         }}
+        onPointerLeave={() => sharePointer(null)}
         onPointerUp={() => {
           pointers.current = Math.max(0, pointers.current - 1)
           cancelHold()
@@ -378,6 +397,7 @@ function BoardCanvas() {
             title={trip.title}
             actions={
               <>
+                <TripStatus />
                 {undo && (
                   <button
                     type="button"
@@ -403,6 +423,9 @@ function BoardCanvas() {
             }
           />
         </div>
+
+        <SessionBanner />
+        <RemotePointers />
 
         {ready && !live.length && !frames.length && (
           <p className="pointer-events-none absolute inset-x-4 top-1/3 text-center text-sm text-subtle italic">

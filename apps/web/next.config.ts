@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { withSerwist } from '@serwist/turbopack'
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
@@ -8,4 +9,4 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 }
 
-export default nextConfig
+export default withSerwist(nextConfig)

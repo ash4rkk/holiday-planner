@@ -1,6 +1,7 @@
 'use client'
 
 import Collaboration from '@tiptap/extension-collaboration'
+import CollaborationCaret from '@tiptap/extension-collaboration-caret'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
 import { Markdown } from '@tiptap/markdown'
@@ -8,6 +9,7 @@ import { type Editor, EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useEffect } from 'react'
 import type * as Y from 'yjs'
+import { useTrip } from '@/lib/yjs/trip-doc'
 
 /** WYSIWYG treści karty; stan żyje w Y.XmlFragment karty (współedycja w etapie 3 bez zmian tutaj). */
 export function CardEditor({
@@ -19,6 +21,7 @@ export function CardEditor({
   autoFocus?: boolean
   onEditor?: (editor: Editor | null) => void
 }) {
+  const { provider, user } = useTrip()
   const editor = useEditor(
     {
       immediatelyRender: false,
@@ -35,6 +38,8 @@ export function CardEditor({
         Placeholder.configure({ placeholder: 'tytuł w pierwszej linii, niżej notatki…' }),
         Markdown,
         Collaboration.configure({ fragment }),
+        // Kursor drugiej osoby w tej samej karcie (pozycje z innych kart są pomijane).
+        ...(provider ? [CollaborationCaret.configure({ provider, user })] : []),
       ],
       editorProps: {
         attributes: {
@@ -43,7 +48,7 @@ export function CardEditor({
         },
       },
     },
-    [fragment],
+    [fragment, provider],
   )
 
   useEffect(() => {

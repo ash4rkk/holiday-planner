@@ -8,6 +8,13 @@
       "when": 1793643245075,
       "tag": "0000_previous_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793646124544,
+      "tag": "0001_lame_genesis",
+      "breakpoints": true
     }
   ]
 }

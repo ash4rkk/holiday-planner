@@ -1,5 +1,6 @@
 'use client'
 
+import { HocuspocusProvider, WebSocketStatus } from '@hocuspocus/provider'
 import {
   type CardSnapshot,
   type EdgeSnapshot,
@@ -20,24 +21,94 @@ import {
 import { IndexeddbPersistence } from 'y-indexeddb'
 import * as Y from 'yjs'
 
-// Jeden dokument Yjs na wyjazd, trzymany w IndexedDB urządzenia (etap 3 doda sync z serwerem).
-// Dokumenty żyją w pamięci przez całą sesję, żeby przejścia Lista ↔ Tablica nie czytały bazy od nowa.
+// Jeden dokument Yjs na wyjazd: kopia w IndexedDB urządzenia (pełna praca offline) i sync na żywo
+// przez WebSocket z serwerem Hocuspocus (apps/sync). Dokumenty i połączenia żyją przez całą sesję,
+// żeby przejścia Lista ↔ Tablica nie łączyły się od nowa.
 
-type Entry = { doc: Y.Doc; persistence: IndexeddbPersistence; synced: Promise<void> }
+export type SyncStatus = 'connecting' | 'live' | 'offline' | 'login'
+
+export type PresenceUser = { name: string; color: string }
+
+type Entry = {
+  doc: Y.Doc
+  persistence: IndexeddbPersistence
+  provider: HocuspocusProvider
+  ready: Promise<void>
+  status: SyncStatus
+  listeners: Set<() => void>
+}
 const entries = new Map<string, Entry>()
 
-function openTripDoc(tripId: string): Entry {
-  let entry = entries.get(tripId)
-  if (!entry) {
-    const doc = new Y.Doc()
-    const persistence = new IndexeddbPersistence(`planer-trip-${tripId}`, doc)
-    const synced = persistence.whenSynced.then(() => {
-      purgeTrash(doc)
-    })
-    entry = { doc, persistence, synced }
-    entries.set(tripId, entry)
+/** Adres serwera sync: w dev osobny port (NEXT_PUBLIC_SYNC_URL), na serwerze ta sama domena /sync. */
+function syncUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_SYNC_URL
+  if (configured) return configured
+  const { protocol, host } = window.location
+  return `${protocol === 'https:' ? 'wss' : 'ws'}://${host}/sync`
+}
+
+/** Sesja Cloudflare Access wygasła, gdy zwykłe żądanie do aplikacji jest przekierowane lub odrzucone. */
+async function sessionExpired(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/session', { redirect: 'manual', cache: 'no-store' })
+    return res.type === 'opaqueredirect' || res.status === 401 || res.status === 403
+  } catch {
+    return false // brak sieci to nie wygasła sesja
   }
-  return entry
+}
+
+function setStatus(entry: Entry, status: SyncStatus) {
+  if (entry.status === status) return
+  entry.status = status
+  for (const listener of entry.listeners) listener()
+}
+
+function openTripDoc(tripId: string, user: PresenceUser): Entry {
+  let entry = entries.get(tripId)
+  if (entry) return entry
+
+  const doc = new Y.Doc()
+  const persistence = new IndexeddbPersistence(`planer-trip-${tripId}`, doc)
+  const provider = new HocuspocusProvider({ url: syncUrl(), name: tripId, document: doc })
+  const created: Entry = {
+    doc,
+    persistence,
+    provider,
+    ready: persistence.whenSynced.then(() => {
+      purgeTrash(doc)
+    }),
+    status: 'connecting',
+    listeners: new Set(),
+  }
+  entry = created
+  provider.awareness?.setLocalStateField('user', user)
+
+  let failures = 0
+  let socket: WebSocketStatus = WebSocketStatus.Connecting
+  provider.on('synced', () => {
+    failures = 0
+    setStatus(created, 'live')
+  })
+  provider.on('status', ({ status }: { status: WebSocketStatus }) => {
+    socket = status
+    if (status === WebSocketStatus.Connected) return // „na żywo” dopiero po synced
+    if (status === WebSocketStatus.Disconnected) {
+      failures++
+      setStatus(created, 'offline')
+      // Po kilku nieudanych próbach przy działającej sieci sprawdzamy, czy to nie wygasła sesja.
+      if (failures >= 2 && navigator.onLine) {
+        void sessionExpired().then((expired) => expired && setStatus(created, 'login'))
+      }
+    }
+  })
+  window.addEventListener('offline', () => setStatus(created, 'offline'))
+  // Krótka przerwa sieci nie zawsze zrywa WebSocket — wtedy nie ma ponownego „synced”.
+  window.addEventListener('online', () => {
+    if (socket === WebSocketStatus.Connected && provider.isSynced) setStatus(created, 'live')
+  })
+
+  entries.set(tripId, created)
+  return created
 }
 
 export type TripMeta = {
@@ -49,16 +120,32 @@ export type TripMeta = {
   archived: boolean
 }
 
-type Ctx = { trip: TripMeta; doc: Y.Doc; ready: boolean }
+type Ctx = {
+  trip: TripMeta
+  user: PresenceUser
+  doc: Y.Doc
+  provider: HocuspocusProvider | null
+  ready: boolean
+}
 const TripContext = createContext<Ctx | null>(null)
 
-export function TripProvider({ trip, children }: { trip: TripMeta; children: ReactNode }) {
-  const [entry] = useState(() => (typeof window === 'undefined' ? null : openTripDoc(trip.id)))
+export function TripProvider({
+  trip,
+  user,
+  children,
+}: {
+  trip: TripMeta
+  user: PresenceUser
+  children: ReactNode
+}) {
+  const [entry] = useState(() =>
+    typeof window === 'undefined' ? null : openTripDoc(trip.id, user),
+  )
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let alive = true
-    entry?.synced.then(() => alive && setReady(true))
+    entry?.ready.then(() => alive && setReady(true))
     return () => {
       alive = false
     }
@@ -67,7 +154,9 @@ export function TripProvider({ trip, children }: { trip: TripMeta; children: Rea
   // Na serwerze (SSR) pusty dokument; prawdziwy powstaje dopiero w przeglądarce.
   const [ssrDoc] = useState(() => new Y.Doc())
   return (
-    <TripContext.Provider value={{ trip, doc: entry?.doc ?? ssrDoc, ready }}>
+    <TripContext.Provider
+      value={{ trip, user, doc: entry?.doc ?? ssrDoc, provider: entry?.provider ?? null, ready }}
+    >
       {children}
     </TripContext.Provider>
   )
@@ -77,6 +166,39 @@ export function useTrip(): Ctx {
   const ctx = useContext(TripContext)
   if (!ctx) throw new Error('useTrip poza TripProvider')
   return ctx
+}
+
+export function useSyncStatus(): SyncStatus {
+  const { trip } = useTrip()
+  return useSyncExternalStore(
+    (cb) => {
+      const entry = entries.get(trip.id)
+      entry?.listeners.add(cb)
+      return () => entry?.listeners.delete(cb)
+    },
+    () => entries.get(trip.id)?.status ?? 'connecting',
+    () => 'connecting',
+  )
+}
+
+/** Stany obecności innych osób (bez własnego) — awatary, kursory. */
+export function usePresence<T = Record<string, unknown>>(): (T & { clientId: number })[] {
+  const { provider } = useTrip()
+  const [states, setStates] = useState<(T & { clientId: number })[]>([])
+  useEffect(() => {
+    const awareness = provider?.awareness
+    if (!awareness) return
+    const update = () =>
+      setStates(
+        [...awareness.getStates().entries()]
+          .filter(([id, state]) => id !== awareness.clientID && state.user)
+          .map(([clientId, state]) => ({ ...(state as T), clientId })),
+      )
+    update()
+    awareness.on('change', update)
+    return () => awareness.off('change', update)
+  }, [provider])
+  return states
 }
 
 // Migawki map dokumentu (karty, ramki, strzałki) przeliczane przy zmianie; ta sama referencja

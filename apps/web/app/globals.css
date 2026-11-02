@@ -144,3 +144,26 @@ body {
   background: transparent;
   padding: 0;
 }
+
+/* Kursor drugiej osoby w edytorze (CollaborationCaret). */
+.collaboration-carets__caret {
+  position: relative;
+  margin: 0 -1px;
+  border-left: 2px solid;
+  border-right: 0;
+  word-break: normal;
+  pointer-events: none;
+}
+.collaboration-carets__label {
+  position: absolute;
+  top: -1.3em;
+  left: -2px;
+  padding: 0 4px;
+  border-radius: 4px 4px 4px 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--on-accent);
+  white-space: nowrap;
+  user-select: none;
+}

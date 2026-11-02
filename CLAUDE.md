@@ -7,20 +7,22 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Etap 0 (fundament) — zrobiony: monorepo, Postgres + Drizzle, proxy JWT Cloudflare Access, motyw Vague, Docker Compose pod układ serwera z portfolio.
 - Etap 1 (karty i Lista) — zrobiony na gałęzi `etap-1`: wyjazdy (Postgres, server actions), dokument Yjs wyjazdu w IndexedDB (`lib/yjs/trip-doc.tsx`, model w `packages/core/src/trip-doc.ts`), arkusz karty z Tiptap (`components/card/`), Lista z dniami, filtrami i koszem. Karty są na razie tylko na urządzeniu — sync w etapie 3.
 - Etap 2 (Tablica) — zrobiony na gałęzi `etap-2`: React Flow (`components/board/`), ramki i strzałki w dokumencie Yjs (`packages/core/src/board.ts`), gesty: tap zaznacza, tap w zaznaczoną otwiera, przytrzymanie przeciąga (`use-hold-drag.ts`), przytrzymanie tła = menu, kropka na krawędzi = strzałka; „ułóż wg dni” z jednym cofnij.
-- Następny: Etap 3 (sync Hocuspocus, kursory, PWA).
+- Etap 3 (sync i offline) — zrobiony na gałęzi `etap-3`: serwer Hocuspocus (`apps/sync`, auth JWT Access przy upgrade, stan w `trip_docs`), provider w `lib/yjs/trip-doc.tsx` (status: na żywo / offline / sesja wygasła), awatary, kursory na tablicy, kursory w edytorze, PWA (Serwist: `app/sw.ts` → `/serwist/sw.js`, manifest, ikony z `app/icons`).
+- Następny: Etap 4 (Share Target, linki Google Maps, skrzynka, Mapa).
 
 ## Stos
 
 Node 26 · pnpm monorepo · Next.js 16 (App Router, Turbopack) · React 19 · TypeScript 6 · Tailwind v4 · next-themes · Drizzle ORM + postgres-js · PostgreSQL 17 · jose · Vitest · Biome · Docker Compose (na serwerze w sieci `edge` ze wspólnymi `caddy`, `cloudflared`, `postgres`).
 Etap 1: Yjs + y-indexeddb, Tiptap 3 (Collaboration na Y.XmlFragment karty, @tiptap/markdown), zod, lucide-react; własne proste komponenty w `components/ui.tsx` zamiast shadcn/ui.
 Etap 2: @xyflow/react 12 + roughjs.
-Planowane (kolejne etapy): Hocuspocus, Serwist, MapLibre, web-push, Anthropic API, Playwright.
+Etap 3: Hocuspocus 4 (server, provider, extension-database), @tiptap/extension-collaboration-caret, Serwist 9 (@serwist/turbopack).
+Planowane (kolejne etapy): Serwist, MapLibre, web-push, Anthropic API, Playwright.
 
 ## Struktura
 
 ```
 apps/web        Next.js; proxy.ts (auth), lib/auth/, app/(app)/ (ekrany za logowaniem)
-apps/sync       serwer Hocuspocus (na razie zaślepka z /health)
+apps/sync       serwer Hocuspocus: WebSocket /sync, dokument Yjs na wyjazd, zapis do trip_docs
 apps/worker     zadania w tle (na razie zaślepka)
 packages/core   wspólny kod: schemat Drizzle (src/db/schema.ts), migracje (drizzle/), helpery
 ```
@@ -35,6 +37,7 @@ nvm use                  # Node 26 z .nvmrc
 cp .env.example apps/web/.env.local   # raz; Next czyta env tylko z apps/web
 docker compose --profile local up -d postgres   # lokalny Postgres pg-planer na 127.0.0.1:5433
 pnpm dev                 # Next na :3000, logowanie przez AUTH_DEV_EMAIL
+pnpm dev:sync            # serwer sync na :1234 (osobny terminal; NEXT_PUBLIC_SYNC_URL w .env.local)
 pnpm lint                # biome check; pnpm format naprawia
 pnpm typecheck
 pnpm test
@@ -47,6 +50,10 @@ pnpm db:migrate          # wymaga DATABASE_URL
 
 - Nie uruchamiaj `next build` przy działającym `next dev` — dzielą `apps/web/.next`, a dev wpada w pętlę przeładowań („HMR hash mismatch”). Naprawa: zatrzymaj dev, `rm -rf apps/web/.next`.
 - React Flow wyłącza zdarzenia wskaźnika na węzłach bez wbudowanego zaznaczania/przeciągania — elementy, które mają reagować, potrzebują `pointer-events-auto`.
+- SW rejestrowany jako `type: 'classic'` — worker modułowy przeglądarka pobiera bez cookie, więc za Cloudflare Access dostałby 401.
+- Zmiany samego URL (np. `?card=`) przez `window.history.pushState`, nie `router.push` — router pyta serwer, więc offline nic by się nie otworzyło.
+- Manifest, `/icons/*` i `/offline` są poza `proxy.ts` i mają Bypass w Access (przeglądarka pobiera manifest bez cookie).
+- Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.
 - W zsh nie używaj zmiennej `path` w skryptach (to tablica powiązana z `PATH`).
 
 ## Auth

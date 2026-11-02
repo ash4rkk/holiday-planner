@@ -24,6 +24,7 @@ import { CardTile } from '@/components/card/card-tile'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { useNavHidden } from '@/components/nav/nav-context'
 import { TopBar } from '@/components/top-bar'
+import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
@@ -72,15 +73,20 @@ export function TripList() {
           title={trip.title}
           subtitle={formatDateSpan(trip.startDate, trip.endDate)}
           actions={
-            <Link
-              href={`/trips/${trip.id}/settings`}
-              aria-label="ustawienia wyjazdu"
-              className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
-            >
-              <Settings2 className="size-5" aria-hidden="true" />
-            </Link>
+            <>
+              <TripStatus />
+              <Link
+                href={`/trips/${trip.id}/settings`}
+                aria-label="ustawienia wyjazdu"
+                className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
+              >
+                <Settings2 className="size-5" aria-hidden="true" />
+              </Link>
+            </>
           }
         />
+
+        <SessionBanner />
 
         <div
           className="-mx-0.5 flex gap-1 overflow-x-auto px-0.5 py-1"

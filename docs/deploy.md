@@ -6,7 +6,7 @@ wspólne `cloudflared`, `caddy` i `postgres`; Planer nie ma własnego tunelu, pr
 
 ```
 telefon → Cloudflare Access → Cloudflare Tunnel (cloudflared) → caddy → planer-web:3000
-                                                                       → planer-sync:1234 (etap 3, /sync)
+                                                                       → planer-sync:1234 (/sync, WebSocket)
 planer-web / planer-sync / planer-worker / planer-migrate → postgres:5432 (baza planer)
 ```
 
@@ -44,13 +44,18 @@ TLS kończy się w Cloudflare), z celem `planer-web:3000`, np.:
 ```caddyfile
 http://planer.wiergowsky.com {
 	encode zstd gzip
-	reverse_proxy planer-web:3000
+	# Współedycja na żywo (Hocuspocus); WebSocket działa w reverse_proxy bez dodatkowych opcji.
+	handle /sync* {
+		reverse_proxy planer-sync:1234
+	}
+	handle {
+		reverse_proxy planer-web:3000
+	}
 }
 ```
 
-Caddy przekazuje nagłówek `Cf-Access-Jwt-Assertion` dalej bez konfiguracji — aplikacja go weryfikuje.
-W etapie 3 dojdzie `handle /sync* { reverse_proxy planer-sync:1234 }` (WebSocket działa w
-`reverse_proxy` bez dodatkowych opcji).
+Caddy przekazuje nagłówek `Cf-Access-Jwt-Assertion` dalej bez konfiguracji. Weryfikują go i aplikacja
+(`proxy.ts`), i serwer sync (przy upgrade do WebSocket).
 
 Caddy ma `admin off`: plik nadpisuj w miejscu (`cat > /srv/edge/Caddyfile`, bo to bind mount
 pojedynczego pliku — edytor podmieniający plik zerwie montowanie), potem `docker restart caddy`.
@@ -69,7 +74,10 @@ docker exec caddy caddy validate --config /etc/caddy/Caddyfile
    długo (np. 1 miesiąc), bo PWA offline musi przetrwać bez ponownego logowania.
    Overview → **Application Audience (AUD) Tag** → `CF_ACCESS_AUD`; team domain
    (`<zespol>.cloudflareaccess.com`) → `CF_ACCESS_TEAM_DOMAIN`.
-3. **Access — link publiczny (etap 8):** osobna aplikacja dla `planer.wiergowsky.com/p/*` z polityką
+3. **Access — pliki PWA:** osobna aplikacja Self-hosted z polityką Bypass dla ścieżek
+   `planer.wiergowsky.com/manifest.webmanifest`, `/icons/*` i `/offline`. Przeglądarka pobiera manifest
+   bez cookie Access, a bez manifestu Planera nie da się zainstalować. To pliki bez danych.
+4. **Access — link publiczny (etap 8):** osobna aplikacja dla `planer.wiergowsky.com/p/*` z polityką
    Bypass. Aplikacja i tak pomija weryfikację JWT dla `/p/*`.
 
 `ALLOWED_EMAILS` to druga linia obrony: inne kontenery w sieci `edge` mogą sięgnąć do `planer-web`
@@ -102,7 +110,7 @@ Każda nowa migracja = też lokalna baza: `pnpm db:migrate` (inaczej lokalny `ne
 ```bash
 docker ps --format '{{.Names}}\t{{.Status}}' | grep planer
 ```
-Oczekiwane: `planer-web Up … (healthy)`, `planer-sync Up`, `planer-worker Up`; `planer-migrate` nie
+Oczekiwane: `planer-web Up … (healthy)`, `planer-sync Up … (healthy)`, `planer-worker Up`; `planer-migrate` nie
 działa (zakończony).
 
 ```bash
@@ -113,6 +121,10 @@ Oczekiwane: `migracje zastosowane`, w logu web `✓ Ready` bez `Error`.
 - Telefon → `https://planer.wiergowsky.com` → logowanie Access → Pulpit „cześć, <imię>”.
 - Inne konto → odmowa Access (albo 403 z aplikacji).
 - `curl -sI https://planer.wiergowsky.com` → przekierowanie do `*.cloudflareaccess.com`.
+- `curl -sI https://planer.wiergowsky.com/manifest.webmanifest` → 200 (Bypass).
+- Dwa telefony w tym samym wyjeździe: w nagłówku zielona kropka i awatar drugiej osoby; zmiana karty
+  na jednym pojawia się na drugim w ciągu sekundy.
+- Chrome na telefonie → menu → „Zainstaluj aplikację”.
 
 ## Wycofanie [S]
 

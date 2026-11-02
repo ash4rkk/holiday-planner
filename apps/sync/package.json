@@ -4,13 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_ENV=development tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@hocuspocus/extension-database": "4.7.1",
+    "@hocuspocus/server": "4.7.1",
     "@planer/core": "workspace:*",
-    "tsx": "4.23.15"
+    "jose": "6.2.13",
+    "tsx": "4.23.15",
+    "yjs": "13.6.33"
   },
   "devDependencies": {
     "@types/node": "26.6.5",

@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./db": "./src/db/index.ts",
-    "./db/schema": "./src/db/schema.ts"
+    "./db/schema": "./src/db/schema.ts",
+    "./access": "./src/access.ts"
   },
   "scripts": {
     "typecheck": "tsc",
@@ -16,6 +17,7 @@
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
+    "jose": "6.2.13",
     "nanoid": "6.0.2",
     "postgres": "3.4.9",
     "yjs": "13.6.33"

@@ -52,8 +52,8 @@ umask 077
 {
   echo "DATABASE_URL=postgresql://planer_app:${PW}@postgres:5432/planer"
   echo
-  # Reszta z szablonu, bez lokalnych DATABASE_URL i AUTH_DEV_EMAIL.
-  grep -vE '^(DATABASE_URL|AUTH_DEV_EMAIL)=' "$DIR/.env.example"
+  # Reszta z szablonu, bez zmiennych tylko do pracy lokalnej.
+  grep -vE '^(DATABASE_URL|AUTH_DEV_EMAIL|NEXT_PUBLIC_SYNC_URL)=' "$DIR/.env.example"
 } > "$ENV_FILE"
 echo "$RO_PW" > "$RO_FILE"
 chmod 600 "$ENV_FILE" "$RO_FILE"

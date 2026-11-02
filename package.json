@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @planer/web dev",
+    "dev:sync": "pnpm --filter @planer/sync dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",

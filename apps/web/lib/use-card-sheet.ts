@@ -1,14 +1,16 @@
 'use client'
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useRef, useState } from 'react'
 
 /**
  * Otwarta karta w parametrze `?card=<id>`: link do karty działa z każdego widoku, a systemowe
  * „wstecz” zamyka arkusz otwarty z widoku.
+ *
+ * Natywne history.pushState zamiast routera Next: zmiana parametru nie idzie do serwera, więc
+ * karty otwierają się także offline (Next synchronizuje to z useSearchParams).
  */
 export function useCardSheet() {
-  const router = useRouter()
   const pathname = usePathname()
   const openId = useSearchParams().get('card')
   const openedHere = useRef(false)
@@ -17,15 +19,15 @@ export function useCardSheet() {
   const open = (id: string, isNew = false) => {
     if (isNew) setNewId(id)
     openedHere.current = true
-    router.push(`${pathname}?card=${id}`, { scroll: false })
+    window.history.pushState(null, '', `${pathname}?card=${encodeURIComponent(id)}`)
   }
 
   const close = () => {
     setNewId(null)
     if (openedHere.current) {
       openedHere.current = false
-      router.back()
-    } else router.replace(pathname, { scroll: false })
+      window.history.back()
+    } else window.history.replaceState(null, '', pathname)
   }
 
   return { openId, isNew: openId !== null && openId === newId, open, close }
