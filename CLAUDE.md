@@ -8,7 +8,8 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Etap 1 (karty i Lista) — zrobiony na gałęzi `etap-1`: wyjazdy (Postgres, server actions), dokument Yjs wyjazdu w IndexedDB (`lib/yjs/trip-doc.tsx`, model w `packages/core/src/trip-doc.ts`), arkusz karty z Tiptap (`components/card/`), Lista z dniami, filtrami i koszem. Karty są na razie tylko na urządzeniu — sync w etapie 3.
 - Etap 2 (Tablica) — zrobiony na gałęzi `etap-2`: React Flow (`components/board/`), ramki i strzałki w dokumencie Yjs (`packages/core/src/board.ts`), gesty: tap zaznacza, tap w zaznaczoną otwiera, przytrzymanie przeciąga (`use-hold-drag.ts`), przytrzymanie tła = menu, kropka na krawędzi = strzałka; „ułóż wg dni” z jednym cofnij.
 - Etap 3 (sync i offline) — zrobiony na gałęzi `etap-3`: serwer Hocuspocus (`apps/sync`, auth JWT Access przy upgrade, stan w `trip_docs`), provider w `lib/yjs/trip-doc.tsx` (status: na żywo / offline / sesja wygasła), awatary, kursory na tablicy, kursory w edytorze, PWA (Serwist: `app/sw.ts` → `/serwist/sw.js`, manifest, ikony z `app/icons`).
-- Następny: Etap 4 (Share Target, linki Google Maps, skrzynka, Mapa).
+- Etap 4 (miejsca) — zrobiony na gałęzi `etap-4`: Share Target (SW zapisuje udostępnienie w IndexedDB → `/share` → kolejka `outbox` → `/api/inbox`, działa offline), rozwijanie linków Google Maps (`packages/core/src/maps.ts` + `lib/maps-resolve.ts`, zapas: Nominatim), skrzynka (`inbox_items`), wklejanie linku („+” i menu tablicy), mini-mapy i nawigacja w karcie, widok Mapa z trasą dnia (MapLibre + OpenFreeMap).
+- Następny: Etap 5 (załączniki, cache offline, podglądy Open Graph, szablony kart).
 
 ## Stos
 
@@ -16,7 +17,8 @@ Node 26 · pnpm monorepo · Next.js 16 (App Router, Turbopack) · React 19 · Ty
 Etap 1: Yjs + y-indexeddb, Tiptap 3 (Collaboration na Y.XmlFragment karty, @tiptap/markdown), zod, lucide-react; własne proste komponenty w `components/ui.tsx` zamiast shadcn/ui.
 Etap 2: @xyflow/react 12 + roughjs.
 Etap 3: Hocuspocus 4 (server, provider, extension-database), @tiptap/extension-collaboration-caret, Serwist 9 (@serwist/turbopack).
-Planowane (kolejne etapy): Serwist, MapLibre, web-push, Anthropic API, Playwright.
+Etap 4: maplibre-gl 6 (kafelki OpenFreeMap: positron / dark), Nominatim jako geokoder zapasowy.
+Planowane (kolejne etapy): web-push, Anthropic API, Playwright.
 
 ## Struktura
 
@@ -53,6 +55,9 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - SW rejestrowany jako `type: 'classic'` — worker modułowy przeglądarka pobiera bez cookie, więc za Cloudflare Access dostałby 401.
 - Zmiany samego URL (np. `?card=`) przez `window.history.pushState`, nie `router.push` — router pyta serwer, więc offline nic by się nie otworzyło.
 - Manifest, `/icons/*` i `/offline` są poza `proxy.ts` i mają Bypass w Access (przeglądarka pobiera manifest bez cookie).
+- MapLibre szuka workera obok swojego pliku — po bundlowaniu go tam nie ma. `dev`/`build` kopiują go do `public/` (`scripts/copy-maplibre-worker.mjs`), a `components/map/maplibre.ts` ustawia `setWorkerUrl`. MapLibre nadpisuje też `transform` elementu znacznika i daje kontenerowi `position: relative` — kształty pinezek w elemencie wewnętrznym, rozmiar mapy z wrappera.
+- pnpm nie uruchamia skryptów `pre*`/`post*` — kroki przygotowawcze wpisuj wprost w skrypt.
+- Rozwijanie linków chodzi tylko po hostach Google (`isAllowedMapsHost`) — to ochrona przed SSRF, nie poluzowuj jej.
 - Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.
 - W zsh nie używaj zmiennej `path` w skryptach (to tablica powiązana z `PATH`).
 

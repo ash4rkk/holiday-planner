@@ -19,13 +19,16 @@ import {
 import { Plus, Settings2 } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
+import { AddButton } from '@/components/add-button'
 import { CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
 import { TYPE_STYLE } from '@/components/card/type-style'
+import { InboxButton } from '@/components/inbox/inbox-button'
 import { useNavHidden } from '@/components/nav/nav-context'
 import { TopBar } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
+import { pasteAsCard } from '@/lib/place-card'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 
@@ -75,6 +78,7 @@ export function TripList() {
           actions={
             <>
               <TripStatus />
+              <InboxButton />
               <Link
                 href={`/trips/${trip.id}/settings`}
                 aria-label="ustawienia wyjazdu"
@@ -215,19 +219,14 @@ export function TripList() {
           </section>
         )}
 
-        <button
-          type="button"
-          onClick={() => add()}
-          aria-label="nowa karta"
-          className={cx(
-            'fixed right-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 flex size-14 items-center justify-center',
-            'rounded-island bg-accent text-on-accent transition-transform duration-200 hover:bg-accent-hover',
-            'motion-reduce:transition-none',
-            hidden && 'translate-y-[calc(100%+90px)]',
-          )}
-        >
-          <Plus className="size-6" aria-hidden="true" />
-        </button>
+        <AddButton
+          hidden={hidden}
+          onNew={() => add()}
+          onPaste={async () => {
+            const id = await pasteAsCard(doc)
+            if (id) open(id)
+          }}
+        />
       </main>
       {openId && <CardSheet key={openId} cardId={openId} isNew={isNew} onClose={close} />}
     </>

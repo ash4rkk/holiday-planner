@@ -1,14 +1,10 @@
-import { TopBar } from '@/components/top-bar'
-import { Island } from '@/components/ui'
-import { getTrip } from '@/lib/trips'
+import { Suspense } from 'react'
+import { TripMap } from '@/components/map/trip-map'
 
-export default async function Page({ params }: PageProps<'/trips/[tripId]/map'>) {
-  const { tripId } = await params
-  const trip = await getTrip(tripId)
+export default function MapPage() {
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-1">
-      <TopBar title={trip?.title ?? 'mapa'} />
-      <Island className="p-4 text-sm text-muted">● mapa pojawi się w etapie 4</Island>
-    </main>
+    <Suspense>
+      <TripMap />
+    </Suspense>
   )
 }

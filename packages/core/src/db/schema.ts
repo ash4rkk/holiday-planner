@@ -1,4 +1,14 @@
-import { boolean, customType, date, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import {
+  boolean,
+  customType,
+  date,
+  doublePrecision,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core'
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
   dataType: () => 'bytea',
@@ -35,7 +45,32 @@ export const tripDocs = pgTable('trip_docs', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/** Skrzynka miejsc: udostępnione z Google Maps, czekają na rozdzielenie na karty. */
+export const inboxItems = pgTable(
+  'inbox_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    address: text('address'),
+    lat: doublePrecision('lat'),
+    lng: doublePrecision('lng'),
+    mapsUrl: text('maps_url'),
+    note: text('note'),
+    // Klucz z kolejki offline klienta: ponowne wysłanie tego samego udostępnienia nie dubluje wpisu.
+    clientKey: text('client_key').unique(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // Ustawiane, gdy z miejsca powstała karta (albo zostało odrzucone).
+    usedAt: timestamp('used_at', { withTimezone: true }),
+  },
+  (t) => [index('inbox_items_trip_idx').on(t.tripId, t.usedAt)],
+)
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Trip = typeof trips.$inferSelect
 export type NewTrip = typeof trips.$inferInsert
+export type InboxItem = typeof inboxItems.$inferSelect

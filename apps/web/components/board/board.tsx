@@ -34,10 +34,13 @@ import {
 } from '@xyflow/react'
 import { Columns3, Plus, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AddButton } from '@/components/add-button'
 import { CardSheet } from '@/components/card/card-sheet'
+import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
+import { pasteAsCard } from '@/lib/place-card'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
 import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
@@ -282,20 +285,15 @@ function BoardCanvas() {
     setMenu({ x, y, flow: rf.screenToFlowPosition({ x, y }) })
   }
 
-  const addCard = (at: { x: number; y: number }, text?: string) => {
-    const id = createCard(
-      doc,
-      {
-        type: 'note',
-        x: Math.round(at.x - CARD_SIZE.w / 2),
-        y: Math.round(at.y - CARD_SIZE.h / 2),
-      },
-      new Date(),
-      text,
-    )
+  // Lewy górny róg karty tak, żeby jej środek wypadł w punkcie.
+  const centered = (at: { x: number; y: number }) => ({
+    x: Math.round(at.x - CARD_SIZE.w / 2),
+    y: Math.round(at.y - CARD_SIZE.h / 2),
+  })
+  const addCard = (at: { x: number; y: number }) => {
+    const id = createCard(doc, { type: 'note', ...centered(at) })
     setMenu(null)
-    if (text) setSelection({ kind: 'card', id })
-    else sheet.open(id, true)
+    sheet.open(id, true)
   }
   const viewportCenter = () =>
     rf.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
@@ -313,9 +311,9 @@ function BoardCanvas() {
     {
       label: 'wklej',
       run: async () => {
-        const text = await navigator.clipboard?.readText().catch(() => '')
-        if (text?.trim()) addCard(menu.flow, text)
-        else setMenu(null)
+        const id = await pasteAsCard(doc, centered(menu.flow))
+        setMenu(null)
+        if (id) setSelection({ kind: 'card', id })
       },
     },
   ]
@@ -398,6 +396,7 @@ function BoardCanvas() {
             actions={
               <>
                 <TripStatus />
+                <InboxButton />
                 {undo && (
                   <button
                     type="button"
@@ -456,17 +455,13 @@ function BoardCanvas() {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => addCard(viewportCenter())}
-          aria-label="nowa karta"
-          className={cx(
-            'fixed right-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 flex size-14 items-center justify-center',
-            'rounded-island bg-accent text-on-accent hover:bg-accent-hover',
-          )}
-        >
-          <Plus className="size-6" aria-hidden="true" />
-        </button>
+        <AddButton
+          onNew={() => addCard(viewportCenter())}
+          onPaste={async () => {
+            const id = await pasteAsCard(doc, centered(viewportCenter()))
+            if (id) setSelection({ kind: 'card', id })
+          }}
+        />
       </div>
 
       {sheet.openId && (

@@ -3,13 +3,18 @@
 import {
   CARD_STATUS_LABELS,
   CARD_STATUSES,
+  type CardLocation,
   type CardSnapshot,
   type EditableCardFields,
   formatShortDate,
+  navigationUrl,
+  placeUrl,
 } from '@planer/core'
-import { X } from 'lucide-react'
+import { Navigation, X } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { MiniMap } from '@/components/map/mini-map'
 import { cx, inputClass } from '@/components/ui'
+import { resolvePastedPlace } from '@/lib/place-card'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
 type Key = 'date' | 'endDate' | 'time' | 'durationMin' | 'status' | 'location' | 'remindMin'
@@ -191,30 +196,7 @@ function FieldInput({
         </div>
       )
     case 'location':
-      return (
-        <div className="flex flex-col gap-1">
-          <input
-            className={inputClass}
-            placeholder="nazwa miejsca"
-            value={card.location?.name ?? ''}
-            onChange={(e) => onChange({ location: { ...card.location, name: e.target.value } })}
-          />
-          <input
-            className={inputClass}
-            placeholder="adres (opcjonalnie)"
-            value={card.location?.address ?? ''}
-            onChange={(e) =>
-              onChange({
-                location: {
-                  name: card.location?.name ?? '',
-                  ...card.location,
-                  address: e.target.value || undefined,
-                },
-              })
-            }
-          />
-        </div>
-      )
+      return <LocationField card={card} onChange={onChange} />
   }
 }
 
@@ -227,4 +209,101 @@ export function fieldsSummary(card: CardSnapshot): string {
   ]
     .filter(Boolean)
     .join(' · ')
+}
+
+/** Miejsce: nazwa i adres ręcznie albo wklejony link Google Maps (współrzędne), mapka i nawigacja. */
+function LocationField({
+  card,
+  onChange,
+}: {
+  card: CardSnapshot
+  onChange: (patch: Partial<EditableCardFields>) => void
+}) {
+  const location = card.location
+  const [link, setLink] = useState('')
+  const [state, setState] = useState<'idle' | 'resolving' | 'failed'>('idle')
+  const hasCoords = location?.lat !== undefined && location?.lng !== undefined
+
+  const set = (patch: Partial<CardLocation>) =>
+    onChange({ location: { name: location?.name ?? '', ...location, ...patch } })
+
+  const resolve = async (text: string) => {
+    if (!text.trim()) return
+    setState('resolving')
+    const place = await resolvePastedPlace(text).catch(() => null)
+    if (!place) {
+      setState('failed')
+      return
+    }
+    setLink('')
+    setState('idle')
+    onChange({
+      location: {
+        name: location?.name || place.name,
+        address: location?.address || place.address || undefined,
+        ...(place.lat != null && place.lng != null && { lat: place.lat, lng: place.lng }),
+        ...(place.mapsUrl && { mapsUrl: place.mapsUrl }),
+      },
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        className={inputClass}
+        placeholder="nazwa miejsca"
+        value={location?.name ?? ''}
+        onChange={(e) => set({ name: e.target.value })}
+      />
+      <input
+        className={inputClass}
+        placeholder="adres (opcjonalnie)"
+        value={location?.address ?? ''}
+        onChange={(e) => set({ address: e.target.value || undefined })}
+      />
+      {!location?.mapsUrl && (
+        <input
+          className={inputClass}
+          inputMode="url"
+          placeholder="wklej link z Google Maps"
+          value={link}
+          onChange={(e) => {
+            setLink(e.target.value)
+            setState('idle')
+          }}
+          onPaste={(e) => void resolve(e.clipboardData.getData('text'))}
+          onBlur={() => void resolve(link)}
+        />
+      )}
+      {state === 'resolving' && <span className="text-xs text-subtle italic">szukam miejsca…</span>}
+      {state === 'failed' && (
+        <span className="text-xs text-red">● to nie jest link do Google Maps</span>
+      )}
+      {hasCoords && (
+        <MiniMap lat={location.lat as number} lng={location.lng as number} className="mt-1" />
+      )}
+      {(hasCoords || location?.mapsUrl) && (
+        <div className="grid grid-cols-2 gap-1">
+          {hasCoords && (
+            <a
+              href={navigationUrl({ lat: location.lat as number, lng: location.lng as number })}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-h-11 items-center justify-center gap-1 rounded-small bg-accent text-sm font-bold text-on-accent"
+            >
+              <Navigation className="size-4" aria-hidden="true" /> nawiguj
+            </a>
+          )}
+          <a
+            href={placeUrl(location ?? {})}
+            target="_blank"
+            rel="noreferrer"
+            className="flex min-h-11 items-center justify-center rounded-small border border-line text-sm text-muted"
+          >
+            Mapy Google ›
+          </a>
+        </div>
+      )}
+    </div>
+  )
 }

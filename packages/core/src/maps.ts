@@ -1,0 +1,209 @@
+import type { CardSnapshot } from './cards'
+import { addDays, dateRange } from './dates'
+import { staysOver } from './trip-doc'
+
+// Linki Google Maps: rozpoznanie, wyciąganie nazwy i współrzędnych, link do nawigacji.
+// Formaty linków Google się zmieniają — stąd kilka wzorców i geokodowanie adresu jako zapas
+// (apps/web/lib/maps-resolve.ts).
+
+export type LatLng = { lat: number; lng: number }
+
+const GOOGLE_HOST = /^(?:www\.|maps\.)?google\.[a-z.]{2,6}$/i
+
+/** Czy to link do Google Maps (krótki maps.app.goo.gl, goo.gl/maps albo google.*\/maps). */
+export function isGoogleMapsUrl(raw: string): boolean {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
+  const host = url.hostname.toLowerCase()
+  if (host === 'maps.app.goo.gl') return true
+  if (host === 'goo.gl') return url.pathname.startsWith('/maps')
+  if (host.startsWith('maps.google.')) return GOOGLE_HOST.test(host)
+  return GOOGLE_HOST.test(host) && url.pathname.startsWith('/maps')
+}
+
+/** Hosty, po których resolver może chodzić przy rozwijaniu przekierowań. */
+export function isAllowedMapsHost(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase()
+    return (
+      host === 'maps.app.goo.gl' ||
+      host === 'goo.gl' ||
+      host === 'consent.google.com' ||
+      GOOGLE_HOST.test(host)
+    )
+  } catch {
+    return false
+  }
+}
+
+const URL_RE = /https?:\/\/[^\s<>"']+/gi
+
+export function findUrls(text: string): string[] {
+  return [...text.matchAll(URL_RE)].map((m) => m[0].replace(/[),.;]+$/, ''))
+}
+
+export type SharedPlace = { name?: string; address?: string; mapsUrl?: string; otherUrl?: string }
+
+/**
+ * Dane z „Udostępnij” (title, text, url). Google Maps zwykle wkłada do `text` nazwę, adres i krótki
+ * link, każde w osobnej linii; czasem tylko link.
+ */
+export function parseShared(input: { title?: string; text?: string; url?: string }): SharedPlace {
+  const text = [input.text ?? '', input.url ?? ''].join('\n')
+  const urls = findUrls(text)
+  const mapsUrl = urls.find(isGoogleMapsUrl)
+  const otherUrl = urls.find((u) => !isGoogleMapsUrl(u))
+  const lines = (input.text ?? '')
+    .split('\n')
+    .map((l) => l.replace(URL_RE, '').trim())
+    .filter(Boolean)
+  const title = input.title?.trim()
+  const name = lines[0] ?? (title && !findUrls(title).length ? title : undefined)
+  const address = lines.length > 1 ? lines.slice(1).join(', ') : undefined
+  return { name, address, mapsUrl, otherUrl }
+}
+
+function valid(lat: number, lng: number): LatLng | undefined {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return undefined
+  return { lat, lng }
+}
+
+const NUM = '(-?\\d{1,3}(?:\\.\\d+)?)'
+
+/**
+ * Współrzędne z pełnego linku. Kolejność: pinezka miejsca (!3d…!4d…), parametry zapytania
+ * (q, query, ll, destination, center), ścieżka /search/ i /dir/, na końcu środek widoku (@lat,lng).
+ */
+export function coordsFromMapsUrl(raw: string): LatLng | undefined {
+  let decoded = raw
+  try {
+    decoded = decodeURIComponent(raw)
+  } catch {}
+  const pin = decoded.match(new RegExp(`!3d${NUM}!4d${NUM}`))
+  if (pin) return valid(Number(pin[1]), Number(pin[2]))
+
+  try {
+    const url = new URL(raw)
+    for (const key of ['q', 'query', 'll', 'destination', 'center', 'sll']) {
+      const value = url.searchParams.get(key)
+      const m = value?.match(new RegExp(`^\\s*${NUM}\\s*,\\s*${NUM}\\s*$`))
+      if (m) return valid(Number(m[1]), Number(m[2]))
+    }
+  } catch {}
+
+  const path = decoded.match(new RegExp(`/(?:search|dir|place)/${NUM},\\s*\\+?${NUM}`))
+  if (path) return valid(Number(path[1]), Number(path[2]))
+
+  const at = decoded.match(new RegExp(`@${NUM},${NUM}`))
+  if (at) return valid(Number(at[1]), Number(at[2]))
+  return undefined
+}
+
+/** Nazwa z /maps/place/<nazwa>/… */
+export function nameFromMapsUrl(raw: string): string | undefined {
+  const m = raw.match(/\/maps\/place\/([^/@?]+)/)
+  if (!m?.[1]) return undefined
+  try {
+    const name = decodeURIComponent(m[1].replace(/\+/g, ' ')).trim()
+    return name && !/^-?\d/.test(name) ? name : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Ekran zgody Google (UE) trzyma docelowy adres w `continue`. */
+export function unwrapConsentUrl(raw: string): string {
+  try {
+    const url = new URL(raw)
+    if (url.hostname === 'consent.google.com') return url.searchParams.get('continue') ?? raw
+  } catch {}
+  return raw
+}
+
+/** Nawigacja w aplikacji Google Maps (Android przekazuje ten link do aplikacji). */
+export function navigationUrl({ lat, lng }: LatLng): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+}
+
+/** Link do miejsca: oryginalny z udostępnienia, a bez niego wyszukiwanie po współrzędnych/nazwie. */
+export function placeUrl(location: {
+  mapsUrl?: string
+  lat?: number
+  lng?: number
+  name?: string
+}): string {
+  if (location.mapsUrl) return location.mapsUrl
+  const query =
+    location.lat !== undefined && location.lng !== undefined
+      ? `${location.lat},${location.lng}`
+      : (location.name ?? '')
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`
+}
+
+/** Kurs w stopniach (0 = północ), do obrotu strzałek trasy na mapie. */
+export function bearing(a: LatLng, b: LatLng): number {
+  const rad = Math.PI / 180
+  const y = Math.sin((b.lng - a.lng) * rad) * Math.cos(b.lat * rad)
+  const x =
+    Math.cos(a.lat * rad) * Math.sin(b.lat * rad) -
+    Math.sin(a.lat * rad) * Math.cos(b.lat * rad) * Math.cos((b.lng - a.lng) * rad)
+  return (Math.atan2(y, x) / rad + 360) % 360
+}
+
+// ---------- mapa wyjazdu ----------
+
+export type MappedCard = CardSnapshot & { location: NonNullable<CardSnapshot['location']> & LatLng }
+
+export function hasCoords(card: CardSnapshot): card is MappedCard {
+  return card.location?.lat !== undefined && card.location?.lng !== undefined
+}
+
+export type DayRoute = {
+  /** Nocleg, z którego zaczyna się dzień (spaliście tam poprzedniej nocy, a w pierwszy dzień — tej nocy). */
+  start?: MappedCard
+  /** Miejsca dnia z mapy w kolejności godzin (bez godziny na końcu). */
+  stops: MappedCard[]
+  /** Karty dnia bez współrzędnych — „poza mapą”. */
+  offMap: CardSnapshot[]
+}
+
+export function dayRoute(cards: CardSnapshot[], date: string): DayRoute {
+  const live = cards.filter((c) => !c.deletedAt)
+  const day = live
+    .filter((c) => c.date === date)
+    .sort((a, b) => {
+      if (a.time && b.time) return a.time.localeCompare(b.time)
+      if (a.time || b.time) return a.time ? -1 : 1
+      return a.createdAt.localeCompare(b.createdAt)
+    })
+  const stays = live.filter(hasCoords).filter((c) => c.type === 'stay')
+  const start =
+    stays.find((s) => staysOver(s, addDays(date, -1))) ?? stays.find((s) => staysOver(s, date))
+  return {
+    start,
+    stops: day.filter(hasCoords).filter((c) => c.id !== start?.id),
+    offMap: day.filter((c) => !hasCoords(c)),
+  }
+}
+
+/** Zakładki dni mapy: wszystkie dni wyjazdu plus dni spoza zakresu, w których są miejsca. */
+export function mapDays(
+  cards: CardSnapshot[],
+  trip: { startDate?: string | null; endDate?: string | null },
+): { date: string; hasPlaces: boolean }[] {
+  const live = cards.filter((c) => !c.deletedAt)
+  const dates = new Set(
+    trip.startDate ? dateRange(trip.startDate, trip.endDate ?? trip.startDate) : [],
+  )
+  for (const c of live) if (c.date && hasCoords(c)) dates.add(c.date)
+  return [...dates].sort().map((date) => ({
+    date,
+    hasPlaces: live.some((c) => c.date === date && hasCoords(c)),
+  }))
+}

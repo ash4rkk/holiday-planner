@@ -1,10 +1,21 @@
 'use client'
 
 import { SerwistProvider } from '@serwist/turbopack/react'
-import type { ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
 
 /** Rejestracja SW tylko w buildzie produkcyjnym (w dev cache przeszkadza w pracy). */
 export function ServiceWorker({ children }: { children: ReactNode }) {
+  // Ekrany potrzebne bez zasięgu od pierwszego uruchomienia (np. udostępnienie w samolocie).
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) return
+    void navigator.serviceWorker.ready.then(() =>
+      window.serwist?.messageSW({
+        type: 'CACHE_URLS',
+        payload: { urlsToCache: ['/', '/trips', '/share'] },
+      }),
+    )
+  }, [])
+
   return (
     <SerwistProvider
       swUrl="/serwist/sw.js"

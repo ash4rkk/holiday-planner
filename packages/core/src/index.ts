@@ -1,5 +1,6 @@
 export * from './board'
 export * from './cards'
 export * from './dates'
+export * from './maps'
 export * from './trip-doc'
 export * from './users'

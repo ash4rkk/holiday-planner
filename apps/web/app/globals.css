@@ -167,3 +167,48 @@ body {
   white-space: nowrap;
   user-select: none;
 }
+
+/* Pinezka na mapach (MapLibre): element znacznika to wrapper (MapLibre nadpisuje jego transform),
+   kształt kropli w środku; kolor przez --pin, opcjonalny numer kolejności. */
+.map-pin {
+  width: 30px;
+  height: 34px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.map-pin__shape {
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--pin, var(--accent));
+  border: 2px solid var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.map-pin__shape > span {
+  transform: rotate(45deg);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--on-accent);
+}
+.map-pin.is-active .map-pin__shape {
+  border-color: var(--text);
+}
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
+/* Strzałka kierunku trasy dnia (obracana wg kursu odcinka). */
+.map-arrow {
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 12px solid var(--accent);
+}

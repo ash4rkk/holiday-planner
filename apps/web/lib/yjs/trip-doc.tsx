@@ -118,6 +118,8 @@ export type TripMeta = {
   endDate: string | null
   currencies: string[]
   archived: boolean
+  /** Miejsca w skrzynce do rozdzielenia (z serwera przy renderze). */
+  inboxCount: number
 }
 
 type Ctx = {

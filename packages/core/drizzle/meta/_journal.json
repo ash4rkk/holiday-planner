@@ -15,6 +15,13 @@
       "when": 1793646124544,
       "tag": "0001_lame_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793647412406,
+      "tag": "0002_first_dreadnoughts",
+      "breakpoints": true
     }
   ]
 }
