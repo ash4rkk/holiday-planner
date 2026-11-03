@@ -11,6 +11,7 @@ import { useEffect } from 'react'
 import type * as Y from 'yjs'
 import { takePendingMarkdown } from '@/lib/card-templates'
 import { useTrip } from '@/lib/yjs/trip-doc'
+import { AmountHighlight } from './amount-highlight'
 
 /** WYSIWYG treści karty; stan żyje w Y.XmlFragment karty (współedycja w etapie 3 bez zmian tutaj). */
 export function CardEditor({
@@ -40,6 +41,7 @@ export function CardEditor({
         TaskItem.configure({ nested: true }),
         Placeholder.configure({ placeholder: 'tytuł w pierwszej linii, niżej notatki…' }),
         Markdown,
+        AmountHighlight,
         Collaboration.configure({ fragment }),
         // Kursor drugiej osoby w tej samej karcie (pozycje z innych kart są pomijane).
         ...(provider ? [CollaborationCaret.configure({ provider, user })] : []),

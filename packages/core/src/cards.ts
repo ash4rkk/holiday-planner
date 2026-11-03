@@ -1,3 +1,5 @@
+import type { Amount } from './amounts'
+
 export const CARD_TYPES = ['stay', 'sight', 'food', 'transport', 'note'] as const
 export type CardType = (typeof CARD_TYPES)[number]
 
@@ -82,6 +84,8 @@ export type CardSnapshot = CardFields & {
   title: string
   /** Kolejne linie treści, skrócone. */
   preview: string
+  /** Kwoty `/+` z całej treści. */
+  amounts: Amount[]
 }
 
 export const CARD_SIZE = { w: 260, h: 160 } as const

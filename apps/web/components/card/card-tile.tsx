@@ -1,5 +1,6 @@
 import { CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot } from '@planer/core'
 import { Paperclip } from 'lucide-react'
+import { AmountBadge } from '@/components/amounts'
 import { cx } from '@/components/ui'
 import { fieldsSummary } from './card-fields'
 import { TYPE_STYLE } from './type-style'
@@ -47,6 +48,7 @@ export function CardTile({
           >
             {card.title || 'bez tytułu'}
           </span>
+          <AmountBadge amounts={card.amounts ?? []} className="ml-auto" />
           {card.pinned && (
             <span className="text-accent" title="przypięta">
               ⌖

@@ -36,6 +36,16 @@ Potem uzupełnij w `/srv/planer/.env`: `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` 
 Hasło `planer_readonly` przenieś do lokalnego `~/.pgpass` (wpis dla `localhost:15432`, jak
 `portfolio_readonly`) i usuń plik z serwera.
 
+### 2a. Klucze powiadomień [L]
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Wynik do `/srv/planer/.env`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:<twój adres>`.
+Czytają je `planer-web` (klucz publiczny dla telefonu), `planer-worker` (przypomnienia) i `planer-sync`
+(zmiany drugiej osoby). Klucze ustawia się raz — nowe unieważniają subskrypcje na telefonach.
+
 ### 3. Caddy [S]
 
 Blok w `/srv/edge/Caddyfile` na wzór bloku `portfolio.wiergowsky.com` (ten sam sposób nasłuchu —
@@ -138,6 +148,8 @@ Oczekiwane: `migracje zastosowane`, w logu web `✓ Ready` bez `Error`.
   na jednym pojawia się na drugim w ciągu sekundy.
 - Chrome na telefonie → menu → „Zainstaluj aplikację”.
 - Karta → „+ plik” → PDF biletu; potem tryb samolotowy → ta sama karta → bilet się otwiera.
+- Pulpit → ustawienia → „włącz powiadomienia” → „wyślij próbne” na obu telefonach.
+- `docker logs planer-worker` po czasie przypomnienia: `worker: przypomnienie „…” → 2 urządz.`
 
 ## Wycofanie [S]
 

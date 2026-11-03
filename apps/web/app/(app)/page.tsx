@@ -1,11 +1,17 @@
 import { daysBetween, todayLocal } from '@planer/core'
+import { Settings } from 'lucide-react'
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { OfflinePrefetch } from '@/components/offline-prefetch'
+import { TodayDashboard } from '@/components/today/today-dashboard'
 import { TopBar } from '@/components/top-bar'
 import { TripRow } from '@/components/trips/trip-row'
 import { buttonClass, SectionLabel } from '@/components/ui'
 import { getCurrentUser } from '@/lib/auth/user'
+import { countInbox } from '@/lib/inbox'
+import { listTemplates } from '@/lib/templates'
 import { listTrips } from '@/lib/trips'
+import { TripProvider } from '@/lib/yjs/trip-doc'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,41 +35,67 @@ export default async function PulpitPage() {
 
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
-      <TopBar title="dziś" subtitle={header} />
+      <TopBar
+        title="dziś"
+        subtitle={header}
+        actions={
+          <Link
+            href="/settings"
+            aria-label="ustawienia"
+            className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
+          >
+            <Settings className="size-5" aria-hidden="true" />
+          </Link>
+        }
+      />
       {/* Bilety trwającego albo najbliższego wyjazdu mają być na telefonie bez czekania. */}
       <OfflinePrefetch tripId={(now ?? next)?.id} />
 
-      <section className="island border-t-2 border-t-accent p-4">
-        <p className="text-xl font-bold">cześć, {user.name}</p>
-        {now?.startDate ? (
-          <p className="mt-1 text-sm text-muted">
-            dzień {daysBetween(now.startDate, today) + 1} wyjazdu{' '}
-            <Link href={`/trips/${now.id}/list`} className="text-accent">
-              {now.title} ›
-            </Link>
-          </p>
-        ) : next?.startDate ? (
-          <p className="mt-1 text-sm text-muted">
-            {(() => {
-              const n = daysBetween(today, next.startDate)
-              return `za ${n} ${plural(n, 'dzień', 'dni', 'dni')}: `
-            })()}
-            <Link href={`/trips/${next.id}/list`} className="text-accent">
-              {next.title} ›
-            </Link>
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-muted">● nie ma zaplanowanych wyjazdów</p>
-        )}
-        <p className="mt-2 text-xs text-subtle italic">
-          plan dnia, dojazd, pogoda i wydatki — etap 6
-        </p>
-      </section>
+      {now ? (
+        // W trakcie wyjazdu: plan dnia z dokumentu wyjazdu (IndexedDB + sync).
+        <TripProvider
+          trip={{
+            id: now.id,
+            title: now.title,
+            startDate: now.startDate,
+            endDate: now.endDate,
+            currencies: now.currencies,
+            archived: now.archived,
+            inboxCount: await countInbox(now.id).catch(() => 0),
+            templates: await listTemplates(),
+          }}
+          user={{ name: user.name, color: user.color }}
+        >
+          <Suspense>
+            <TodayDashboard userName={user.name} />
+          </Suspense>
+        </TripProvider>
+      ) : (
+        <section className="island border-t-2 border-t-accent p-4">
+          <p className="text-xl font-bold">cześć, {user.name}</p>
+          {next?.startDate ? (
+            <p className="mt-1 text-sm text-muted">
+              {(() => {
+                const n = daysBetween(today, next.startDate)
+                return `za ${n} ${plural(n, 'dzień', 'dni', 'dni')}: `
+              })()}
+              <Link href={`/trips/${next.id}/list`} className="text-accent">
+                {next.title} ›
+              </Link>
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-muted">● nie ma zaplanowanych wyjazdów</p>
+          )}
+        </section>
+      )}
 
-      {current.length + upcoming.length > 0 && <SectionLabel>wyjazdy</SectionLabel>}
-      {[...current, ...upcoming].slice(0, 4).map((t) => (
-        <TripRow key={t.id} trip={t} />
-      ))}
+      {current.length + upcoming.length > (now ? 1 : 0) && <SectionLabel>wyjazdy</SectionLabel>}
+      {[...current, ...upcoming]
+        .filter((t) => t.id !== now?.id)
+        .slice(0, 4)
+        .map((t) => (
+          <TripRow key={t.id} trip={t} />
+        ))}
 
       <div className="mt-1 grid grid-cols-2 gap-1">
         <Link href="/trips" className={buttonClass('island')}>

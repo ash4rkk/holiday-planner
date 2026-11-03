@@ -212,3 +212,12 @@ body {
   border-right: 7px solid transparent;
   border-bottom: 12px solid var(--accent);
 }
+
+/* Kwota `/+` w treści karty. */
+.amount-mark {
+  color: var(--orange);
+  font-weight: 700;
+  background: color-mix(in srgb, var(--orange) 14%, transparent);
+  border-radius: 4px;
+  padding: 0 2px;
+}

@@ -16,6 +16,7 @@ import {
 } from '@xyflow/react'
 import { Pin, PinOff, SquarePen, Trash2 } from 'lucide-react'
 import { memo } from 'react'
+import { AmountBadge } from '@/components/amounts'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardMetaLine } from '@/components/card/card-tile'
 import { TYPE_STYLE } from '@/components/card/type-style'
@@ -102,6 +103,7 @@ export const CardNode = memo(function CardNode({
             {card.title || 'bez tytułu'}
           </span>
           {card.pinned && <span className="text-accent">⌖</span>}
+          <AmountBadge amounts={card.amounts ?? []} />
         </div>
         {(meta || card.status) && (
           <div className="flex items-center gap-2 text-xs">

@@ -10,7 +10,8 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Etap 3 (sync i offline) — zrobiony na gałęzi `etap-3`: serwer Hocuspocus (`apps/sync`, auth JWT Access przy upgrade, stan w `trip_docs`), provider w `lib/yjs/trip-doc.tsx` (status: na żywo / offline / sesja wygasła), awatary, kursory na tablicy, kursory w edytorze, PWA (Serwist: `app/sw.ts` → `/serwist/sw.js`, manifest, ikony z `app/icons`).
 - Etap 4 (miejsca) — zrobiony na gałęzi `etap-4`: Share Target (SW zapisuje udostępnienie w IndexedDB → `/share` → kolejka `outbox` → `/api/inbox`, działa offline), rozwijanie linków Google Maps (`packages/core/src/maps.ts` + `lib/maps-resolve.ts`, zapas: Nominatim), skrzynka (`inbox_items`), wklejanie linku („+” i menu tablicy), mini-mapy i nawigacja w karcie, widok Mapa z trasą dnia (MapLibre + OpenFreeMap).
 - Etap 5 (pliki i linki) — zrobiony na gałęzi `etap-5`: załączniki (`attachments`, pliki w `UPLOAD_DIR`, typ rozpoznawany z bajtów, metadane w mapie `attachments` dokumentu Yjs), podgląd w aplikacji (PDF.js), pliki aktywnego wyjazdu w cache `attachments` (SW cache-first + `lib/offline-files.ts`), podglądy Open Graph (`lib/safe-fetch.ts` z ochroną SSRF), szablony kart (`card_templates`, „z szablonu” w „+”, „zapisz jako szablon”).
-- Następny: Etap 6 (parser /+, kursy NBP, Pulpit dnia, przypomnienia push).
+- Etap 6 (Pulpit, koszty, push) — zrobiony na gałęzi `etap-6`: kwoty `/+` (`packages/core/src/amounts.ts`), kursy NBP z cache `fx_rates` (`@planer/core/fx`, `/api/fx`, `lib/use-rates.ts`), sumy kart/dni/wyjazdu, pogoda (Open-Meteo, `/api/weather`) w Liście i na Pulpicie, dojazd (OSRM FOSSGIS, `/api/route`), Pulpit dnia (`components/today/`), push: subskrypcje (`push_subscriptions`, `/settings`), przypomnienia (`reminders`, liczy sync, wysyła worker), zmiany drugiej osoby (sync, po 3 min ciszy), strefa czasowa wyjazdu (`trips.timezone`).
+- Następny: Etap 7 (AI: czat z kontekstem wyjazdu, import zdjęć i PDF-ów do szkiców kart).
 
 ## Stos
 
@@ -20,14 +21,15 @@ Etap 2: @xyflow/react 12 + roughjs.
 Etap 3: Hocuspocus 4 (server, provider, extension-database), @tiptap/extension-collaboration-caret, Serwist 9 (@serwist/turbopack).
 Etap 4: maplibre-gl 6 (kafelki OpenFreeMap: positron / dark), Nominatim jako geokoder zapasowy.
 Etap 5: pdfjs-dist 6 (worker w public/ jak MapLibre), ipaddr.js.
-Planowane (kolejne etapy): web-push, Anthropic API, Playwright.
+Etap 6: web-push (VAPID), Temporal (Node 26) do stref czasowych przypomnień.
+Planowane (kolejne etapy): Anthropic API, Playwright.
 
 ## Struktura
 
 ```
 apps/web        Next.js; proxy.ts (auth), lib/auth/, app/(app)/ (ekrany za logowaniem)
 apps/sync       serwer Hocuspocus: WebSocket /sync, dokument Yjs na wyjazd, zapis do trip_docs
-apps/worker     zadania w tle (na razie zaślepka)
+apps/worker     zadania w tle: przypomnienia push (co 30 s), kursy NBP (co 6 h)
 packages/core   wspólny kod: schemat Drizzle (src/db/schema.ts), migracje (drizzle/), helpery
 ```
 
@@ -62,7 +64,11 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - Dynamiczne ścieżki plików na serwerze oznaczaj `/* turbopackIgnore: true */`, inaczej build śledzi cały projekt do `standalone`.
 - pnpm nie uruchamia skryptów `pre*`/`post*` — kroki przygotowawcze wpisuj wprost w skrypt.
 - Rozwijanie linków chodzi tylko po hostach Google (`isAllowedMapsHost`) — to ochrona przed SSRF, nie poluzowuj jej.
+- `Temporal` tylko po stronie serwera (`@planer/core/reminders`) — nie importuj go do kodu klienta, przeglądarki go jeszcze nie mają.
+- Moduły `@planer/core/fx`, `/push`, `/reminders-db` używają bazy — tylko serwer (API, sync, worker).
 - Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.
+- `pnpm dev` dla sync/worker uruchamia `tsx watch` jako osobny proces `node` — zabicie powłoki go nie zatrzymuje; przy testach sprawdzaj `ps`, bo stary worker potrafi przejąć przypomnienia.
+- Wartości z `;` w `.env` (np. `USER_NAMES`) w cudzysłowie, inaczej `source .env` w powłoce je ucina.
 - W zsh nie używaj zmiennej `path` w skryptach (to tablica powiązana z `PATH`).
 
 ## Auth

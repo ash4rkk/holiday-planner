@@ -5,6 +5,14 @@ import { useActionState } from 'react'
 import { buttonClass, Field, inputClass } from '@/components/ui'
 import type { TripFormState } from '@/lib/trip-form'
 
+// Lista podpowiedzi; pole przyjmuje każdą strefę IANA.
+const TIMEZONES =
+  typeof Intl.supportedValuesOf === 'function'
+    ? Intl.supportedValuesOf('timeZone').filter((tz) =>
+        /^(Europe|Atlantic|Africa|Asia|America)\//.test(tz),
+      )
+    : ['Europe/Warsaw']
+
 type Action = (prev: TripFormState, form: FormData) => Promise<TripFormState>
 
 export function TripForm({
@@ -64,6 +72,26 @@ export function TripForm({
           autoCapitalize="characters"
           autoComplete="off"
         />
+      </Field>
+      <Field
+        label="strefa czasowa miejsca"
+        error={e.timezone}
+        hint="godziny kart i przypomnienia liczą się w tej strefie"
+      >
+        <input
+          name="timezone"
+          list="timezones"
+          defaultValue={v?.timezone ?? trip?.timezone ?? 'Europe/Warsaw'}
+          className={inputClass}
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+        />
+        <datalist id="timezones">
+          {TIMEZONES.map((tz) => (
+            <option key={tz} value={tz} />
+          ))}
+        </datalist>
       </Field>
       <button type="submit" disabled={pending} className={buttonClass('primary')}>
         {pending ? 'zapisuję…' : submitLabel}

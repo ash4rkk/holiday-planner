@@ -2,12 +2,12 @@ import 'server-only'
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns'
 import http from 'node:http'
 import https from 'node:https'
-import type { LookupFunction } from 'node:net'
+import { isIP, type LookupFunction } from 'node:net'
 import ipaddr from 'ipaddr.js'
 
 // Pobieranie stron spod adresów podanych przez użytkownika (podgląd linku) bez SSRF:
-// tylko http(s), tylko publiczne adresy IP — sprawdzane w samym lookupie gniazda, więc DNS
-// nie może po walidacji podmienić adresu na wewnętrzny (rebinding). Limit czasu, rozmiaru i przekierowań.
+// tylko http(s), tylko publiczne adresy IP — nazwy sprawdzane w samym lookupie gniazda, więc DNS
+// nie może po walidacji podmienić adresu na wewnętrzny (rebinding); adresy IP wprost przed połączeniem. Limit czasu, rozmiaru i przekierowań.
 
 const MAX_BYTES = 1024 * 1024
 const TIMEOUT_MS = 6000
@@ -111,6 +111,9 @@ export async function fetchPublicHtml(raw: string): Promise<FetchedPage | null> 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
     if (url.username || url.password) return null
+    // Adres IP wprost w URL omija lookup gniazda — sprawdzamy go tutaj.
+    const host = url.hostname.replace(/^\[|\]$/g, '')
+    if (isIP(host) && !isPublicAddress(host)) return null
     const res = await requestOnce(url).catch(() => null)
     if (!res) return null
     if (res.location) {

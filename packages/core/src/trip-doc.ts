@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
+import { parseAmounts } from './amounts'
 import {
   CARD_SIZE,
   type CardFields,
@@ -158,6 +159,7 @@ export function readCard(id: string, card: CardMap): CardSnapshot {
     id,
     title,
     preview: preview.length > 160 ? `${preview.slice(0, 159)}…` : preview,
+    amounts: parseAmounts(lines.join('\n')),
   }
 }
 

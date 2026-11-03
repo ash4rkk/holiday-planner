@@ -29,4 +29,18 @@ describe('fetchPublicHtml', () => {
     expect(await fetchPublicHtml('file:///etc/passwd')).toBeNull()
     expect(await fetchPublicHtml('http://user:pass@example.com/')).toBeNull()
   })
+
+  it('adres IP wprost (omija lookup) — odrzucony bez próby połączenia', async () => {
+    const started = Date.now()
+    for (const url of [
+      'http://10.255.255.1/',
+      'http://172.18.0.2:5432/',
+      'http://169.254.169.254/latest/meta-data',
+      'http://[fd00::1]/',
+    ]) {
+      expect(await fetchPublicHtml(url)).toBeNull()
+    }
+    // Nieosiągalne adresy prywatne zawiesiłyby połączenie na sekundy — tu odpowiedź jest natychmiast.
+    expect(Date.now() - started).toBeLessThan(200)
+  })
 })

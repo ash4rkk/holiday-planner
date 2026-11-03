@@ -20,6 +20,7 @@ import { Plus, Settings2 } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { AddButton } from '@/components/add-button'
+import { TotalsText } from '@/components/amounts'
 import { CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
 import { TYPE_STYLE } from '@/components/card/type-style'
@@ -28,6 +29,7 @@ import { useNavHidden } from '@/components/nav/nav-context'
 import { TopBar } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
+import { DayWeather } from '@/components/weather'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
@@ -36,6 +38,8 @@ import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function TripList() {
   const { trip, doc, ready, templates } = useTrip()
+  // Waluta główna wyjazdu (pierwsza z listy); bez walut — same złotówki.
+  const main = trip.currencies[0] ?? 'PLN'
   const cards = useCards()
   const attachments = useAttachments()
   const fileCounts = useMemo(() => countByCard(attachments), [attachments])
@@ -142,6 +146,13 @@ export function TripList() {
           })}
         </div>
 
+        {cards.some((c) => !c.deletedAt && c.amounts?.length) && (
+          <p className="px-3 text-xs text-subtle italic">
+            wydatki wyjazdu ·{' '}
+            <TotalsText cards={cards} mainCurrency={main} className="not-italic font-bold" />
+          </p>
+        )}
+
         {ready && live === 0 && (
           <p className="island p-4 text-sm text-muted">
             ● brak kart — dodaj pierwszą przyciskiem +
@@ -172,11 +183,14 @@ export function TripList() {
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
+                <DayWeather date={day.date} cards={cards} />
+                <span className="flex-1" />
+                <TotalsText cards={day.cards} mainCurrency={main} className="text-xs" />
                 <button
                   type="button"
                   onClick={() => add(day.date)}
                   aria-label={`dodaj kartę na ${formatShortDate(day.date)}`}
-                  className="ml-auto flex size-11 items-center justify-center text-muted hover:text-accent"
+                  className="flex size-11 items-center justify-center text-muted hover:text-accent"
                 >
                   <Plus className="size-4" aria-hidden="true" />
                 </button>

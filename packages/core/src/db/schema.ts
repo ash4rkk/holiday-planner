@@ -7,6 +7,8 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
+  real,
   text,
   timestamp,
   uuid,
@@ -35,6 +37,8 @@ export const trips = pgTable('trips', {
   // główna waluta wyjazdu pierwsza, np. ['EUR', 'CHF']
   currencies: text('currencies').array().notNull().default([]),
   archived: boolean('archived').notNull().default(false),
+  // Godziny kart są lokalne dla miejsca wyjazdu; strefa potrzebna do przypomnień push.
+  timezone: text('timezone').notNull().default('Europe/Warsaw'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -102,6 +106,50 @@ export const cardTemplates = pgTable('card_templates', {
   sortOrder: integer('sort_order').notNull().default(100),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/** Cache kursów NBP (tabela A): ile PLN za 1 jednostkę waluty w dniu publikacji. */
+export const fxRates = pgTable(
+  'fx_rates',
+  {
+    currency: text('currency').notNull(),
+    date: date('date').notNull(),
+    ratePln: real('rate_pln').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.currency, t.date] })],
+)
+
+/** Subskrypcje Web Push (jedna na przeglądarkę/telefon). */
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  // Powiadomienia o zmianach drugiej osoby (przypomnienia z kart przychodzą zawsze).
+  notifyChanges: boolean('notify_changes').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/** Przypomnienia z kart (data + godzina − wyprzedzenie); wylicza je serwer sync przy zmianie dokumentu. */
+export const reminders = pgTable(
+  'reminders',
+  {
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    cardId: text('card_id').notNull(),
+    fireAt: timestamp('fire_at', { withTimezone: true }).notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tripId, t.cardId, t.fireAt] }),
+    index('reminders_due_idx').on(t.sentAt, t.fireAt),
+  ],
+)
 
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert

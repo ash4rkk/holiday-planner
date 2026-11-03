@@ -2,6 +2,7 @@ import { Database } from '@hocuspocus/extension-database'
 import { Server } from '@hocuspocus/server'
 import { eq, getDb, sql, tripDocs, trips } from '@planer/core/db'
 import { authenticate } from './auth'
+import { rememberDigest, scheduleReminders, trackChange } from './notify'
 
 // Serwer współedycji: jeden dokument Yjs na wyjazd (nazwa dokumentu = id wyjazdu),
 // stan trwały w trip_docs. Klienci i tak trzymają kopię w IndexedDB, więc to nie jedyna kopia.
@@ -34,6 +35,20 @@ const server = new Server<{ email: string }>({
   async onConnect({ requestHeaders, documentName, context }) {
     context.email = await authenticate(requestHeaders)
     if (!(await tripExists(documentName))) throw new Error('nie ma takiego wyjazdu')
+  },
+
+  async afterLoadDocument({ documentName, document }) {
+    rememberDigest(documentName, document)
+    scheduleReminders(documentName, document)
+  },
+
+  async onChange({ documentName, document, context }) {
+    scheduleReminders(documentName, document)
+    if (context?.email) {
+      trackChange(documentName, document, context.email, () =>
+        [...document.connections.keys()].map((c) => c.context?.email).filter(Boolean),
+      )
+    }
   },
 
   async onRequest({ request, response }) {

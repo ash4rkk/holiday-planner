@@ -68,4 +68,41 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
+// Web Push: przypomnienia z kart (worker) i zmiany drugiej osoby (serwer sync).
+self.addEventListener('push', (event) => {
+  let data: { title?: string; body?: string; url?: string; tag?: string } = {}
+  try {
+    data = event.data?.json() ?? {}
+  } catch {
+    data = { body: event.data?.text() }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title ?? 'Planer', {
+      body: data.body,
+      tag: data.tag,
+      icon: '/icons/192.png',
+      data: { url: data.url ?? '/' },
+    }),
+  )
+})
+
+// Dotknięcie powiadomienia: otwarte okno Planera przechodzi do karty, inaczej nowe okno.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = new URL(
+    (event.notification.data as { url?: string })?.url ?? '/',
+    self.location.origin,
+  ).href
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const client = windows.find((w) => new URL(w.url).origin === self.location.origin)
+      if (client) {
+        await client.focus()
+        await client.navigate(url)
+      } else await self.clients.openWindow(url)
+    })(),
+  )
+})
+
 serwist.addEventListeners()
