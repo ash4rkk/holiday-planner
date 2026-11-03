@@ -4,6 +4,7 @@ import {
   arrangeByDays,
   createEdge,
   createFrame,
+  dayOrder,
   deleteFrame,
   moveItems,
   readEdges,
@@ -89,8 +90,8 @@ describe('ułóż wg dni', () => {
       endDate: '2027-07-16',
     })
     expect(byId(doc, first)).toMatchObject({ x: 100, y: 300 })
-    expect(byId(doc, early)).toMatchObject({ x: 400, y: 300 })
-    expect(byId(doc, late)?.x).toBe(400)
+    expect(byId(doc, early)).toMatchObject({ x: 450, y: 300 })
+    expect(byId(doc, late)?.x).toBe(450)
     expect(byId(doc, late)?.y).toBeGreaterThan(300)
     expect(byId(doc, loose)).toMatchObject({ x: 5, y: 5 })
 
@@ -108,5 +109,23 @@ describe('createCard z tekstem', () => {
       title: 'Pizzeria da Michele',
       preview: 'via Cesare Sersale 1',
     })
+  })
+})
+
+describe('dayOrder', () => {
+  it('grupuje karty z datą po dniach i układa je po godzinie', () => {
+    const doc = new Y.Doc()
+    const t = (n: number) => new Date(Date.UTC(2027, 0, 1, 0, n))
+    const late = createCard(doc, { type: 'sight', date: '2027-07-14', time: '15:00' }, t(1))
+    const early = createCard(doc, { type: 'food', date: '2027-07-14', time: '09:00' }, t(2))
+    const noTime = createCard(doc, { type: 'note', date: '2027-07-14' }, t(3))
+    const next = createCard(doc, { type: 'stay', date: '2027-07-15' }, t(4))
+    const gone = createCard(doc, { type: 'note', date: '2027-07-15' }, t(5))
+    createCard(doc, { type: 'note' }, t(6))
+    trashCard(doc, gone)
+    expect(dayOrder(readCards(doc))).toEqual([
+      { date: '2027-07-14', ids: [noTime, early, late] },
+      { date: '2027-07-15', ids: [next] },
+    ])
   })
 })

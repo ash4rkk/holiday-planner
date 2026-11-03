@@ -7,9 +7,12 @@ import {
   createCard,
   createEdge,
   createFrame,
+  dayIndexOf,
+  dayOrder,
   deleteEdge,
   deleteFrame,
   edgesOf,
+  formatDayHeader,
   framesOf,
   moveItems,
   type Positions,
@@ -50,12 +53,15 @@ import { useCardSheet } from '@/lib/use-card-sheet'
 import { useAttachments, useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
 import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
 import { CardNode } from './card-node'
+import { DayNode } from './day-node'
 import { FrameNode } from './frame-node'
 import { RemotePointers } from './remote-pointers'
-import { SketchEdge } from './sketch-edge'
+import { OrderEdge, SketchEdge } from './sketch-edge'
 
-const nodeTypes = { card: CardNode, frame: FrameNode }
-const edgeTypes = { sketch: SketchEdge }
+const nodeTypes = { card: CardNode, frame: FrameNode, day: DayNode }
+const edgeTypes = { sketch: SketchEdge, order: OrderEdge }
+// Margines obrysu dnia wokół kart; u góry miejsce na etykietę dnia.
+const DAY_PAD = { side: 22, top: 34, bottom: 22 }
 const HOLD_MENU_MS = 500
 
 export function Board() {
@@ -152,20 +158,77 @@ function BoardCanvas() {
     })
   }, [live, frames, fileCounts])
 
+  const days = useMemo(() => dayOrder(live), [live])
+
+  // Obrysy dni z bieżących pozycji węzłów (także w trakcie przeciągania).
+  const dayNodes = useMemo(() => {
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    return days.flatMap(({ date, ids }): Node[] => {
+      const boxes = ids.flatMap((id) => {
+        const n = byId.get(id)
+        if (!n) return []
+        const w = n.measured?.width ?? n.width ?? CARD_SIZE.w
+        const h = n.measured?.height ?? n.height ?? CARD_SIZE.h
+        return [{ x: n.position.x, y: n.position.y, r: n.position.x + w, b: n.position.y + h }]
+      })
+      if (!boxes.length) return []
+      const x = Math.min(...boxes.map((b) => b.x)) - DAY_PAD.side
+      const y = Math.min(...boxes.map((b) => b.y)) - DAY_PAD.top
+      const index = dayIndexOf(date, trip.startDate, trip.endDate)
+      return [
+        {
+          id: `day:${date}`,
+          type: 'day',
+          position: { x, y },
+          width: Math.max(...boxes.map((b) => b.r)) + DAY_PAD.side - x,
+          height: Math.max(...boxes.map((b) => b.b)) + DAY_PAD.bottom - y,
+          zIndex: 0,
+          selectable: false,
+          draggable: false,
+          focusable: false,
+          style: { pointerEvents: 'none' },
+          data: { date, label: formatDayHeader(date), sub: index ? `dzień ${index}` : undefined },
+        },
+      ]
+    })
+  }, [days, nodes, trip.startDate, trip.endDate])
+
   const shownNodes = useMemo(
-    () =>
-      nodes.map((n) => {
+    () => [
+      ...dayNodes,
+      ...nodes.map((n) => {
         const selected =
           (selection?.kind === 'card' && selection.id === n.id) ||
           (selection?.kind === 'frame' && frameNodeId(selection.id) === n.id)
         return n.selected === selected ? n : { ...n, selected }
       }),
-    [nodes, selection],
+    ],
+    [dayNodes, nodes, selection],
   )
 
-  const shownEdges = useMemo(
-    () =>
-      visibleEdges(edges, cards).map((e) => ({
+  const shownEdges = useMemo(() => {
+    const drawn = visibleEdges(edges, cards)
+    const linked = new Set(drawn.flatMap((e) => [`${e.from}>${e.to}`, `${e.to}>${e.from}`]))
+    // Kolejność w dniu: strzałka do następnej karty, chyba że ta para ma już własną strzałkę.
+    const order = days.flatMap(({ ids }) =>
+      ids.slice(1).flatMap((to, i) => {
+        const from = ids[i] as string
+        if (linked.has(`${from}>${to}`)) return []
+        return [
+          {
+            id: `order:${from}>${to}`,
+            source: from,
+            target: to,
+            type: 'order' as const,
+            selectable: false,
+            focusable: false,
+          },
+        ]
+      }),
+    )
+    return [
+      ...order,
+      ...drawn.map((e) => ({
         id: e.id,
         source: e.from,
         target: e.to,
@@ -174,8 +237,8 @@ function BoardCanvas() {
         selected: selection?.kind === 'edge' && selection.id === e.id,
         data: { label: e.label },
       })),
-    [edges, cards, selection],
-  )
+    ]
+  }, [edges, cards, days, selection])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)),

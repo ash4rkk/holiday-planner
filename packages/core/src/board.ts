@@ -22,7 +22,8 @@ export type Rect = { x: number; y: number; w: number; h: number }
 export type Positions = Record<string, { x: number; y: number; frameId?: string }>
 
 export const FRAME_SIZE = { w: 600, h: 400 } as const
-const GAP = 40
+// „Ułóż wg dni”: odstęp kolumn mieści obrysy dni (web: DAY_PAD), a pionowy — strzałki kolejności.
+const DAY_GAP = { x: 90, y: 56 }
 
 export function framesOf(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
   return doc.getMap<Y.Map<unknown>>('frames')
@@ -171,6 +172,23 @@ export function visibleEdges(edges: EdgeSnapshot[], cards: CardSnapshot[]): Edge
 
 // ---------- ułóż wg dni ----------
 
+/** Kolejność w dniu: po godzinie, bez godziny na początku, przy remisie wg utworzenia. */
+function byTime(a: CardSnapshot, b: CardSnapshot): number {
+  return (a.time ?? '').localeCompare(b.time ?? '') || a.createdAt.localeCompare(b.createdAt)
+}
+
+/** Dni z kartami (bez kosza) i id kart w kolejności dnia — do obrysów dni i strzałek kolejności. */
+export function dayOrder(cards: CardSnapshot[]): { date: string; ids: string[] }[] {
+  const byDate = new Map<string, CardSnapshot[]>()
+  for (const c of cards) {
+    if (c.deletedAt || !c.date) continue
+    byDate.set(c.date, [...(byDate.get(c.date) ?? []), c])
+  }
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, day]) => ({ date, ids: day.sort(byTime).map((c) => c.id) }))
+}
+
 /**
  * Karty z datą w kolumny dni (po godzinie), od lewego górnego rogu obecnych kart z datą.
  * Karty bez daty, ramki i strzałki zostają. Zwraca poprzednie pozycje do jednego „cofnij”.
@@ -194,19 +212,14 @@ export function arrangeByDays(
 
   doc.transact(() => {
     for (const [col, date] of columns.entries()) {
-      const day = dated
-        .filter((c) => c.date === date)
-        .sort(
-          (a, b) =>
-            (a.time ?? '').localeCompare(b.time ?? '') || a.createdAt.localeCompare(b.createdAt),
-        )
+      const day = dated.filter((c) => c.date === date).sort(byTime)
       let y = originY
       for (const card of day) {
         previous[card.id] = { x: card.x, y: card.y, frameId: card.frameId }
         const map = cardsOf(doc).get(card.id)
-        map?.set('x', originX + col * (CARD_SIZE.w + GAP))
+        map?.set('x', originX + col * (CARD_SIZE.w + DAY_GAP.x))
         map?.set('y', y)
-        y += (card.h ?? CARD_SIZE.h) + GAP / 2
+        y += (card.h ?? CARD_SIZE.h) + DAY_GAP.y
       }
     }
     assignFrames(doc)

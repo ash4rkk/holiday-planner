@@ -43,19 +43,11 @@ function borderPoint(b: Box, to: { x: number; y: number }, pad = 6) {
   return { x: cx + dx * scale, y: cy + dy * scale }
 }
 
-/** Swobodna szkicowa strzałka między brzegami kart, z opcjonalną etykietą. */
-export const SketchEdge = memo(function SketchEdge({
-  id,
-  source,
-  target,
-  data,
-  selected,
-}: EdgeProps<SketchEdgeType>) {
-  const board = useBoard()
+/** Szkicowa strzałka od brzegu karty `source` do brzegu `target`. */
+function useArrow(id: string, source: string, target: string) {
   const s = useInternalNode(source)
   const t = useInternalNode(target)
-
-  const geo = useMemo(() => {
+  return useMemo(() => {
     if (!s || !t) return null
     const sb = boxOf(s)
     const tb = boxOf(t)
@@ -72,7 +64,19 @@ export const SketchEdge = memo(function SketchEdge({
       paths: [...sketchLine(a.x, a.y, b.x, b.y, seed), ...sketchArrowHead(b.x, b.y, angle, seed)],
     }
   }, [s, t, id])
+}
 
+/** Swobodna szkicowa strzałka między brzegami kart, z opcjonalną etykietą. */
+export const SketchEdge = memo(function SketchEdge({
+  id,
+  source,
+  target,
+  data,
+  selected,
+}: EdgeProps<SketchEdgeType>) {
+  const board = useBoard()
+
+  const geo = useArrow(id, source, target)
   if (!geo) return null
   const { a, b, mid, paths } = geo
 
@@ -128,4 +132,22 @@ export const SketchEdge = memo(function SketchEdge({
       )}
     </>
   )
+})
+
+export type OrderEdgeType = Edge<Record<string, never>, 'order'>
+
+/** Strzałka kolejności w dniu (z godzin kart, niezapisana): cieńsza, w kolorze obrysu dnia, bez gestów. */
+export const OrderEdge = memo(function OrderEdge({ id, source, target }: EdgeProps<OrderEdgeType>) {
+  const geo = useArrow(id, source, target)
+  if (!geo) return null
+  return geo.paths.map((d, i) => (
+    <path
+      key={i}
+      d={d}
+      fill="none"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      className="pointer-events-none stroke-teal/80"
+    />
+  ))
 })

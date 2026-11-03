@@ -24,6 +24,8 @@ import { cx } from '@/components/ui'
 import { useBoard } from './board-context'
 import { useHoldDrag } from './use-hold-drag'
 
+const SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left]
+
 export type CardNodeType = Node<{ card: CardSnapshot; files: number }, 'card'>
 
 export const CardNode = memo(function CardNode({
@@ -48,7 +50,7 @@ export const CardNode = memo(function CardNode({
 
   return (
     <>
-      <NodeToolbar isVisible={selected} position={Position.Top} offset={8}>
+      <NodeToolbar isVisible={selected} position={Position.Top} offset={20}>
         <div className="flex gap-1 rounded-island border border-line bg-panel p-1">
           <ToolButton label="otwórz kartę" onClick={() => board.openCard(id)}>
             <SquarePen className="size-5" aria-hidden="true" />
@@ -126,16 +128,21 @@ export const CardNode = memo(function CardNode({
         )}
       </div>
 
-      {/* Strzałka: przeciągnięcie z kropki na krawędzi zaznaczonej karty do dowolnej innej karty. */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        aria-label="narysuj strzałkę"
-        className={cx(
-          '!h-6 !w-6 !rounded-full !border-2 !border-panel !bg-accent transition-opacity',
-          selected ? 'opacity-100' : '!pointer-events-none opacity-0',
-        )}
-      />
+      {/* Strzałka: przeciągnięcie z kropki na krawędzi zaznaczonej karty do dowolnej innej karty.
+          Kropka na każdym boku — ciągnie się w stronę celu; kształt strzałki i tak liczy SketchEdge. */}
+      {SIDES.map((side) => (
+        <Handle
+          key={side}
+          id={side}
+          type="source"
+          position={side}
+          aria-label="narysuj strzałkę"
+          className={cx(
+            '!h-6 !w-6 !rounded-full !border-2 !border-panel !bg-accent transition-opacity',
+            selected ? 'opacity-100' : '!pointer-events-none opacity-0',
+          )}
+        />
+      ))}
       <Handle
         type="target"
         position={Position.Left}
