@@ -11,7 +11,8 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Etap 4 (miejsca) — zrobiony na gałęzi `etap-4`: Share Target (SW zapisuje udostępnienie w IndexedDB → `/share` → kolejka `outbox` → `/api/inbox`, działa offline), rozwijanie linków Google Maps (`packages/core/src/maps.ts` + `lib/maps-resolve.ts`, zapas: Nominatim), skrzynka (`inbox_items`), wklejanie linku („+” i menu tablicy), mini-mapy i nawigacja w karcie, widok Mapa z trasą dnia (MapLibre + OpenFreeMap).
 - Etap 5 (pliki i linki) — zrobiony na gałęzi `etap-5`: załączniki (`attachments`, pliki w `UPLOAD_DIR`, typ rozpoznawany z bajtów, metadane w mapie `attachments` dokumentu Yjs), podgląd w aplikacji (PDF.js), pliki aktywnego wyjazdu w cache `attachments` (SW cache-first + `lib/offline-files.ts`), podglądy Open Graph (`lib/safe-fetch.ts` z ochroną SSRF), szablony kart (`card_templates`, „z szablonu” w „+”, „zapisz jako szablon”).
 - Etap 6 (Pulpit, koszty, push) — zrobiony na gałęzi `etap-6`: kwoty `/+` (`packages/core/src/amounts.ts`), kursy NBP z cache `fx_rates` (`@planer/core/fx`, `/api/fx`, `lib/use-rates.ts`), sumy kart/dni/wyjazdu, pogoda (Open-Meteo, `/api/weather`) w Liście i na Pulpicie, dojazd (OSRM FOSSGIS, `/api/route`), Pulpit dnia (`components/today/`), push: subskrypcje (`push_subscriptions`, `/settings`), przypomnienia (`reminders`, liczy sync, wysyła worker), zmiany drugiej osoby (sync, po 3 min ciszy), strefa czasowa wyjazdu (`trips.timezone`).
-- Następny: Etap 7 (AI: czat z kontekstem wyjazdu, import zdjęć i PDF-ów do szkiców kart).
+- Etap 7 (AI) — zrobiony na gałęzi `etap-7`: czat (`/api/ai/chat`, SSE; kontekst wyjazdu z `trip_docs` przez `tripContext` w core; wyszukiwanie w sieci; narzędzie `read_attachment`; historia `ai_messages`), import zdjęć/PDF-ów do szkiców kart (`/api/ai/import`, ustrukturyzowane wyjście; kolejka offline w IndexedDB `imports`; okienko Zatwierdź/Popraw/Odrzuć), koszt w `ai_usage` i limit miesięczny (`lib/ai/budget.ts`).
+- Następny: Etap 8 (eksport .md i PDF, link tylko do odczytu, kopie zapasowe).
 
 ## Stos
 
@@ -22,7 +23,8 @@ Etap 3: Hocuspocus 4 (server, provider, extension-database), @tiptap/extension-c
 Etap 4: maplibre-gl 6 (kafelki OpenFreeMap: positron / dark), Nominatim jako geokoder zapasowy.
 Etap 5: pdfjs-dist 6 (worker w public/ jak MapLibre), ipaddr.js.
 Etap 6: web-push (VAPID), Temporal (Node 26) do stref czasowych przypomnień.
-Planowane (kolejne etapy): Anthropic API, Playwright.
+Etap 7: @anthropic-ai/sdk 1.x (Claude Opus 5.5 domyślnie, `fallbacks: "default"`), sharp do zmniejszania zdjęć.
+Planowane (kolejne etapy): Playwright.
 
 ## Struktura
 
@@ -64,6 +66,8 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - Dynamiczne ścieżki plików na serwerze oznaczaj `/* turbopackIgnore: true */`, inaczej build śledzi cały projekt do `standalone`.
 - pnpm nie uruchamia skryptów `pre*`/`post*` — kroki przygotowawcze wpisuj wprost w skrypt.
 - Rozwijanie linków chodzi tylko po hostach Google (`isAllowedMapsHost`) — to ochrona przed SSRF, nie poluzowuj jej.
+- AI: historia czatu wraca do modelu bez bloków rozumowania (zapisujemy tylko tekst tur), więc opis wyjazdu w prompcie systemowym może się zmieniać między pytaniami — nie dodawaj zapisu pełnych bloków odpowiedzi bez przemyślenia „preserved thinking” (edycja historii = 400).
+- AI: zmienne dane (data, godzina, kto pyta) idą w treść pytania, nie do promptu systemowego — inaczej cache promptu nie działa.
 - `Temporal` tylko po stronie serwera (`@planer/core/reminders`) — nie importuj go do kodu klienta, przeglądarki go jeszcze nie mają.
 - Moduły `@planer/core/fx`, `/push`, `/reminders-db` używają bazy — tylko serwer (API, sync, worker).
 - Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.

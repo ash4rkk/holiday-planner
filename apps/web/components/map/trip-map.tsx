@@ -16,6 +16,7 @@ import {
 import { Navigation, SquarePen } from 'lucide-react'
 import type { GeoJSONSource, Map as MapLibreMap, Marker } from 'maplibre-gl'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChatButton } from '@/components/ai/chat-panel'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
 import { TYPE_STYLE } from '@/components/card/type-style'
@@ -238,10 +239,12 @@ export function TripMap() {
 
         <div className="pointer-events-none absolute inset-x-0.5 top-1 z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
           <TopBar
+            theme={false}
             title={trip.title}
             actions={
               <>
                 <TripStatus />
+                <ChatButton onOpenCard={(id) => sheet.open(id)} />
                 <InboxButton />
               </>
             }

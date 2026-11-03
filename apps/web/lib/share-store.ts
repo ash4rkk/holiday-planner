@@ -21,14 +21,26 @@ export type OutboxShare = {
   createdAt: number
 }
 
-type Stores = { pending: PendingShare; outbox: OutboxShare }
+/** Plik do importu AI (zdjęcie, PDF) — czeka na sieć, potem upload → szkic karty. */
+export type ImportJob = {
+  id: string
+  tripId: string
+  file: File
+  createdAt: number
+}
+
+type Stores = { pending: PendingShare; outbox: OutboxShare; imports: ImportJob }
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('planer-share', 1)
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore('pending', { keyPath: 'id' })
-      req.result.createObjectStore('outbox', { keyPath: 'clientKey' })
+    const req = indexedDB.open('planer-share', 2)
+    req.onupgradeneeded = (event) => {
+      const db = req.result
+      if (event.oldVersion < 1) {
+        db.createObjectStore('pending', { keyPath: 'id' })
+        db.createObjectStore('outbox', { keyPath: 'clientKey' })
+      }
+      if (event.oldVersion < 2) db.createObjectStore('imports', { keyPath: 'id' })
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)

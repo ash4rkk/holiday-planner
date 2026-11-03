@@ -75,6 +75,7 @@ export type EditableCardFields = Pick<
   | 'location'
   | 'linkPreview'
   | 'templateId'
+  | 'aiDraft'
   | 'pinned'
 >
 

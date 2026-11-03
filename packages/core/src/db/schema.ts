@@ -151,6 +151,45 @@ export const reminders = pgTable(
   ],
 )
 
+/**
+ * Czat AI wyjazdu: jedna rozmowa na wyjazd (obie osoby widzą tę samą). `content` to bloki dokładnie
+ * tak, jak idą do API (bez bloków rozumowania z zakończonych tur), `text` — to, co widać w panelu.
+ */
+export const aiMessages = pgTable(
+  'ai_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    role: text('role').$type<'user' | 'assistant'>().notNull(),
+    content: jsonb('content').$type<unknown[]>().notNull(),
+    text: text('text').notNull(),
+    // Źródła z wyszukiwania w sieci (tytuł, adres) pod odpowiedzią.
+    sources: jsonb('sources').$type<{ title: string; url: string }[]>().notNull().default([]),
+    // „Nowa rozmowa” — starsze wiadomości zostają w bazie, ale nie idą już do modelu.
+    archived: boolean('archived').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('ai_messages_trip_idx').on(t.tripId, t.archived, t.createdAt)],
+)
+
+/** Koszt każdego wywołania AI (czat, import) — do limitu miesięcznego. */
+export const aiUsage = pgTable('ai_usage', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  kind: text('kind').$type<'chat' | 'import'>().notNull(),
+  model: text('model').notNull(),
+  inputTokens: integer('input_tokens').notNull(),
+  outputTokens: integer('output_tokens').notNull(),
+  cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+  cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+  webSearches: integer('web_searches').notNull().default(0),
+  costPln: real('cost_pln').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Trip = typeof trips.$inferSelect
@@ -158,3 +197,4 @@ export type NewTrip = typeof trips.$inferInsert
 export type InboxItem = typeof inboxItems.$inferSelect
 export type Attachment = typeof attachments.$inferSelect
 export type CardTemplate = typeof cardTemplates.$inferSelect
+export type AiMessage = typeof aiMessages.$inferSelect

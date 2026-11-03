@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { TopBar } from '@/components/top-bar'
 import { buttonClass, cx, Field, inputClass, SectionLabel } from '@/components/ui'
+import { enqueueImport } from '@/lib/ai-import'
 import { flushOutbox } from '@/lib/outbox'
 import { type PendingShare, randomId, shareStore } from '@/lib/share-store'
 
@@ -61,6 +62,15 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
     else router.replace(`/trips/${tripId}/inbox`)
   }
 
+  // Pliki (bilet, paragon) → kolejka importu AI wyjazdu; przetworzy ją widok wyjazdu (także później, offline).
+  const importFiles = async () => {
+    if (!share || !tripId) return
+    setState('sending')
+    await enqueueImport(tripId, share.files)
+    if (share.id !== 'query') await shareStore.delete('pending', share.id)
+    router.replace(`/trips/${tripId}/list`)
+  }
+
   const cancel = async () => {
     if (share && share.id !== 'query') await shareStore.delete('pending', share.id)
     router.replace('/')
@@ -89,8 +99,8 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
               {share.files.length > 0 && (
                 <p className="mt-2 flex items-center gap-1 text-xs text-subtle italic">
                   <Paperclip className="size-3.5" aria-hidden="true" />
-                  {share.files.length} {share.files.length === 1 ? 'plik' : 'pliki'} — import zdjęć
-                  i PDF-ów w etapie 7
+                  {share.files.map((f) => f.name).join(', ')} — AI zrobi z{' '}
+                  {share.files.length === 1 ? 'niego' : 'nich'} szkic karty
                 </p>
               )}
             </div>
@@ -162,14 +172,25 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
                 <button type="button" onClick={cancel} className={buttonClass('island')}>
                   anuluj
                 </button>
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={!tripId || state === 'sending'}
-                  className={buttonClass('primary')}
-                >
-                  {state === 'sending' ? 'dodaję…' : 'dodaj do skrzynki'}
-                </button>
+                {share.files.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={importFiles}
+                    disabled={!tripId || state === 'sending'}
+                    className={buttonClass('primary')}
+                  >
+                    {state === 'sending' ? 'zapisuję…' : 'szkic karty (AI)'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={!tripId || state === 'sending'}
+                    className={buttonClass('primary')}
+                  >
+                    {state === 'sending' ? 'dodaję…' : 'dodaj do skrzynki'}
+                  </button>
+                )}
               </div>
             </>
           )}

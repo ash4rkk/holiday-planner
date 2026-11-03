@@ -1,24 +1,28 @@
 'use client'
 
-import { ChevronLeft, ClipboardPaste, LayoutTemplate, Plus, SquarePlus } from 'lucide-react'
+import { Camera, ChevronLeft, ClipboardPaste, LayoutTemplate, Plus, SquarePlus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/components/ui'
 import type { Template } from '@/lib/card-templates'
 
-/** Duży „+”: nowa karta albo wklejony link (zdjęcie z importem AI dojdzie w etapie 7). */
+/** Duży „+”: nowa karta, z szablonu, wklejony link, zdjęcie albo PDF do importu AI. */
 export function AddButton({
   onNew,
   onPaste,
   onTemplate,
   templates = [],
+  onImport,
   hidden,
 }: {
   onNew: () => void
   onPaste: () => Promise<void>
   onTemplate?: (t: Template) => void
   templates?: Template[]
+  /** Zdjęcie albo PDF do importu AI (szkic karty). */
+  onImport?: (files: File[]) => void
   hidden?: boolean
 }) {
+  const fileInput = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -57,6 +61,16 @@ export function AddButton({
             ]
           : []),
         { label: 'wklej link', icon: ClipboardPaste, keepOpen: false, run: onPaste },
+        ...(onImport
+          ? [
+              {
+                label: 'zdjęcie / PDF (AI)',
+                icon: Camera,
+                keepOpen: false,
+                run: async () => fileInput.current?.click(),
+              },
+            ]
+          : []),
       ]
 
   return (
@@ -92,6 +106,21 @@ export function AddButton({
             </button>
           ))}
         </div>
+      )}
+      {onImport && (
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*,application/pdf"
+          multiple
+          className="hidden"
+          aria-label="zdjęcie albo PDF do importu"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? [])
+            if (files.length) onImport(files)
+            e.target.value = ''
+          }}
+        />
       )}
       <button
         type="button"

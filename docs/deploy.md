@@ -46,6 +46,13 @@ Wynik do `/srv/planer/.env`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUB
 Czytają je `planer-web` (klucz publiczny dla telefonu), `planer-worker` (przypomnienia) i `planer-sync`
 (zmiany drugiej osoby). Klucze ustawia się raz — nowe unieważniają subskrypcje na telefonach.
 
+### 2b. AI [L]
+
+Klucz API z console.anthropic.com → `/srv/planer/.env`: `ANTHROPIC_API_KEY`. Opcjonalnie
+`ANTHROPIC_MODEL` (domyślnie `claude-opus-5-5`) i `AI_MONTHLY_BUDGET_PLN` (domyślnie 20). Klucz czyta
+tylko `planer-web`; przeglądarka go nie dostaje. Koszt każdego wywołania zapisuje się w `ai_usage`,
+licznik jest w ustawieniach aplikacji.
+
 ### 3. Caddy [S]
 
 Blok w `/srv/edge/Caddyfile` na wzór bloku `portfolio.wiergowsky.com` (ten sam sposób nasłuchu —
@@ -149,6 +156,7 @@ Oczekiwane: `migracje zastosowane`, w logu web `✓ Ready` bez `Error`.
 - Chrome na telefonie → menu → „Zainstaluj aplikację”.
 - Karta → „+ plik” → PDF biletu; potem tryb samolotowy → ta sama karta → bilet się otwiera.
 - Pulpit → ustawienia → „włącz powiadomienia” → „wyślij próbne” na obu telefonach.
+- Wyjazd → czat AI → „Co mamy jutro?”; „+ → zdjęcie / PDF (AI)” z paragonem → okienko szkicu.
 - `docker logs planer-worker` po czasie przypomnienia: `worker: przypomnienie „…” → 2 urządz.`
 
 ## Wycofanie [S]

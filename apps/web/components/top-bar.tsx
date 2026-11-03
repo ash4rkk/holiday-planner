@@ -8,11 +8,14 @@ export function TopBar({
   subtitle,
   back,
   actions,
+  theme = true,
 }: {
   title: ReactNode
   subtitle?: ReactNode
   back?: { href: string; label: string }
   actions?: ReactNode
+  /** Przełącznik motywu — w widokach wyjazdu wyłączony, żeby zmieścił się tytuł i przyciski wyjazdu. */
+  theme?: boolean
 }) {
   return (
     <header className="flex gap-1">
@@ -35,7 +38,7 @@ export function TopBar({
         )}
       </div>
       {actions}
-      <ThemeToggle />
+      {theme && <ThemeToggle />}
     </header>
   )
 }

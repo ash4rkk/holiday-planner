@@ -20,6 +20,8 @@ import { Plus, Settings2 } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { AddButton } from '@/components/add-button'
+import { ChatButton } from '@/components/ai/chat-panel'
+import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { TotalsText } from '@/components/amounts'
 import { CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
@@ -30,6 +32,7 @@ import { TopBar } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
 import { DayWeather } from '@/components/weather'
+import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
@@ -83,11 +86,13 @@ export function TripList() {
       {/* Pod otwartym arkuszem lista jest nieaktywna (fokus i czytniki ekranu zostają w arkuszu). */}
       <main inert={!!openId} className="mx-auto flex max-w-xl flex-col gap-1">
         <TopBar
+          theme={false}
           title={trip.title}
           subtitle={formatDateSpan(trip.startDate, trip.endDate)}
           actions={
             <>
               <TripStatus />
+              <ChatButton onOpenCard={(id) => open(id)} />
               <InboxButton />
               <Link
                 href={`/trips/${trip.id}/settings`}
@@ -243,12 +248,18 @@ export function TripList() {
           hidden={hidden}
           onNew={() => add()}
           templates={templates}
+          onImport={(files) =>
+            void enqueueImport(trip.id, files).then(() => runImports(trip.id, doc))
+          }
           onTemplate={(t) => open(createFromTemplate(doc, t), true)}
           onPaste={async () => {
             const id = await pasteAsCard(doc)
             if (id) open(id)
           }}
         />
+        <ImportRunner />
+        <ImportStatus />
+        <DraftReview onEdit={(id) => open(id)} />
       </main>
       {openId && <CardSheet key={openId} cardId={openId} isNew={isNew} onClose={close} />}
     </>

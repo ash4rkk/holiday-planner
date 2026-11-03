@@ -35,11 +35,14 @@ import {
 import { Columns3, Plus, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AddButton } from '@/components/add-button'
+import { ChatButton } from '@/components/ai/chat-panel'
+import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { CardSheet } from '@/components/card/card-sheet'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
+import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
@@ -396,10 +399,12 @@ function BoardCanvas() {
 
         <div className="pointer-events-none absolute inset-x-0.5 top-1 z-10 [&>*]:pointer-events-auto">
           <TopBar
+            theme={false}
             title={trip.title}
             actions={
               <>
                 <TripStatus />
+                <ChatButton onOpenCard={(id) => sheet.open(id)} />
                 <InboxButton />
                 {undo && (
                   <button
@@ -429,6 +434,9 @@ function BoardCanvas() {
 
         <SessionBanner />
         <RemotePointers />
+        <ImportRunner />
+        <ImportStatus />
+        <DraftReview onEdit={(id) => sheet.open(id)} />
 
         {ready && !live.length && !frames.length && (
           <p className="pointer-events-none absolute inset-x-4 top-1/3 text-center text-sm text-subtle italic">
@@ -462,6 +470,9 @@ function BoardCanvas() {
         <AddButton
           onNew={() => addCard(viewportCenter())}
           templates={templates}
+          onImport={(files) =>
+            void enqueueImport(trip.id, files).then(() => runImports(trip.id, doc))
+          }
           onTemplate={(t) =>
             sheet.open(createFromTemplate(doc, t, centered(viewportCenter())), true)
           }

@@ -132,6 +132,25 @@ export function CardSheet({
           className={cx('island overflow-hidden', card.aiDraft && 'border-dashed border-accent')}
         >
           <div className={cx('h-0.5', TYPE_STYLE[card.type].bar)} />
+          {card.aiDraft && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-dashed border-accent px-4 py-2 text-xs">
+              <span className="flex-1 text-accent">● szkic z AI — sprawdź dane z dokumentu</span>
+              <button
+                type="button"
+                onClick={() => change({ aiDraft: undefined })}
+                className="min-h-9 rounded-small bg-accent px-3 font-bold text-on-accent"
+              >
+                zatwierdź
+              </button>
+              <button
+                type="button"
+                onClick={remove}
+                className="min-h-9 rounded-small border border-line px-3 text-muted"
+              >
+                odrzuć
+              </button>
+            </div>
+          )}
           <CardFields card={card} onChange={change} />
           {card.linkPreview && <LinkPreviewBlock preview={card.linkPreview} />}
           <CardAttachments cardId={cardId} />

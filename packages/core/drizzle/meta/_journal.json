@@ -36,6 +36,13 @@
       "when": 1793732075093,
       "tag": "0004_fantastic_johnny_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793733705011,
+      "tag": "0005_goofy_valeria_richards",
+      "breakpoints": true
     }
   ]
 }
