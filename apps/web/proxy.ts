@@ -33,8 +33,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Poza logowaniem: statyki Next, zdrowie dla healthchecku, publiczny link /p/* (etap 8),
-  // manifest, ikony i strona offline (przeglądarka pobiera manifest bez cookie Access).
+  // manifest, ikony i strona offline (przeglądarka pobiera manifest bez cookie Access), worker mapy
+  // (potrzebny też stronie publicznej).
   matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|api/health|p/|manifest\\.webmanifest|icons/|offline).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|api/health|p/|manifest\\.webmanifest|icons/|offline|maplibre-gl-worker\\.mjs).*)',
   ],
 }

@@ -221,3 +221,15 @@ body {
   border-radius: 4px;
   padding: 0 2px;
 }
+
+/* Treść kart na stronie publicznej (HTML z blocksToHtml). */
+.public-content p,
+.public-content ul,
+.public-content ol { margin: 2px 0; }
+.public-content ul,
+.public-content ol { padding-left: 1.2em; list-style: disc; }
+.public-content ol { list-style: decimal; }
+.public-content ul.tasks { list-style: none; padding-left: 0; }
+.public-content li.done { text-decoration: line-through; color: var(--dim); }
+.public-content a { color: var(--accent); text-decoration: underline; }
+.public-content blockquote { border-left: 2px solid var(--line); padding-left: 8px; }

@@ -94,8 +94,10 @@ docker exec caddy caddy validate --config /etc/caddy/Caddyfile
 3. **Access — pliki PWA:** osobna aplikacja Self-hosted z polityką Bypass dla ścieżek
    `planer.wiergowsky.com/manifest.webmanifest`, `/icons/*` i `/offline`. Przeglądarka pobiera manifest
    bez cookie Access, a bez manifestu Planera nie da się zainstalować. To pliki bez danych.
-4. **Access — link publiczny (etap 8):** osobna aplikacja dla `planer.wiergowsky.com/p/*` z polityką
-   Bypass. Aplikacja i tak pomija weryfikację JWT dla `/p/*`.
+4. **Access — link dla rodziny:** osobna aplikacja z polityką **Bypass** dla ścieżek
+   `planer.wiergowsky.com/p/*` (strona), `/_next/static/*` (style i skrypty strony — kod aplikacji,
+   bez danych) i `/maplibre-gl-worker.mjs` (mapa). Aplikacja i tak pomija weryfikację JWT dla tych
+   ścieżek; dane wyjazdu pokazuje tylko pod ważnym, nieunieważnionym tokenem.
 
 `ALLOWED_EMAILS` to druga linia obrony: inne kontenery w sieci `edge` mogą sięgnąć do `planer-web`
 z pominięciem Access, a bez ważnego JWT dla adresu z listy dostaną 401/403.
@@ -125,14 +127,53 @@ Każda nowa migracja = też lokalna baza: `pnpm db:migrate` (inaczej lokalny `ne
 ## Pliki (załączniki)
 
 Bilety, rezerwacje i paragony leżą na wolumenie `planer_uploads` (`/data/uploads` w `planer-web`),
-po jednym katalogu na wyjazd. Obecny `/srv/scripts/backup.sh` robi tylko `pg_dumpall` — **pliki trzeba
-dopisać do kopii** (etap 8), np.:
+po jednym katalogu na wyjazd. Limit pliku: 20 MB (aplikacja), Cloudflare przepuszcza do 100 MB.
+
+## Kopie zapasowe
+
+`planer-worker` raz na dobę po 3:00 (czas polski) zapisuje do `BACKUP_HOST_DIR` (domyślnie
+`/srv/data/backups/planer`):
+
+- `planer-db_<data>.dump` — `pg_dump` bazy `planer` (format custom: karty w `trip_docs`, wyjazdy,
+  skrzynka, czat, ustawienia),
+- `planer-files_<data>.tar.gz` — wszystkie załączniki,
+
+i usuwa kopie starsze niż `BACKUP_KEEP_DAYS` (14). Przed pierwszym startem [S]:
 
 ```bash
-docker run --rm -v planer_uploads:/data:ro -v /srv/data/backups:/out alpine tar czf /out/planer-uploads_$(date +%F).tar.gz -C /data .
+mkdir -p /srv/data/backups/planer && chown 1000:1000 /srv/data/backups/planer
 ```
 
-Limit pliku: 20 MB (aplikacja), Cloudflare przepuszcza do 100 MB.
+Wspólny `/srv/scripts/backup.sh` (`pg_dumpall`) i tak obejmuje też bazę `planer` — kopia workera jest
+dodatkowa i zawiera pliki. Obie leżą na tym samym dysku co dane: **kopię poza VPS** trzeba dołożyć
+osobno (np. restic/rclone na `/srv/data/backups`), tak jak zaleca audyt portfolio.
+
+Sprawdzenie po pierwszej nocy [S]:
+
+```bash
+ls -la /srv/data/backups/planer && docker logs planer-worker 2>&1 | grep "kopia zapasowa"
+```
+
+### Odtworzenie [S]
+
+Najpierw do osobnej bazy, porównać, dopiero potem podmienić:
+
+```bash
+docker exec -i postgres createdb -U postgres -O planer_app planer_restore
+```
+
+```bash
+docker exec -i postgres pg_restore -U postgres -d planer_restore --no-owner --role=planer_app < /srv/data/backups/planer/planer-db_<data>.dump
+```
+
+Pliki: zatrzymać `planer-web`, rozpakować archiwum do wolumenu, uruchomić:
+
+```bash
+docker run --rm -v planer_uploads:/data -v /srv/data/backups/planer:/in:ro alpine sh -c "tar xzf /in/planer-files_<data>.tar.gz -C /data"
+```
+
+Dokument każdego wyjazdu leży też w przeglądarkach obu telefonów (IndexedDB) — po odtworzeniu bazy
+telefony dosyłają serwerowi zmiany, których kopia nie zawierała.
 
 ## Sprawdzenie
 
@@ -156,6 +197,8 @@ Oczekiwane: `migracje zastosowane`, w logu web `✓ Ready` bez `Error`.
 - Chrome na telefonie → menu → „Zainstaluj aplikację”.
 - Karta → „+ plik” → PDF biletu; potem tryb samolotowy → ta sama karta → bilet się otwiera.
 - Pulpit → ustawienia → „włącz powiadomienia” → „wyślij próbne” na obu telefonach.
+- Ustawienia wyjazdu → eksport PDF i Markdown; „link dla rodziny” otwiera się w oknie incognito bez
+  logowania, a po „unieważnij” zwraca 404.
 - Wyjazd → czat AI → „Co mamy jutro?”; „+ → zdjęcie / PDF (AI)” z paragonem → okienko szkicu.
 - `docker logs planer-worker` po czasie przypomnienia: `worker: przypomnienie „…” → 2 urządz.`
 

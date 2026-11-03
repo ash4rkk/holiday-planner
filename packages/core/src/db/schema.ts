@@ -190,6 +190,17 @@ export const aiUsage = pgTable('ai_usage', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/** Linki tylko do odczytu dla rodziny (/p/<token>): długi losowy token, można unieważnić. */
+export const shareLinks = pgTable('share_links', {
+  token: text('token').primaryKey(),
+  tripId: uuid('trip_id')
+    .notNull()
+    .references(() => trips.id, { onDelete: 'cascade' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+})
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Trip = typeof trips.$inferSelect

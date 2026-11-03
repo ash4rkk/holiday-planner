@@ -28,6 +28,9 @@ RUN pnpm --filter @planer/web build
 
 FROM node:26-alpine AS web
 WORKDIR /app
+# PDF z planu wyjazdu (lib/export/pdf.ts): Chromium i fonty z polskimi znakami.
+RUN apk add --no-cache chromium font-dejavu
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN addgroup -S planer && adduser -S planer -G planer
 # Katalog załączników (UPLOAD_DIR) należy do planer; pusty nazwany wolumen montowany tutaj
@@ -47,5 +50,7 @@ CMD ["pnpm", "--filter", "@planer/sync", "start"]
 
 FROM source AS worker
 ENV NODE_ENV=production
+# Nocne kopie: pg_dump zgodny z serwerem (PostgreSQL 17).
+RUN apk add --no-cache postgresql17-client
 USER node
 CMD ["pnpm", "--filter", "@planer/worker", "start"]

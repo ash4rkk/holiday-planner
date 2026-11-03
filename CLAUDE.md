@@ -12,7 +12,8 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Etap 5 (pliki i linki) — zrobiony na gałęzi `etap-5`: załączniki (`attachments`, pliki w `UPLOAD_DIR`, typ rozpoznawany z bajtów, metadane w mapie `attachments` dokumentu Yjs), podgląd w aplikacji (PDF.js), pliki aktywnego wyjazdu w cache `attachments` (SW cache-first + `lib/offline-files.ts`), podglądy Open Graph (`lib/safe-fetch.ts` z ochroną SSRF), szablony kart (`card_templates`, „z szablonu” w „+”, „zapisz jako szablon”).
 - Etap 6 (Pulpit, koszty, push) — zrobiony na gałęzi `etap-6`: kwoty `/+` (`packages/core/src/amounts.ts`), kursy NBP z cache `fx_rates` (`@planer/core/fx`, `/api/fx`, `lib/use-rates.ts`), sumy kart/dni/wyjazdu, pogoda (Open-Meteo, `/api/weather`) w Liście i na Pulpicie, dojazd (OSRM FOSSGIS, `/api/route`), Pulpit dnia (`components/today/`), push: subskrypcje (`push_subscriptions`, `/settings`), przypomnienia (`reminders`, liczy sync, wysyła worker), zmiany drugiej osoby (sync, po 3 min ciszy), strefa czasowa wyjazdu (`trips.timezone`).
 - Etap 7 (AI) — zrobiony na gałęzi `etap-7`: czat (`/api/ai/chat`, SSE; kontekst wyjazdu z `trip_docs` przez `tripContext` w core; wyszukiwanie w sieci; narzędzie `read_attachment`; historia `ai_messages`), import zdjęć/PDF-ów do szkiców kart (`/api/ai/import`, ustrukturyzowane wyjście; kolejka offline w IndexedDB `imports`; okienko Zatwierdź/Popraw/Odrzuć), koszt w `ai_usage` i limit miesięczny (`lib/ai/budget.ts`).
-- Następny: Etap 8 (eksport .md i PDF, link tylko do odczytu, kopie zapasowe).
+- Etap 8 (eksport i kopie) — zrobiony na gałęzi `etap-8`: konwersja treści kart Yjs → Markdown/HTML (`packages/core/src/rich-text.ts`), eksport `.md`, widok do druku i PDF z Chromium (`/api/export/[tripId]`, `lib/export/`), link dla rodziny `/p/<token>` (`share_links`, `app/p/[token]`), nocna kopia bazy i plików w workerze (`apps/worker/src/backup.ts`).
+- Wszystkie etapy z planu są zrobione; dalej: wdrożenie, testy na telefonach, poprawki.
 
 ## Stos
 
@@ -24,14 +25,14 @@ Etap 4: maplibre-gl 6 (kafelki OpenFreeMap: positron / dark), Nominatim jako geo
 Etap 5: pdfjs-dist 6 (worker w public/ jak MapLibre), ipaddr.js.
 Etap 6: web-push (VAPID), Temporal (Node 26) do stref czasowych przypomnień.
 Etap 7: @anthropic-ai/sdk 1.x (Claude Opus 5.5 domyślnie, `fallbacks: "default"`), sharp do zmniejszania zdjęć.
-Planowane (kolejne etapy): Playwright.
+Etap 8: playwright-core + Chromium (PDF), pg_dump 17 w obrazie workera.
 
 ## Struktura
 
 ```
 apps/web        Next.js; proxy.ts (auth), lib/auth/, app/(app)/ (ekrany za logowaniem)
 apps/sync       serwer Hocuspocus: WebSocket /sync, dokument Yjs na wyjazd, zapis do trip_docs
-apps/worker     zadania w tle: przypomnienia push (co 30 s), kursy NBP (co 6 h)
+apps/worker     zadania w tle: przypomnienia push (co 30 s), kursy NBP (co 6 h), nocna kopia bazy i plików
 packages/core   wspólny kod: schemat Drizzle (src/db/schema.ts), migracje (drizzle/), helpery
 ```
 
@@ -63,11 +64,13 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - Manifest, `/icons/*` i `/offline` są poza `proxy.ts` i mają Bypass w Access (przeglądarka pobiera manifest bez cookie).
 - MapLibre szuka workera obok swojego pliku — po bundlowaniu go tam nie ma. `dev`/`build` kopiują go do `public/` (`scripts/copy-maplibre-worker.mjs`), a `components/map/maplibre.ts` ustawia `setWorkerUrl`. MapLibre nadpisuje też `transform` elementu znacznika i daje kontenerowi `position: relative` — kształty pinezek w elemencie wewnętrznym, rozmiar mapy z wrappera.
 - Nie wołaj `router.refresh()`, gdy w adresie jest `?card=` — Next przestaje potem synchronizować zmiany adresu z `history.pushState` i arkusz karty się nie otwiera. Nowe dane trzymaj w stanie klienta (np. `addTemplate` w `TripProvider`).
+- Biblioteki z plikami innymi niż JS (np. `playwright-core` → `browsers.json`) wymagają `outputFileTracingIncludes` w `next.config.ts`, inaczej w obrazie `standalone` ich brakuje. Sprawdzaj nowe zależności serwerowe w zbudowanym obrazie, nie tylko w `next dev`.
 - Dynamiczne ścieżki plików na serwerze oznaczaj `/* turbopackIgnore: true */`, inaczej build śledzi cały projekt do `standalone`.
 - pnpm nie uruchamia skryptów `pre*`/`post*` — kroki przygotowawcze wpisuj wprost w skrypt.
 - Rozwijanie linków chodzi tylko po hostach Google (`isAllowedMapsHost`) — to ochrona przed SSRF, nie poluzowuj jej.
 - AI: historia czatu wraca do modelu bez bloków rozumowania (zapisujemy tylko tekst tur), więc opis wyjazdu w prompcie systemowym może się zmieniać między pytaniami — nie dodawaj zapisu pełnych bloków odpowiedzi bez przemyślenia „preserved thinking” (edycja historii = 400).
 - AI: zmienne dane (data, godzina, kto pyta) idą w treść pytania, nie do promptu systemowego — inaczej cache promptu nie działa.
+- Treść kart do HTML tylko przez `blocksToHtml` (ucieczka znaków, odrzuca niebezpieczne linki) — nigdy surowego tekstu z dokumentu w `dangerouslySetInnerHTML`.
 - `Temporal` tylko po stronie serwera (`@planer/core/reminders`) — nie importuj go do kodu klienta, przeglądarki go jeszcze nie mają.
 - Moduły `@planer/core/fx`, `/push`, `/reminders-db` używają bazy — tylko serwer (API, sync, worker).
 - Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.
@@ -78,7 +81,7 @@ pnpm db:migrate          # wymaga DATABASE_URL
 ## Auth
 
 - `apps/web/proxy.ts` (Next 16: dawny middleware) weryfikuje `Cf-Access-Jwt-Assertion` (lub cookie `CF_Authorization`) przez JWKS zespołu, sprawdza `aud`, `iss` i allowlistę `ALLOWED_EMAILS`, potem ustawia `x-user-email` (nagłówek z zewnątrz jest zawsze usuwany).
-- Poza logowaniem: `/api/health`, `/p/*` (publiczny link, etap 8), statyki.
+- Poza logowaniem: `/api/health`, `/p/*` (link dla rodziny, tylko pod ważnym tokenem), statyki, manifest, ikony, worker mapy.
 - `AUTH_DEV_EMAIL` działa tylko przy `NODE_ENV=development`.
 - W kodzie serwerowym: `getCurrentUser()` z `lib/auth/user.ts`.
 

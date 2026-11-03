@@ -43,6 +43,13 @@
       "when": 1793733705011,
       "tag": "0005_goofy_valeria_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793734808121,
+      "tag": "0006_steep_miss_america",
+      "breakpoints": true
     }
   ]
 }

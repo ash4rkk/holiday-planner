@@ -56,11 +56,19 @@ services:
       timeout: 3s
       retries: 3
 
+  # Przypomnienia push, kursy NBP i nocna kopia bazy oraz plików (BACKUP_HOST_DIR na hoście,
+  # katalog zapisywalny dla uid 1000 — docs/deploy.md).
   worker:
     <<: *app
     build: { context: ., target: worker }
     image: planer-worker:local
     container_name: planer-worker
+    environment:
+      UPLOAD_DIR: /data/uploads
+      BACKUP_DIR: /backups
+    volumes:
+      - uploads:/data/uploads:ro
+      - ${BACKUP_HOST_DIR:-/srv/data/backups/planer}:/backups
     depends_on:
       migrate: { condition: service_completed_successfully }
 
