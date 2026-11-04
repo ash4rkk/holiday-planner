@@ -52,6 +52,8 @@ export type CardFields = {
   remindMin?: number
   status?: CardStatus
   location?: CardLocation
+  /** Transport: dokąd jedzie (location to miejsce startu). */
+  destination?: CardLocation
   linkPreview?: LinkPreview
   attachmentIds: string[]
   pinned: boolean
@@ -73,6 +75,7 @@ export type EditableCardFields = Pick<
   | 'remindMin'
   | 'status'
   | 'location'
+  | 'destination'
   | 'linkPreview'
   | 'templateId'
   | 'aiDraft'

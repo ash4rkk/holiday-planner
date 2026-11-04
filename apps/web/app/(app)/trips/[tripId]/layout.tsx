@@ -15,7 +15,7 @@ export default async function TripLayout({ params, children }: LayoutProps<'/tri
     listTemplates(),
   ])
   if (!trip) notFound()
-  const { id, title, startDate, endDate, currencies, archived } = trip
+  const { id, title, startDate, endDate, currencies, archived, travelMode, travelBufferMin } = trip
   return (
     <TripProvider
       trip={{
@@ -27,7 +27,8 @@ export default async function TripLayout({ params, children }: LayoutProps<'/tri
         archived,
         inboxCount,
         templates,
-        routes: Boolean(process.env.GOOGLE_ROUTES_API_KEY),
+        travelMode,
+        travelBufferMin,
       }}
       user={{ name: user.name, color: user.color }}
     >

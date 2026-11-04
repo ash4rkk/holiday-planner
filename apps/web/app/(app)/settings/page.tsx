@@ -1,10 +1,10 @@
 import { formatAmount } from '@planer/core'
+import { routesBudgetPln, routesLimit, routesUsedThisMonth } from '@planer/core/routes'
 import { Route, Sparkles } from 'lucide-react'
 import { PushSettings } from '@/components/settings/push-settings'
 import { TopBar } from '@/components/top-bar'
 import { MONTHLY_BUDGET_PLN, spentThisMonthPln } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured } from '@/lib/ai/client'
-import { ROUTES_BUDGET_PLN, ROUTES_MONTHLY_LIMIT, routesUsedThisMonth } from '@/lib/routes-usage'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,16 +48,16 @@ export default async function SettingsPage() {
           <div className="min-w-0 flex-1">
             <p className="font-bold">dojazdy komunikacją</p>
             <p className="mt-1">
-              w tym miesiącu: <b>{checks}</b> z {ROUTES_MONTHLY_LIMIT} sprawdzeń
+              w tym miesiącu: <b>{checks}</b> z {routesLimit()} sprawdzeń
             </p>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-raised" aria-hidden="true">
               <div
                 className="h-full bg-accent"
-                style={{ width: `${Math.min(100, (checks / ROUTES_MONTHLY_LIMIT) * 100)}%` }}
+                style={{ width: `${Math.min(100, (checks / routesLimit()) * 100)}%` }}
               />
             </div>
             <p className="mt-2 text-xs text-subtle italic">
-              limit kwoty {formatAmount({ value: ROUTES_BUDGET_PLN, currency: 'PLN' })} · po jego
+              limit kwoty {formatAmount({ value: routesBudgetPln(), currency: 'PLN' })} · po jego
               wyczerpaniu sprawdzanie wyłącza się do końca miesiąca
             </p>
           </div>

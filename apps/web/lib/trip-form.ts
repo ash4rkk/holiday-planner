@@ -11,7 +11,12 @@ export function isTimeZone(value: string): boolean {
 }
 
 export type TripFormState = {
-  errors?: Partial<Record<'title' | 'startDate' | 'endDate' | 'currencies' | 'timezone', string>>
+  errors?: Partial<
+    Record<
+      'title' | 'startDate' | 'endDate' | 'currencies' | 'timezone' | 'travelBufferMin',
+      string
+    >
+  >
   values?: Record<string, string>
 }
 
@@ -49,6 +54,8 @@ export const tripSchema = z
       .trim()
       .transform((v) => v || 'Europe/Warsaw')
       .refine(isTimeZone, 'nieznana strefa czasowa, np. Europe/Rome'),
+    travelMode: z.enum(['transit', 'walk', 'drive']).catch('transit'),
+    travelBufferMin: z.coerce.number().int('pełne minuty').min(0, 'od 0').max(120, 'do 120 minut'),
   })
   .refine((t) => !t.endDate || t.startDate, {
     path: ['startDate'],
@@ -66,6 +73,8 @@ export function parseTripForm(form: FormData) {
     endDate: String(form.get('endDate') ?? ''),
     currencies: String(form.get('currencies') ?? ''),
     timezone: String(form.get('timezone') ?? ''),
+    travelMode: String(form.get('travelMode') ?? 'transit'),
+    travelBufferMin: String(form.get('travelBufferMin') ?? '10'),
   }
   const parsed = tripSchema.safeParse(raw)
   if (parsed.success) return { ok: true as const, data: parsed.data }

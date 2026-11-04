@@ -10,9 +10,12 @@ export async function createTrip(_prev: TripFormState, form: FormData): Promise<
   await getCurrentUser()
   const result = parseTripForm(form)
   if (!result.ok) return result.state
-  const { title, startDate, endDate, currencies, timezone } = result.data
+  const { title, startDate, endDate, currencies, timezone, travelMode, travelBufferMin } =
+    result.data
   const trip = await insertTrip({
     timezone,
+    travelMode,
+    travelBufferMin,
     title,
     startDate: startDate ?? null,
     endDate: endDate ?? startDate ?? null,
@@ -31,9 +34,12 @@ export async function updateTrip(
   if (!(await getTrip(tripId))) return { errors: { title: 'wyjazd nie istnieje' } }
   const result = parseTripForm(form)
   if (!result.ok) return result.state
-  const { title, startDate, endDate, currencies, timezone } = result.data
+  const { title, startDate, endDate, currencies, timezone, travelMode, travelBufferMin } =
+    result.data
   await patchTrip(tripId, {
     timezone,
+    travelMode,
+    travelBufferMin,
     title,
     startDate: startDate ?? null,
     endDate: endDate ?? startDate ?? null,

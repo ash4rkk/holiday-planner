@@ -6,6 +6,7 @@ import {
   CARD_TYPE_LABELS,
   type CardType,
   dayRoute,
+  decodePolyline,
   formatDayHeader,
   hasCoords,
   type MappedCard,
@@ -25,6 +26,7 @@ import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
 import { useCardSheet } from '@/lib/use-card-sheet'
+import { useDayPlans } from '@/lib/use-day-plans'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { cssVar, useMapStyle } from './map-style'
 import { loadMapLibre } from './maplibre'
@@ -77,6 +79,7 @@ export function TripMap() {
   const days = useMemo(() => mapDays(cards, trip), [cards, trip])
   const live = useMemo(() => cards.filter((c) => !c.deletedAt), [cards])
   const route = useMemo(() => (tab === 'all' ? null : dayRoute(cards, tab)), [cards, tab])
+  const dayPlans = useDayPlans(tab === 'all' ? null : tab)
 
   // Pinezki widoku: wszystkie miejsca albo trasa dnia (z numerami).
   const pins = useMemo(() => {
@@ -187,7 +190,20 @@ export function TripMap() {
     const m = map.current
     if (!m || !loaded) return
     const stops: MappedCard[] = route ? [...(route.start ? [route.start] : []), ...route.stops] : []
-    const coordinates = stops.map((c) => [c.location.lng, c.location.lat])
+    // Prawdziwy przebieg z planu dnia; bez niego prosta linia między punktami.
+    const lines = Object.values(dayPlans.plans).filter((p) => p?.polyline)
+    const coordinates = lines.length
+      ? dayPlans.legs.flatMap((leg) => {
+          const line = dayPlans.plans[leg.id]?.polyline
+          if (line) return decodePolyline(line)
+          return leg.route
+            ? [
+                [leg.route.from.lng, leg.route.from.lat],
+                [leg.route.to.lng, leg.route.to.lat],
+              ]
+            : []
+        })
+      : stops.map((c) => [c.location.lng, c.location.lat])
 
     const draw = () => {
       const data = { ...EMPTY_LINE, geometry: { type: 'LineString' as const, coordinates } }
@@ -204,14 +220,17 @@ export function TripMap() {
         })
       }
     }
-    if (m.isStyleLoaded()) draw()
+    // Przy dociąganiu kafelków isStyleLoaded() bywa fałszywe, a plan dnia przychodzi właśnie wtedy.
+    if (m.getSource(ROUTE_SOURCE) || m.isStyleLoaded()) draw()
+    else m.once('idle', draw)
     m.on('style.load', draw)
 
     let cancelled = false
     void loadMapLibre().then(({ Marker }) => {
       if (cancelled) return
       for (const a of arrows.current) a.remove()
-      arrows.current = stops.slice(1).map((to, i) => {
+      // Strzałki stoją w połowie prostej, więc przy prawdziwym przebiegu wisiałyby obok trasy.
+      arrows.current = (lines.length ? [] : stops.slice(1)).map((to, i) => {
         const from = stops[i] as MappedCard
         const el = document.createElement('div')
         el.className = 'map-arrow'
@@ -230,8 +249,9 @@ export function TripMap() {
     return () => {
       cancelled = true
       m.off('style.load', draw)
+      m.off('idle', draw)
     }
-  }, [route, loaded])
+  }, [route, loaded, dayPlans.plans, dayPlans.legs])
 
   // Kadr na widoczne pinezki przy zmianie zakładki (i po pierwszym wczytaniu).
   const fittedTab = useRef<string | null>(null)

@@ -3,15 +3,18 @@
 import {
   CARD_TYPE_LABELS,
   type CardSnapshot,
-  dayGaps,
+  type DayGap,
   daysBetween,
   formatAmount,
   hasCoords,
   type LatLng,
+  type LegPlan,
   type MappedCard,
   navigationUrl,
   nextPlace,
+  shiftClock,
   staysOver,
+  TRAVEL_MODE_LABELS,
   todayLocal,
 } from '@planer/core'
 import { LocateFixed, Navigation, Settings2 } from 'lucide-react'
@@ -22,7 +25,7 @@ import { ChatButton } from '@/components/ai/chat-panel'
 import { TotalsText } from '@/components/amounts'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
-import { DayGapRow } from '@/components/card/day-gap'
+import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
@@ -30,6 +33,7 @@ import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
 import { useWeather, weatherIcon, weatherPlace } from '@/components/weather'
 import { useCardSheet } from '@/lib/use-card-sheet'
+import { useDayPlans } from '@/lib/use-day-plans'
 import { useFetchCached } from '@/lib/use-fetch-cached'
 import { usePosition } from '@/lib/use-position'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
@@ -78,7 +82,12 @@ export function TodayDashboard({ userName }: { userName: string }) {
   const main = trip.currencies[0] ?? 'PLN'
   const place = weatherPlace(cards, planDate)
   const weather = useWeather(place)
-  const gaps = useMemo(() => dayGaps(todays), [todays])
+  const { legs, plans, limited, refresh } = useDayPlans(after ? null : planDate)
+  const legRow = (leg: (typeof legs)[number] | undefined) =>
+    leg && (
+      <LegRow leg={leg} plan={plans[leg.id]} bufferMin={trip.travelBufferMin} onRefresh={refresh} />
+    )
+  const nextLeg = next && legs.find((l) => l.to === next.id)
   const tripDays = startDate && endDate ? daysBetween(startDate, endDate) + 1 : undefined
   const dayNumber = during && startDate ? daysBetween(startDate, today) + 1 : undefined
   const status = dayNumber
@@ -164,7 +173,15 @@ export function TodayDashboard({ userName }: { userName: string }) {
         </section>
       </div>
 
-      {next && <NextPlace card={next} from={stay} onOpen={() => sheet.open(next.id)} />}
+      {next && (
+        <NextPlace
+          card={next}
+          from={stay}
+          leg={nextLeg}
+          plan={nextLeg && plans[nextLeg.id]}
+          onOpen={() => sheet.open(next.id)}
+        />
+      )}
 
       {!after && <SectionLabel>{before ? 'pierwszy dzień' : 'plan dnia'}</SectionLabel>}
       {after ? null : todays.length === 0 ? (
@@ -173,12 +190,12 @@ export function TodayDashboard({ userName }: { userName: string }) {
         </p>
       ) : (
         <ol className="island flex flex-col p-2" aria-label="plan dnia">
+          {legRow(legs.find((l) => l.kind === 'start'))}
           {todays.map((card, i) => {
             const prev = todays[i - 1]
             // Kreska „teraz” między ostatnią minioną a pierwszą przyszłą pozycją z godziną.
             const nowLine =
               during && card.time && card.time > now && (!prev?.time || prev.time <= now)
-            const gap = gaps.find((g) => g.from === card.id)
             return (
               <li key={card.id}>
                 {nowLine && (
@@ -227,12 +244,14 @@ export function TodayDashboard({ userName }: { userName: string }) {
                     </span>
                   </span>
                 </button>
-                {gap && <DayGapRow gap={gap} />}
+                {legRow(legs.find((l) => l.from === card.id))}
               </li>
             )
           })}
         </ol>
       )}
+
+      {!after && <DayTravelSummary plans={plans} limited={limited} />}
 
       {sheet.openId && (
         <CardSheet
@@ -298,12 +317,17 @@ function WeatherTile({ at, today }: { at?: LatLng; today: string }) {
 function NextPlace({
   card,
   from,
+  leg,
+  plan,
   onOpen,
 }: {
   card: MappedCard
   from?: MappedCard
+  leg?: DayGap
+  plan?: LegPlan | null
   onOpen: () => void
 }) {
+  const { trip } = useTrip()
   const { position } = usePosition()
   // Skąd: bieżąca pozycja, a bez niej nocleg (rano zwykle stamtąd).
   const origin = position ?? (from ? { lat: from.location.lat, lng: from.location.lng } : undefined)
@@ -325,6 +349,15 @@ function NextPlace({
         <span className="font-bold">{card.title || card.location.name}</span>
         <span className="block text-xs text-subtle">⌖ {card.location.name}</span>
       </button>
+      {plan && leg?.arriveBy && (
+        <p className="mt-1 text-sm font-bold">
+          {plan.minutes} min {TRAVEL_MODE_LABELS[plan.mode]} · wyjdź do{' '}
+          {shiftClock(
+            plan.departAt ?? shiftClock(leg.arriveBy, -plan.minutes),
+            -trip.travelBufferMin,
+          )}
+        </p>
+      )}
       {travel && (
         <p className="mt-1 text-sm">
           {travel}

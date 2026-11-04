@@ -217,7 +217,7 @@ function BoardCanvas() {
     const overlapping = new Set(
       days.flatMap(({ date }) =>
         dayGaps(live.filter((c) => c.date === date))
-          .filter((g) => g.freeMin < 0)
+          .filter((g) => (g.freeMin ?? 0) < 0)
           .map((g) => g.from),
       ),
     )

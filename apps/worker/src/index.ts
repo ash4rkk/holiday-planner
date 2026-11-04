@@ -1,7 +1,9 @@
-import { eq, getDb, trips } from '@planer/core/db'
+import { shiftClock, TRAVEL_MODE_LABELS } from '@planer/core'
+import { and, eq, getDb, gte, lte, tripDocs, trips } from '@planer/core/db'
 import { getRates } from '@planer/core/fx'
 import { sendPush } from '@planer/core/push'
 import { dueReminders, markReminderSent, unmarkReminderSent } from '@planer/core/reminders-db'
+import { legsFromDoc, markLegAlerted, planLeg } from '@planer/core/routes'
 import { nightlyBackup } from './backup'
 
 // Zadania w tle: przypomnienia push z kart (co 30 s), odświeżanie kursów NBP (co 6 h)
@@ -10,6 +12,54 @@ import { nightlyBackup } from './backup'
 const REMINDERS_EVERY_MS = 30_000
 const FX_EVERY_MS = 6 * 60 * 60_000
 const BACKUP_CHECK_MS = 10 * 60_000
+const LEAVE_CHECK_MS = 2 * 60_000
+const LEAVE_LOOKAHEAD_MIN = 150
+const LEAVE_NOTICE_MIN = 10
+
+const toMinutes = (time: string) => {
+  const [h = 0, m = 0] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** „Czas wyjść”: świeży dojazd do następnej karty i push na chwilę przed godziną wyjścia. */
+async function leaveReminders() {
+  const today = Temporal.Now.plainDateISO('Europe/Warsaw').toString()
+  const rows = await getDb()
+    .select({ trip: trips, state: tripDocs.state })
+    .from(trips)
+    .innerJoin(tripDocs, eq(tripDocs.tripId, trips.id))
+    .where(and(eq(trips.archived, false), lte(trips.startDate, today), gte(trips.endDate, today)))
+
+  for (const { trip, state } of rows) {
+    const now = Temporal.Now.zonedDateTimeISO(trip.timezone)
+    const date = now.toPlainDate().toString()
+    const clock = now.hour * 60 + now.minute
+    for (const leg of legsFromDoc(state, date)) {
+      if (!leg.route || !leg.arriveBy) continue
+      const arrive = toMinutes(leg.arriveBy)
+      if (arrive <= clock || arrive - clock > LEAVE_LOOKAHEAD_MIN) continue
+      const request = { ...leg.route, date, leaveAt: leg.leaveAt, arriveBy: leg.arriveBy }
+      const { plan } = await planLeg(request, trip)
+      if (!plan) continue
+      const leaveBy = shiftClock(
+        plan.departAt ?? shiftClock(leg.arriveBy, -plan.minutes),
+        -trip.travelBufferMin,
+      )
+      if (clock < toMinutes(leaveBy) - LEAVE_NOTICE_MIN) continue
+      if (!(await markLegAlerted(request, trip.travelMode))) continue
+      await sendPush(
+        {},
+        {
+          title: `czas wyjść · ${leaveBy}`,
+          body: `${plan.minutes} min ${TRAVEL_MODE_LABELS[plan.mode]}, na miejscu o ${leg.arriveBy}`,
+          url: `/trips/${trip.id}/today`,
+          tag: `leave-${leg.id}`,
+        },
+      )
+      console.log(`worker: czas wyjść ${trip.title} ${leaveBy}`)
+    }
+  }
+}
 
 async function sendReminders() {
   for (const r of await dueReminders()) {
@@ -65,6 +115,7 @@ function every(ms: number, job: () => Promise<void>, name: string) {
 
 every(REMINDERS_EVERY_MS, sendReminders, 'przypomnienia')
 every(FX_EVERY_MS, refreshRates, 'kursy NBP')
+every(LEAVE_CHECK_MS, leaveReminders, 'czas wyjść')
 every(
   BACKUP_CHECK_MS,
   async () => {

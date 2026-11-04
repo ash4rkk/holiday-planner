@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   coordsFromMapsUrl,
+  decodePolyline,
   isAllowedMapsHost,
   isGoogleMapsUrl,
   nameFromMapsUrl,
@@ -163,6 +164,16 @@ describe('trasa dnia', () => {
       { date: '2027-07-14', hasPlaces: true },
       { date: '2027-07-15', hasPlaces: true },
       { date: '2027-07-16', hasPlaces: false },
+    ])
+  })
+})
+
+describe('decodePolyline', () => {
+  it('dekoduje przykład z dokumentacji', () => {
+    expect(decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@')).toEqual([
+      [-120.2, 38.5],
+      [-120.95, 40.7],
+      [-126.453, 43.252],
     ])
   })
 })

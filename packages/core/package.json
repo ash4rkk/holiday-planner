@@ -11,7 +11,8 @@
     "./fx": "./src/fx.ts",
     "./reminders": "./src/reminders.ts",
     "./reminders-db": "./src/reminders-db.ts",
-    "./push": "./src/push.ts"
+    "./push": "./src/push.ts",
+    "./routes": "./src/routes.ts"
   },
   "scripts": {
     "typecheck": "tsc",

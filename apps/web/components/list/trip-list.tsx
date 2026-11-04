@@ -9,7 +9,7 @@ import {
   type CardStatus,
   type CardType,
   createCard,
-  dayGaps,
+  type DayGap,
   formatDayHeader,
   formatShortDate,
   groupCardsByDay,
@@ -26,7 +26,7 @@ import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-
 import { TotalsText } from '@/components/amounts'
 import { CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
-import { DayGapRow } from '@/components/card/day-gap'
+import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
@@ -38,7 +38,7 @@ import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
 import { useCardSheet } from '@/lib/use-card-sheet'
-import { useDayTravel } from '@/lib/use-day-travel'
+import { useDayPlans } from '@/lib/use-day-plans'
 import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function TripList() {
@@ -288,7 +288,7 @@ export function TripList() {
   )
 }
 
-/** Karty dnia na osi: między nimi przerwy, nakładanie się i (z kluczem) sprawdzanie dojazdów. */
+/** Karty dnia na osi: między nimi dojazdy, ostrzeżenia, wyjście z noclegu i powrót. */
 function DayCards({
   date,
   cards,
@@ -299,53 +299,33 @@ function DayCards({
   tile: (c: CardSnapshot) => React.ReactNode
 }) {
   const { trip } = useTrip()
-  const gaps = useMemo(() => dayGaps(cards.filter((c) => c.date === date)), [cards, date])
-  const { checks, state, check } = useDayTravel(date, gaps)
-  const checkable = trip.routes && date >= todayLocal() && gaps.some((g) => g.route)
+  const { legs, plans, limited, refresh } = useDayPlans(date)
+  const row = (leg: DayGap | undefined) =>
+    leg && (
+      <LegRow leg={leg} plan={plans[leg.id]} bufferMin={trip.travelBufferMin} onRefresh={refresh} />
+    )
 
   return (
     <div className="flex flex-col gap-1">
       <div className="day-rail flex flex-col gap-1">
-        {cards.map((c) => {
-          const gap = gaps.find((g) => g.from === c.id)
-          return (
-            <Fragment key={c.id}>
-              <div className="relative">
-                <span
-                  aria-hidden="true"
-                  className={cx(
-                    'absolute top-5 -left-[12px] size-2 rounded-full',
-                    TYPE_STYLE[c.type].bar,
-                  )}
-                />
-                {tile(c)}
-              </div>
-              {gap && <DayGapRow gap={gap} check={checks.get(gap.from)} />}
-            </Fragment>
-          )
-        })}
+        {row(legs.find((l) => l.kind === 'start'))}
+        {cards.map((c) => (
+          <Fragment key={c.id}>
+            <div className="relative">
+              <span
+                aria-hidden="true"
+                className={cx(
+                  'absolute top-5 -left-[12px] size-2 rounded-full',
+                  TYPE_STYLE[c.type].bar,
+                )}
+              />
+              {tile(c)}
+            </div>
+            {row(legs.find((l) => l.from === c.id))}
+          </Fragment>
+        ))}
       </div>
-      {checkable && (
-        <div className="flex items-center gap-3 pl-3">
-          <button
-            type="button"
-            onClick={() => void check()}
-            disabled={state === 'busy'}
-            className="min-h-11 text-xs text-accent disabled:opacity-50"
-          >
-            {state === 'busy'
-              ? 'sprawdzam…'
-              : state === 'error'
-                ? '● nie udało się — spróbuj ponownie'
-                : state === 'limit'
-                  ? '● limit sprawdzeń wyczerpany — zostają czasy pieszo'
-                  : 'sprawdź dojazdy ›'}
-          </button>
-          {checks.size > 0 && (
-            <span className="font-sans text-xs whitespace-nowrap text-attrib">Google Maps</span>
-          )}
-        </div>
-      )}
+      <DayTravelSummary plans={plans} limited={limited} />
     </div>
   )
 }

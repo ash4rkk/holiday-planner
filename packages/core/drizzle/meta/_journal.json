@@ -57,6 +57,13 @@
       "when": 1793820624532,
       "tag": "0007_tricky_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793822844590,
+      "tag": "0008_medical_hitman",
+      "breakpoints": true
     }
   ]
 }

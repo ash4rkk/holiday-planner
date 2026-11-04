@@ -93,6 +93,30 @@ export function TripForm({
           ))}
         </datalist>
       </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="jak się poruszacie">
+          <select
+            name="travelMode"
+            defaultValue={v?.travelMode ?? trip?.travelMode ?? 'transit'}
+            className={inputClass}
+          >
+            <option value="transit">komunikacją</option>
+            <option value="walk">pieszo</option>
+            <option value="drive">autem</option>
+          </select>
+        </Field>
+        <Field label="zapas na dojazd (min)" error={e.travelBufferMin}>
+          <input
+            type="number"
+            name="travelBufferMin"
+            min={0}
+            max={120}
+            inputMode="numeric"
+            defaultValue={v?.travelBufferMin ?? trip?.travelBufferMin ?? 10}
+            className={inputClass}
+          />
+        </Field>
+      </div>
       <button type="submit" disabled={pending} className={buttonClass('primary')}>
         {pending ? 'zapisuję…' : submitLabel}
       </button>

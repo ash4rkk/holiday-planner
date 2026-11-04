@@ -17,7 +17,15 @@ import { cx, inputClass } from '@/components/ui'
 import { resolvePastedPlace } from '@/lib/place-card'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
-type Key = 'date' | 'endDate' | 'time' | 'durationMin' | 'status' | 'location' | 'remindMin'
+type Key =
+  | 'date'
+  | 'endDate'
+  | 'time'
+  | 'durationMin'
+  | 'status'
+  | 'location'
+  | 'destination'
+  | 'remindMin'
 
 const FIELDS: { key: Key; label: string }[] = [
   { key: 'date', label: 'data' },
@@ -26,6 +34,7 @@ const FIELDS: { key: Key; label: string }[] = [
   { key: 'durationMin', label: 'czas trwania' },
   { key: 'status', label: 'status' },
   { key: 'location', label: 'miejsce' },
+  { key: 'destination', label: 'dokąd' },
   { key: 'remindMin', label: 'przypomnienie' },
 ]
 
@@ -49,8 +58,10 @@ export function CardFields({
     onChange({ [key]: undefined })
   }
 
-  const shown = FIELDS.filter((f) => isShown(f.key))
-  const hidden = FIELDS.filter((f) => !isShown(f.key))
+  // „Dokąd” ma sens tylko przy transporcie: bez tego nie wiadomo, skąd liczyć następny dojazd.
+  const fields = FIELDS.filter((f) => f.key !== 'destination' || card.type === 'transport')
+  const shown = fields.filter((f) => isShown(f.key))
+  const hidden = fields.filter((f) => !isShown(f.key))
 
   return (
     <div className="flex flex-col gap-2 px-4 py-3">
@@ -196,7 +207,8 @@ function FieldInput({
         </div>
       )
     case 'location':
-      return <LocationField card={card} onChange={onChange} />
+    case 'destination':
+      return <LocationField field={field} card={card} onChange={onChange} />
   }
 }
 
@@ -213,19 +225,21 @@ export function fieldsSummary(card: CardSnapshot): string {
 
 /** Miejsce: nazwa i adres ręcznie albo wklejony link Google Maps (współrzędne), mapka i nawigacja. */
 function LocationField({
+  field,
   card,
   onChange,
 }: {
+  field: 'location' | 'destination'
   card: CardSnapshot
   onChange: (patch: Partial<EditableCardFields>) => void
 }) {
-  const location = card.location
+  const location = card[field]
   const [link, setLink] = useState('')
   const [state, setState] = useState<'idle' | 'resolving' | 'failed'>('idle')
   const hasCoords = location?.lat !== undefined && location?.lng !== undefined
 
   const set = (patch: Partial<CardLocation>) =>
-    onChange({ location: { name: location?.name ?? '', ...location, ...patch } })
+    onChange({ [field]: { name: location?.name ?? '', ...location, ...patch } })
 
   const resolve = async (text: string) => {
     if (!text.trim()) return
@@ -238,7 +252,7 @@ function LocationField({
     setLink('')
     setState('idle')
     onChange({
-      location: {
+      [field]: {
         name: location?.name || place.name,
         address: location?.address || place.address || undefined,
         ...(place.lat != null && place.lng != null && { lat: place.lat, lng: place.lng }),

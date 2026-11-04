@@ -15,7 +15,7 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Etap 8 (eksport i kopie) — zrobiony na gałęzi `etap-8`: konwersja treści kart Yjs → Markdown/HTML (`packages/core/src/rich-text.ts`), eksport `.md`, widok do druku i PDF z Chromium (`/api/export/[tripId]`, `lib/export/`), link dla rodziny `/p/<token>` (`share_links`, `app/p/[token]`), nocna kopia bazy i plików w workerze (`apps/worker/src/backup.ts`).
 - Audyt po etapie 8: `docs/audyt-2026-11.md`; poprawione punkty 1, 2, 4, 5, 6, 7 i ponowienie `tar`.
 - Po wdrożeniu: wybór profilu na `/` (raz na sesję, `components/profile/`), „dziś” wyjazdu `/trips/<id>/today` (Pulpit zastąpiony), wyjście „‹” do `/trips`, pogoda w nagłówku dnia i w obrysie dnia na Tablicy.
-- Animacje i wygląd: przejścia React `ViewTransition`, arkusze `.sheet-in`, „+” w menu dolnym (portal do `NAV_SLOT`), oś dnia na Liście, grupowanie pinezek. Przytrzymanie karty na Liście = przeniesienie na inny dzień. Czat proponuje karty narzędziem `propose_cards` (dodaje je dopiero osoba). Przerwy dnia: `packages/core/src/gaps.ts`, dojazdy komunikacją na żądanie (`/api/route/transit`, `GOOGLE_ROUTES_API_KEY`).
+- Animacje i wygląd: przejścia React `ViewTransition`, arkusze `.sheet-in`, „+” w menu dolnym (portal do `NAV_SLOT`), oś dnia na Liście, grupowanie pinezek. Przytrzymanie karty na Liście = przeniesienie na inny dzień. Czat proponuje karty narzędziem `propose_cards` (dodaje je dopiero osoba). Przerwy dnia: `packages/core/src/gaps.ts`, odcinki dnia `dayLegs`, plany `@planer/core/routes` (Google dla komunikacji, OSRM pieszo i autem, wyniki w `route_cache`), `/api/route/plan`, `useDayPlans`, „czas wyjść” w workerze.
 - Wszystkie etapy z planu są zrobione; dalej: wdrożenie, testy na telefonach, poprawki.
 
 ## Stos
@@ -79,7 +79,7 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - W obrazach sync i worker `CMD` to Node wprost, nie `pnpm`: pnpm nie przekazuje SIGTERM, więc `server.destroy()` nie zapisałby dokumentów. `init: true` tego nie naprawia.
 - Push tylko na hosty z `isPushEndpoint`, sync tylko z `Origin` aplikacji (`isAppOrigin`, `APP_ORIGIN`) — to ochrona przed SSRF i obcymi stronami, nie poluzowuj.
 - Zdjęcia profili tylko na serwerze (`UPLOAD_DIR/profiles/<imię>.jpg`, `/api/profile-photo/<imię>`), nigdy w repo — jest publiczne. E-maile profili też tylko w `.env`.
-- Czasów z Google Routes nie wolno zapisywać (warunki EOG pozwalają cache'ować tylko współrzędne): wynik tylko w stanie komponentu, bez bazy i `localStorage`; nie pokazuj kroków trasy, przy wyniku tekst `Google Maps` (`text-attrib`).
+- Wyniki Google Routes są zapisywane w `route_cache` i pokazywane z liniami i przesiadkami, wbrew warunkom Google (dopuszczają tylko cache współrzędnych). To świadoma decyzja właściciela; ryzyko to blokada klucza. Przy wynikach zostaje tekst `Google Maps` (`text-attrib`).
 - Nie dawaj `transition`/`transition-duration` na `*`: domyślna właściwość to `all`, więc Tablica spóźniała się o czas przejścia.
 - Style komponentów typu `.island` trzymaj w `@layer components`, inaczej wygrywają z klasami Tailwind.
 - Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.

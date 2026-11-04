@@ -39,6 +39,12 @@ export const trips = pgTable('trips', {
   archived: boolean('archived').notNull().default(false),
   // Godziny kart są lokalne dla miejsca wyjazdu; strefa potrzebna do przypomnień push.
   timezone: text('timezone').notNull().default('Europe/Warsaw'),
+  // Jak się poruszacie: domyślny sposób dojazdu między kartami i zapas w minutach.
+  travelMode: text('travel_mode')
+    .$type<'transit' | 'walk' | 'drive'>()
+    .notNull()
+    .default('transit'),
+  travelBufferMin: integer('travel_buffer_min').notNull().default(10),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -194,6 +200,15 @@ export const aiUsage = pgTable('ai_usage', {
 export const routesUsage = pgTable('routes_usage', {
   month: text('month').primaryKey(),
   requests: integer('requests').notNull().default(0),
+})
+
+/** Wyniki tras (czas, przesiadki, przebieg): wspólne dla obu telefonów, nie zużywają limitu drugi raz. */
+export const routeCache = pgTable('route_cache', {
+  key: text('key').primaryKey(),
+  plan: jsonb('plan').notNull(),
+  checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+  // Przypomnienie „czas wyjść” idzie raz na odcinek.
+  alertedAt: timestamp('alerted_at', { withTimezone: true }),
 })
 
 /** Linki tylko do odczytu dla rodziny (/p/<token>): długi losowy token, można unieważnić. */

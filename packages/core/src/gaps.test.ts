@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CardSnapshot } from './cards'
-import { dayGaps } from './gaps'
+import { dayGaps, dayLegs, legShortfall, shiftClock } from './gaps'
 
 const place = { name: 'x', lat: 1, lng: 2 }
 const card = (id: string, fields: Partial<CardSnapshot>) =>
@@ -12,7 +12,13 @@ describe('dayGaps', () => {
       card('a', { time: '11:30', durationMin: 120, location: place }),
       card('b', { time: '14:00', location: place }),
     ])
-    expect(gap).toMatchObject({ from: 'a', to: 'b', freeMin: 30, leaveAt: '13:30' })
+    expect(gap).toMatchObject({
+      from: 'a',
+      to: 'b',
+      freeMin: 30,
+      leaveAt: '13:30',
+      arriveBy: '14:00',
+    })
     expect(gap?.route).toBeDefined()
   })
 
@@ -35,6 +41,20 @@ describe('dayGaps', () => {
     expect(gaps.map((g) => [g.from, g.to])).toEqual([['a', 'b']])
   })
 
+  it('po transporcie z polem „dokąd” trasa rusza z celu', () => {
+    const [gap] = dayGaps([
+      card('a', {
+        type: 'transport',
+        time: '09:00',
+        durationMin: 60,
+        location: place,
+        destination: { name: 'dworzec', lat: 5, lng: 6 },
+      }),
+      card('b', { time: '12:00', location: place }),
+    ])
+    expect(gap?.route?.from).toEqual({ lat: 5, lng: 6 })
+  })
+
   it('po transporcie nie ma trasy, bo nie wiadomo, gdzie się kończy', () => {
     const [gap] = dayGaps([
       card('a', { type: 'transport', time: '09:00', location: place }),
@@ -46,5 +66,64 @@ describe('dayGaps', () => {
   it('bez czasu trwania liczy 0 minut', () => {
     const [gap] = dayGaps([card('a', { time: '09:00' }), card('b', { time: '09:45' })])
     expect(gap).toMatchObject({ freeMin: 45, leaveAt: '09:00' })
+  })
+})
+
+describe('dayLegs', () => {
+  const stay = card('h', {
+    type: 'stay',
+    date: '2027-07-13',
+    endDate: '2027-07-16',
+    location: { name: 'hotel', lat: 9, lng: 9 },
+  })
+
+  it('dodaje dojazd z noclegu i powrót', () => {
+    const legs = dayLegs(
+      [
+        stay,
+        card('a', { time: '10:00', durationMin: 60, location: place }),
+        card('b', { time: '14:00', location: place }),
+      ],
+      '2027-07-14',
+    )
+    expect(legs.map((l) => l.kind)).toEqual(['start', 'between', 'end'])
+    expect(legs[0]).toMatchObject({ to: 'a', arriveBy: '10:00' })
+    expect(legs[0]?.route?.from).toEqual({ lat: 9, lng: 9 })
+    expect(legs[2]).toMatchObject({ from: 'b', leaveAt: '14:00' })
+  })
+
+  it('bez noclegu tylko odcinki między kartami', () => {
+    const legs = dayLegs([card('a', { time: '10:00' }), card('b', { time: '14:00' })], '2027-07-14')
+    expect(legs.map((l) => l.kind)).toEqual(['between'])
+  })
+})
+
+describe('legShortfall', () => {
+  const leg = {
+    id: 'x',
+    kind: 'between' as const,
+    leaveAt: '13:30',
+    arriveBy: '14:00',
+    freeMin: 30,
+  }
+
+  it('z czasu dojazdu i zapasu', () => {
+    expect(legShortfall(leg, { minutes: 25 }, 10)).toBe(5)
+    expect(legShortfall(leg, { minutes: 10 }, 10)).toBe(-10)
+  })
+
+  it('godzina odjazdu z rozkładu wygrywa', () => {
+    expect(legShortfall(leg, { minutes: 10, departAt: '13:20' }, 10)).toBe(20)
+  })
+
+  it('bez końca karty nie ma czego liczyć', () => {
+    expect(legShortfall({ ...leg, leaveAt: undefined }, { minutes: 5 }, 10)).toBeUndefined()
+  })
+})
+
+describe('shiftClock', () => {
+  it('przesuwa i zawija przez północ', () => {
+    expect(shiftClock('10:05', -15)).toBe('09:50')
+    expect(shiftClock('00:05', -10)).toBe('23:55')
   })
 })
