@@ -1,9 +1,10 @@
+import { isPushEndpoint } from '@planer/core'
 import { eq, getDb, pushSubscriptions } from '@planer/core/db'
 import { z } from 'zod'
 import { getCurrentUser } from '@/lib/auth/user'
 
 const body = z.object({
-  endpoint: z.string().url().max(1000),
+  endpoint: z.string().url().max(1000).refine(isPushEndpoint),
   keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
   notifyChanges: z.boolean().default(true),
 })

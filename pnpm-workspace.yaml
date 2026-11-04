@@ -5,3 +5,6 @@ packages:
 allowBuilds:
   "@swc/core": false
   esbuild: true
+
+# Na starszym Node brakuje Temporal — lepiej odmówić od razu niż dostać 500 w aplikacji.
+engineStrict: true

@@ -8,6 +8,16 @@ export const ACCESS_HEADER = 'cf-access-jwt-assertion'
 export const ACCESS_COOKIE = 'CF_Authorization'
 export const USER_EMAIL_HEADER = 'x-user-email'
 
+/**
+ * WebSocket nie podlega same-origin, a przeglądarka dokleja do niego cookie Access — bez tego cudza
+ * strona mogłaby łączyć się z sync w sesji zalogowanej osoby. Klient spoza przeglądarki nie wysyła
+ * Origin, ale nie ma też cookie ofiary, więc wystarcza mu sam JWT.
+ */
+export function isAppOrigin(origin: string | null, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NODE_ENV === 'development' || origin === null) return true
+  return origin === (env.APP_ORIGIN ?? 'https://planer.wiergowsky.com')
+}
+
 export type AccessConfig = {
   teamDomain: string
   aud: string

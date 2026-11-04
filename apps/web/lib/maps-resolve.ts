@@ -7,6 +7,7 @@ import {
   parseShared,
   unwrapConsentUrl,
 } from '@planer/core'
+import { redirectTarget } from '@/lib/safe-fetch'
 
 export type ResolvedPlace = {
   name: string
@@ -26,14 +27,11 @@ async function followRedirects(start: string): Promise<string> {
   let url = unwrapConsentUrl(start)
   for (let hop = 0; hop < 6 && !coordsFromMapsUrl(url); hop++) {
     if (!isAllowedMapsHost(url)) break
-    const res = await fetch(url, {
-      redirect: 'manual',
-      headers: { 'user-agent': USER_AGENT, 'accept-language': 'pl' },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+    const location = await redirectTarget(url, {
+      'user-agent': USER_AGENT,
+      'accept-language': 'pl',
     })
-    const location = res.headers.get('location')
-    await res.body?.cancel()
-    if (res.status < 300 || res.status >= 400 || !location) break
+    if (!location) break
     url = unwrapConsentUrl(new URL(location, url).href)
   }
   return url

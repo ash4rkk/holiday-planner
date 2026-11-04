@@ -47,6 +47,7 @@ export type FetchedPage = { url: string; html: string }
 
 function requestOnce(
   url: URL,
+  headers: Record<string, string> = {},
 ): Promise<{ status: number; location?: string; type?: string; body?: string }> {
   return new Promise((resolve, reject) => {
     const client = url.protocol === 'https:' ? https : http
@@ -59,6 +60,7 @@ function requestOnce(
           'user-agent': USER_AGENT,
           accept: 'text/html,application/xhtml+xml',
           'accept-language': 'pl,en;q=0.8',
+          ...headers,
         },
       },
       (res) => {
@@ -98,6 +100,15 @@ function requestOnce(
     req.on('timeout', () => req.destroy(new Error('przekroczony czas')))
     req.on('error', reject)
   })
+}
+
+/** Cel przekierowania spod adresu albo null; łączy się tylko z adresami publicznymi. */
+export async function redirectTarget(
+  raw: string,
+  headers: Record<string, string>,
+): Promise<string | null> {
+  const res = await requestOnce(new URL(raw), headers).catch(() => null)
+  return res?.location ?? null
 }
 
 /** HTML strony spod adresu użytkownika albo null (zły adres, prywatna sieć, nie-HTML, błąd). */

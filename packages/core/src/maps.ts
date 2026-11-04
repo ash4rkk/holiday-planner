@@ -8,7 +8,9 @@ import { staysOver } from './trip-doc'
 
 export type LatLng = { lat: number; lng: number }
 
-const GOOGLE_HOST = /^(?:www\.|maps\.)?google\.[a-z.]{2,6}$/i
+// Domena krajowa to dokładnie 2 litery — inaczej przejdzie cudza google.xy.io. Wzorzec nie wystarcza:
+// serwer i tak łączy się tylko z adresami publicznymi (lib/safe-fetch.ts).
+const GOOGLE_HOST = /^(?:www\.|maps\.)?google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/i
 
 /** Czy to link do Google Maps (krótki maps.app.goo.gl, goo.gl/maps albo google.*\/maps). */
 export function isGoogleMapsUrl(raw: string): boolean {
@@ -29,7 +31,9 @@ export function isGoogleMapsUrl(raw: string): boolean {
 /** Hosty, po których resolver może chodzić przy rozwijaniu przekierowań. */
 export function isAllowedMapsHost(raw: string): boolean {
   try {
-    const host = new URL(raw).hostname.toLowerCase()
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' || url.port || url.username || url.password) return false
+    const host = url.hostname.toLowerCase()
     return (
       host === 'maps.app.goo.gl' ||
       host === 'goo.gl' ||

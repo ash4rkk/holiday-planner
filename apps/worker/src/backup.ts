@@ -50,26 +50,29 @@ export async function nightlyBackup(): Promise<string | null> {
   const dbFile = path.join(dir, `planer-db_${stamp}.dump`)
   await mkdir(dir, { recursive: true })
   await prune(dir, now.toPlainDate())
-  if (existsSync(dbFile)) return null
+  const done: string[] = []
 
   // Najpierw do pliku tymczasowego — przerwana kopia nie udaje udanej.
-  await run(
-    'pg_dump',
-    ['--format=custom', '--no-owner', '--no-privileges', `--file=${dbFile}.part`],
-    pgEnv(url),
-  )
-  await rename(`${dbFile}.part`, dbFile)
-  const done = [`baza ${await size(dbFile)}`]
+  if (!existsSync(dbFile)) {
+    await run(
+      'pg_dump',
+      ['--format=custom', '--no-owner', '--no-privileges', `--file=${dbFile}.part`],
+      pgEnv(url),
+    )
+    await rename(`${dbFile}.part`, dbFile)
+    done.push(`baza ${await size(dbFile)}`)
+  }
 
+  // Osobny warunek: gdy tar padnie, następne sprawdzenie ponowi same pliki.
   const uploads = process.env.UPLOAD_DIR
-  if (uploads && existsSync(uploads)) {
-    const filesFile = path.join(dir, `planer-files_${stamp}.tar.gz`)
+  const filesFile = path.join(dir, `planer-files_${stamp}.tar.gz`)
+  if (uploads && existsSync(uploads) && !existsSync(filesFile)) {
     await run('tar', ['-czf', `${filesFile}.part`, '-C', uploads, '.'], {})
     await rename(`${filesFile}.part`, filesFile)
     done.push(`pliki ${await size(filesFile)}`)
   }
 
-  return `${stamp}: ${done.join(', ')}`
+  return done.length ? `${stamp}: ${done.join(', ')}` : null
 }
 
 /** Usuwa kopie starsze niż BACKUP_KEEP_DAYS (przy każdym sprawdzeniu, nie tylko w dniu nowej kopii). */

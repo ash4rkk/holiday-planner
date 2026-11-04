@@ -3,6 +3,7 @@ import { defaultCache } from '@serwist/turbopack/worker'
 import {
   CacheableResponsePlugin,
   CacheFirst,
+  NetworkOnly,
   type PrecacheEntry,
   Serwist,
   type SerwistGlobalConfig,
@@ -35,6 +36,12 @@ const serwist = new Serwist({
         cacheName: 'attachments',
         plugins: [new CacheableResponsePlugin({ statuses: [200] })],
       }),
+    },
+    // Status sesji, eksport i AI zawsze z sieci — defaultCache trzymałby je 24 h mimo no-store.
+    {
+      matcher: ({ url, sameOrigin }) =>
+        sameOrigin && /^\/api\/(?:session|export|ai)(?:\/|$)/.test(url.pathname),
+      handler: new NetworkOnly(),
     },
     ...defaultCache,
   ],

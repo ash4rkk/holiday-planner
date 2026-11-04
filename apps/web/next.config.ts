@@ -17,6 +17,22 @@ const nextConfig: NextConfig = {
   },
   // proxy.ts buforuje ciało żądania; uploady plików do 20 MB (lib/attachments.ts).
   experimental: { proxyClientMaxBodySize: '21mb' },
+  // Załączniki i eksport ustawiają własne, ostrzejsze CSP w trasach.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ]
+  },
 }
 
 export default withSerwist(nextConfig)

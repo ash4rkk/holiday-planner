@@ -1,6 +1,7 @@
 import {
   ACCESS_COOKIE,
   ACCESS_HEADER,
+  isAppOrigin,
   readAccessConfig,
   verifyAccessToken,
 } from '@planer/core/access'
@@ -18,6 +19,8 @@ function cookie(headers: Headers, name: string): string | undefined {
  * upgrade; zapasowo cookie CF_Authorization (ta sama domena co aplikacja).
  */
 export async function authenticate(headers: Headers): Promise<string> {
+  if (!isAppOrigin(headers.get('origin'))) throw new Error('brak dostępu: obcy Origin')
+
   const devEmail = process.env.AUTH_DEV_EMAIL
   if (process.env.NODE_ENV === 'development' && devEmail) return devEmail.toLowerCase()
 

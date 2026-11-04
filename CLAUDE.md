@@ -13,6 +13,7 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Etap 6 (Pulpit, koszty, push) — zrobiony na gałęzi `etap-6`: kwoty `/+` (`packages/core/src/amounts.ts`), kursy NBP z cache `fx_rates` (`@planer/core/fx`, `/api/fx`, `lib/use-rates.ts`), sumy kart/dni/wyjazdu, pogoda (Open-Meteo, `/api/weather`) w Liście i na Pulpicie, dojazd (OSRM FOSSGIS, `/api/route`), Pulpit dnia (`components/today/`), push: subskrypcje (`push_subscriptions`, `/settings`), przypomnienia (`reminders`, liczy sync, wysyła worker), zmiany drugiej osoby (sync, po 3 min ciszy), strefa czasowa wyjazdu (`trips.timezone`).
 - Etap 7 (AI) — zrobiony na gałęzi `etap-7`: czat (`/api/ai/chat`, SSE; kontekst wyjazdu z `trip_docs` przez `tripContext` w core; wyszukiwanie w sieci; narzędzie `read_attachment`; historia `ai_messages`), import zdjęć/PDF-ów do szkiców kart (`/api/ai/import`, ustrukturyzowane wyjście; kolejka offline w IndexedDB `imports`; okienko Zatwierdź/Popraw/Odrzuć), koszt w `ai_usage` i limit miesięczny (`lib/ai/budget.ts`).
 - Etap 8 (eksport i kopie) — zrobiony na gałęzi `etap-8`: konwersja treści kart Yjs → Markdown/HTML (`packages/core/src/rich-text.ts`), eksport `.md`, widok do druku i PDF z Chromium (`/api/export/[tripId]`, `lib/export/`), link dla rodziny `/p/<token>` (`share_links`, `app/p/[token]`), nocna kopia bazy i plików w workerze (`apps/worker/src/backup.ts`).
+- Audyt po etapie 8: `docs/audyt-2026-11.md`; poprawione punkty 1, 2, 4, 5, 6, 7 i ponowienie `tar`.
 - Wszystkie etapy z planu są zrobione; dalej: wdrożenie, testy na telefonach, poprawki.
 
 ## Stos
@@ -73,6 +74,8 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - Treść kart do HTML tylko przez `blocksToHtml` (ucieczka znaków, odrzuca niebezpieczne linki) — nigdy surowego tekstu z dokumentu w `dangerouslySetInnerHTML`.
 - `Temporal` tylko po stronie serwera (`@planer/core/reminders`) — nie importuj go do kodu klienta, przeglądarki go jeszcze nie mają.
 - Moduły `@planer/core/fx`, `/push`, `/reminders-db` używają bazy — tylko serwer (API, sync, worker).
+- W obrazach sync i worker `CMD` to Node wprost, nie `pnpm`: pnpm nie przekazuje SIGTERM, więc `server.destroy()` nie zapisałby dokumentów. `init: true` tego nie naprawia.
+- Push tylko na hosty z `isPushEndpoint`, sync tylko z `Origin` aplikacji (`isAppOrigin`, `APP_ORIGIN`) — to ochrona przed SSRF i obcymi stronami, nie poluzowuj.
 - Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.
 - `pnpm dev` dla sync/worker uruchamia `tsx watch` jako osobny proces `node` — zabicie powłoki go nie zatrzymuje; przy testach sprawdzaj `ps`, bo stary worker potrafi przejąć przypomnienia.
 - Wartości z `;` w `.env` (np. `USER_NAMES`) w cudzysłowie, inaczej `source .env` w powłoce je ucina.

@@ -1,6 +1,7 @@
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import webpush from 'web-push'
 import { getDb, pushSubscriptions, users } from './db'
+import { isPushEndpoint } from './push-endpoint'
 
 // Wysyłka Web Push (VAPID) — wspólna dla workera (przypomnienia) i serwera sync (zmiany).
 
@@ -52,6 +53,10 @@ export async function sendPush(
   let failed = 0
   await Promise.all(
     subs.map(async (sub) => {
+      if (!isPushEndpoint(sub.endpoint)) {
+        console.warn('[push] pomijam subskrypcję spoza usług push')
+        return
+      }
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },

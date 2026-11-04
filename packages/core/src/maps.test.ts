@@ -20,12 +20,20 @@ describe('isGoogleMapsUrl', () => {
     ['https://www.google.com/search?q=koloseum', false],
     ['https://evil.com/maps/place/x', false],
     ['https://google.com.evil.com/maps', false],
+    ['https://google.ab.io/maps/place/x', false],
+    ['https://maps.google.xy.io/maps', false],
     ['javascript:alert(1)', false],
   ])('%s → %s', (url, ok) => expect(isGoogleMapsUrl(url)).toBe(ok))
 
   it('hosty przekierowań', () => {
     expect(isAllowedMapsHost('https://consent.google.com/m?continue=x')).toBe(true)
+    expect(isAllowedMapsHost('https://www.google.co.uk/maps')).toBe(true)
+    expect(isAllowedMapsHost('https://www.google.com.br/maps')).toBe(true)
     expect(isAllowedMapsHost('http://169.254.169.254/latest')).toBe(false)
+    expect(isAllowedMapsHost('https://google.ab.io/x')).toBe(false)
+    expect(isAllowedMapsHost('https://maps.google.xy.io/x')).toBe(false)
+    expect(isAllowedMapsHost('http://www.google.com/maps')).toBe(false)
+    expect(isAllowedMapsHost('https://www.google.com:8443/maps')).toBe(false)
   })
 })
 

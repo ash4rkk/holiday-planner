@@ -43,14 +43,17 @@ USER planer
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
 
+# Node wprost jako PID 1: pnpm nie przekazuje SIGTERM, więc server.destroy() nie zapisałby dokumentów.
 FROM source AS sync
 ENV NODE_ENV=production
+WORKDIR /repo/apps/sync
 USER node
-CMD ["pnpm", "--filter", "@planer/sync", "start"]
+CMD ["node", "--import", "tsx", "src/index.ts"]
 
 FROM source AS worker
 ENV NODE_ENV=production
 # Nocne kopie: pg_dump zgodny z serwerem (PostgreSQL 17).
 RUN apk add --no-cache postgresql17-client
+WORKDIR /repo/apps/worker
 USER node
-CMD ["pnpm", "--filter", "@planer/worker", "start"]
+CMD ["node", "--import", "tsx", "src/index.ts"]
