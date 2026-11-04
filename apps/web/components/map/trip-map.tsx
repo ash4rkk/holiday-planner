@@ -9,6 +9,7 @@ import {
   dayRoute,
   decodePolyline,
   formatDayHeader,
+  formatShortDate,
   hasCoords,
   type LegPlan,
   type MappedCard,
@@ -16,7 +17,7 @@ import {
   navigationUrl,
   todayLocal,
 } from '@planer/core'
-import { Navigation, SquarePen } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Navigation, SquarePen } from 'lucide-react'
 import type { GeoJSONSource, Map as MapLibreMap, Marker } from 'maplibre-gl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChatButton } from '@/components/ai/chat-panel'
@@ -107,7 +108,7 @@ function groupNearby<T extends { card: MappedCard }>(m: MapLibreMap, pins: T[]):
 }
 
 export function TripMap() {
-  const { trip } = useTrip()
+  const { trip, user } = useTrip()
   const cards = useCards()
   const sheet = useCardSheet()
   const style = useMapStyle()
@@ -319,6 +320,17 @@ export function TripMap() {
     return ROUTE_KINDS.filter((k) => found.has(k))
   }, [route, dayPlans.legs, dayPlans.plans])
 
+  // Strzałki jak na Tablicy: pierwsze naciśnięcie dzisiejszy dzień, potem kolejne dni z miejscami.
+  const jump = (step: number) => {
+    const dates = days.filter((d) => d.hasPlaces).map((d) => d.date)
+    if (!dates.length) return
+    const index = dates.indexOf(tab)
+    const start = dates.findIndex((d) => d >= today)
+    const next = index === -1 ? (start === -1 ? dates.length - 1 : start) : index + step
+    setTab(dates[Math.min(dates.length - 1, Math.max(0, next))] as string)
+    setSelected(null)
+  }
+
   const selectedCard = live.find((c) => c.id === selected)
   const offMap = route?.offMap ?? []
   const tabs: { id: Tab; label: string; dot?: boolean }[] = [
@@ -348,6 +360,7 @@ export function TripMap() {
             title={trip.title}
             back={TRIPS_BACK}
             morph={`trip-${trip.id}`}
+            profile={user.name}
             actions={
               <>
                 <TripStatus />
@@ -408,6 +421,29 @@ export function TripMap() {
         <SessionBanner />
 
         <div className="pointer-events-none absolute inset-x-0.5 bottom-[calc(80px+env(safe-area-inset-bottom))] z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
+          <div className="island flex items-center self-end">
+            <button
+              type="button"
+              onClick={() => jump(-1)}
+              aria-label="poprzedni dzień"
+              className="flex size-11 items-center justify-center text-muted hover:text-accent"
+            >
+              <ChevronLeft className="size-5" aria-hidden="true" />
+            </button>
+            {tab !== 'all' && (
+              <span className="px-1 text-xs whitespace-nowrap text-subtle">
+                {formatShortDate(tab)}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => jump(1)}
+              aria-label="następny dzień"
+              className="flex size-11 items-center justify-center text-muted hover:text-accent"
+            >
+              <ChevronRight className="size-5" aria-hidden="true" />
+            </button>
+          </div>
           {selectedCard && hasCoords(selectedCard) && (
             <section className="island border-t-2 border-t-accent p-3">
               <div className="flex items-start gap-2">

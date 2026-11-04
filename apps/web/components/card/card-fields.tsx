@@ -15,6 +15,7 @@ import { type ReactNode, useState } from 'react'
 import { MiniMap } from '@/components/map/mini-map'
 import { cx, inputClass } from '@/components/ui'
 import { resolvePastedPlace } from '@/lib/place-card'
+import { StatusMark } from './status-mark'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
 type Key =
@@ -47,7 +48,8 @@ export function CardFields({
   onChange: (patch: Partial<EditableCardFields>) => void
 }) {
   const [opened, setOpened] = useState<Set<Key>>(new Set())
-  const isShown = (key: Key) => card[key] !== undefined || opened.has(key)
+  // Status widać zawsze: wybór „brak” jest równorzędny z pozostałymi.
+  const isShown = (key: Key) => key === 'status' || card[key] !== undefined || opened.has(key)
   const open = (key: Key) => setOpened((s) => new Set(s).add(key))
   const clear = (key: Key) => {
     setOpened((s) => {
@@ -66,7 +68,7 @@ export function CardFields({
   return (
     <div className="flex flex-col gap-2 px-4 py-3">
       {shown.map(({ key, label }) => (
-        <Row key={key} label={label} onClear={() => clear(key)}>
+        <Row key={key} label={label} onClear={key === 'status' ? undefined : () => clear(key)}>
           <FieldInput field={key} card={card} onChange={onChange} />
         </Row>
       ))}
@@ -94,21 +96,23 @@ function Row({
   children,
 }: {
   label: string
-  onClear: () => void
+  onClear?: () => void
   children: ReactNode
 }) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-20 shrink-0 text-xs text-subtle italic">{label}</span>
       <div className="min-w-0 flex-1">{children}</div>
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label={`usuń pole ${label}`}
-        className="flex size-11 shrink-0 items-center justify-center text-dim hover:text-red"
-      >
-        <X className="size-4" aria-hidden="true" />
-      </button>
+      {onClear && (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label={`usuń pole ${label}`}
+          className="flex size-11 shrink-0 items-center justify-center text-dim hover:text-red"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 }
@@ -188,20 +192,21 @@ function FieldInput({
     case 'status':
       return (
         <div className="flex gap-1">
-          {CARD_STATUSES.map((s) => (
+          {[undefined, ...CARD_STATUSES].map((s) => (
             <button
-              key={s}
+              key={s ?? 'none'}
               type="button"
               aria-pressed={card.status === s}
+              aria-label={s ? CARD_STATUS_LABELS[s] : 'bez statusu'}
               onClick={() => onChange({ status: s })}
               className={cx(
-                'min-h-11 flex-1 rounded-small border px-1 text-xs transition-colors',
+                'flex min-h-11 flex-1 items-center justify-center rounded-small border px-1 text-xs transition-colors',
                 card.status === s
                   ? 'border-accent bg-accent/20 text-accent'
                   : 'border-line text-muted',
               )}
             >
-              {CARD_STATUS_LABELS[s]}
+              {!s ? 'brak' : s === 'idea' ? CARD_STATUS_LABELS[s] : <StatusMark status={s} />}
             </button>
           ))}
         </div>

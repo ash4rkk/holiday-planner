@@ -206,12 +206,14 @@ export function DayTravelSummary({
   limited: boolean
 }) {
   const list = Object.values(plans).filter((p) => !!p)
-  if (!list.length && !limited) return null
+  // Jeden odcinek tylko powtórzyłby wiersz nad podsumowaniem.
+  const summary = list.length > 1
+  if (!summary && !limited) return null
   const minutes = list.reduce((sum, p) => sum + p.minutes, 0)
   const km = list.reduce((sum, p) => sum + (p.km ?? 0), 0)
   return (
     <p className="px-3 text-xs text-subtle italic">
-      {list.length > 0 &&
+      {summary &&
         `w drodze około ${formatDuration(minutes)}${km ? ` · ${String(Math.round(km * 10) / 10).replace('.', ',')} km` : ''}`}
       {limited && (
         <span className="text-red not-italic"> ● limit dojazdów wyczerpany, czasy pieszo</span>

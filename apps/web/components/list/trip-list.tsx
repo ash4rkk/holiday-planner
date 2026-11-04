@@ -18,9 +18,9 @@ import {
   restoreCard,
   todayLocal,
 } from '@planer/core'
-import { Luggage, Plus, Settings2 } from 'lucide-react'
+import { Lightbulb, Luggage, Plus, Settings2 } from 'lucide-react'
 import Link from 'next/link'
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, type ReactNode, useMemo, useState } from 'react'
 import { AddButton } from '@/components/add-button'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
@@ -28,6 +28,7 @@ import { TotalsText } from '@/components/amounts'
 import { CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
 import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
+import { StatusMark } from '@/components/card/status-mark'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
@@ -44,7 +45,7 @@ import { useTripNow } from '@/lib/use-trip-now'
 import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function TripList() {
-  const { trip, doc, ready, templates } = useTrip()
+  const { trip, user, doc, ready, templates } = useTrip()
   // Waluta główna wyjazdu (pierwsza z listy); bez walut — same złotówki.
   const main = trip.currencies[0] ?? 'PLN'
   const cards = useCards()
@@ -100,6 +101,7 @@ export function TripList() {
           title={trip.title}
           back={TRIPS_BACK}
           morph={`trip-${trip.id}`}
+          profile={user.name}
           actions={
             <>
               <TripStatus />
@@ -119,47 +121,42 @@ export function TripList() {
         <SessionBanner />
 
         <div
-          className="fade-x -mx-0.5 flex gap-1 overflow-x-auto px-0.5 py-1 pr-7"
+          className="relative mt-1 flex w-fit max-w-full items-center self-center overflow-x-auto rounded-island border border-line bg-panel p-1"
           role="group"
           aria-label="filtry"
         >
           {CARD_TYPES.map((t) => {
             const Icon = TYPE_STYLE[t].icon
-            const on = types.has(t)
             return (
-              <button
+              <FilterChip
                 key={t}
-                type="button"
-                aria-pressed={on}
+                label={CARD_TYPE_LABELS[t]}
+                on={types.has(t)}
                 onClick={() => toggle(types, t, setTypes)}
-                className={cx(
-                  'flex min-h-11 shrink-0 items-center gap-1 rounded-small border px-2 text-xs transition-colors',
-                  on ? 'border-accent bg-accent/20 text-accent' : 'border-line bg-panel text-muted',
-                )}
               >
-                <Icon className={cx('size-3.5', !on && TYPE_STYLE[t].text)} aria-hidden="true" />
-                {CARD_TYPE_LABELS[t]}
-              </button>
+                <Icon
+                  className={cx('size-5', !types.has(t) && TYPE_STYLE[t].text)}
+                  aria-hidden="true"
+                  strokeWidth={1.8}
+                />
+              </FilterChip>
             )
           })}
-          <span className="mx-1 w-px shrink-0 bg-line" />
-          {CARD_STATUSES.map((s) => {
-            const on = statuses.has(s)
-            return (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={on}
-                onClick={() => toggle(statuses, s, setStatuses)}
-                className={cx(
-                  'min-h-11 shrink-0 rounded-small border px-2 text-xs transition-colors',
-                  on ? 'border-accent bg-accent/20 text-accent' : 'border-line bg-panel text-muted',
-                )}
-              >
-                {CARD_STATUS_LABELS[s]}
-              </button>
-            )
-          })}
+          <span className="mx-1 h-6 w-px shrink-0 bg-line" />
+          {CARD_STATUSES.map((s) => (
+            <FilterChip
+              key={s}
+              label={CARD_STATUS_LABELS[s]}
+              on={statuses.has(s)}
+              onClick={() => toggle(statuses, s, setStatuses)}
+            >
+              {s === 'idea' ? (
+                <Lightbulb className="size-5" aria-hidden="true" strokeWidth={1.8} />
+              ) : (
+                <StatusMark status={s} />
+              )}
+            </FilterChip>
+          ))}
         </div>
 
         {cards.some((c) => !c.deletedAt && c.amounts?.length) && (
@@ -298,7 +295,7 @@ function DayCards({
 }: {
   date: string
   cards: CardSnapshot[]
-  tile: (c: CardSnapshot) => React.ReactNode
+  tile: (c: CardSnapshot) => ReactNode
 }) {
   const { trip } = useTrip()
   const { legs, plans, limited, refresh } = useDayPlans(date)
@@ -308,6 +305,7 @@ function DayCards({
   const upcoming = now && timed.find((c) => (c.time as string) > now.time)
   const lineBefore = now?.date === date && upcoming ? upcoming.id : undefined
   const lineAtEnd = now?.date === date && !upcoming && timed.length > 0
+  const endLeg = legs.find((l) => l.kind === 'end')
   const row = (leg: DayGap | undefined) =>
     leg && (
       <LegRow
@@ -341,13 +339,57 @@ function DayCards({
               />
               {tile(c)}
             </div>
+            {/* Powrót do noclegu jest jeszcze przed Wami, więc „teraz” stoi nad nim. */}
+            {lineAtEnd && now && endLeg?.from === c.id && <NowLine time={now.time} />}
             {row(legs.find((l) => l.from === c.id))}
           </Fragment>
         ))}
-        {lineAtEnd && now && <NowLine time={now.time} />}
+        {lineAtEnd && now && !endLeg && <NowLine time={now.time} />}
       </div>
       <DayTravelSummary plans={plans} limited={limited} />
     </div>
+  )
+}
+
+/** Filtr jak pozycja menu dolnego: sama ikona, po włączeniu wysuwa się nazwa. */
+function FilterChip({
+  label,
+  on,
+  onClick,
+  children,
+}: {
+  label: string
+  on: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        onClick()
+        // Nazwa wysuwa się 200 ms; bez tego przy końcu paska zostałaby poza krawędzią.
+        const chip = e.currentTarget
+        setTimeout(() => chip.scrollIntoView({ inline: 'nearest', block: 'nearest' }), 220)
+      }}
+      className={cx(
+        'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-[9px] transition-colors',
+        on ? 'bg-accent/20 px-3 text-accent' : 'text-muted hover:text-text',
+      )}
+    >
+      {children}
+      <span
+        className={cx(
+          'overflow-hidden text-sm font-bold whitespace-nowrap transition-[max-width,margin] duration-200',
+          on ? 'ml-2 max-w-32' : 'max-w-0',
+        )}
+      >
+        {label}
+      </span>
+    </button>
   )
 }
 

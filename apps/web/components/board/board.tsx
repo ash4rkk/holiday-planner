@@ -108,7 +108,7 @@ function DayPlans({
 }
 
 function BoardCanvas() {
-  const { trip, doc, ready, provider, templates } = useTrip()
+  const { trip, user, doc, ready, provider, templates } = useTrip()
   const cards = useCards()
   const frames = useFrames()
   const edges = useEdges()
@@ -368,6 +368,10 @@ function BoardCanvas() {
       setSelection(sel)
     },
     openCard: (id) => sheet.open(id),
+    panBy: (dx, dy) => {
+      const { x, y, zoom } = rf.getViewport()
+      void rf.setViewport({ x: x + dx, y: y + dy, zoom })
+    },
     dragStart: (kind, id) => {
       setMenu(null)
       setSelection({ kind, id })
@@ -598,6 +602,7 @@ function BoardCanvas() {
             title={trip.title}
             back={TRIPS_BACK}
             morph={`trip-${trip.id}`}
+            profile={user.name}
             actions={
               <>
                 <TripStatus />
@@ -630,7 +635,7 @@ function BoardCanvas() {
         </div>
 
         {days.length > 0 && (
-          <div className="island absolute bottom-[calc(72px+env(safe-area-inset-bottom))] left-1 z-10 flex items-center">
+          <div className="island absolute bottom-[calc(72px+env(safe-area-inset-bottom))] right-1 z-10 flex items-center">
             <button
               type="button"
               onClick={() => jump(-1)}

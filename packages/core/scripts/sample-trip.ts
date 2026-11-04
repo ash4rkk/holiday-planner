@@ -77,7 +77,7 @@ const CARDS: Sample[] = [
     date: '2026-11-02',
     time: '10:05',
     durationMin: 255,
-    status: 'done',
+    status: 'booked',
     location: place('Lotnisko Humberto Delgado', 38.7742, -9.1342, 'Lizbona'),
     body: [
       'Lot WAW → LIS',
@@ -107,7 +107,7 @@ const CARDS: Sample[] = [
     type: 'food',
     date: '2026-11-02',
     time: '20:00',
-    status: 'done',
+    status: 'booked',
     location: place('Taberna da Rua das Flores', 38.7104, -9.1427, 'Rua das Flores 103, Lizbona'),
     body: ['Kolacja w Tabernie', 'Bez rezerwacji, przyjść przed 19:30. /+48 EUR'],
   },

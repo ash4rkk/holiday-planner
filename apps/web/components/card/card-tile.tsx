@@ -1,9 +1,10 @@
-import { CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot } from '@planer/core'
+import { CARD_TYPE_LABELS, type CardSnapshot } from '@planer/core'
 import { Paperclip } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { cx } from '@/components/ui'
 import { fieldsSummary } from './card-fields'
+import { StatusMark } from './status-mark'
 import { TYPE_STYLE } from './type-style'
 
 const HOLD_MS = 450
@@ -33,7 +34,6 @@ export function CardTile({
   const style = TYPE_STYLE[card.type]
   const Icon = style.icon
   const summary = fieldsSummary(card)
-  const done = card.status === 'done'
 
   return (
     <button
@@ -74,13 +74,7 @@ export function CardTile({
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-baseline gap-2">
-          <span
-            className={cx(
-              'truncate font-bold',
-              !card.title && 'font-normal text-dim italic',
-              done && 'text-subtle',
-            )}
-          >
+          <span className={cx('truncate font-bold', !card.title && 'font-normal text-dim italic')}>
             {card.title || 'bez tytułu'}
           </span>
           <AmountBadge amounts={card.amounts ?? []} className="ml-auto" />
@@ -89,16 +83,7 @@ export function CardTile({
               ⌖
             </span>
           )}
-          {card.status && (
-            <span
-              className={cx(
-                'ml-auto shrink-0 rounded-small px-2 py-0.5 text-[11px]',
-                card.status === 'booked' ? 'bg-green/15 text-green' : 'bg-raised text-subtle',
-              )}
-            >
-              {CARD_STATUS_LABELS[card.status]}
-            </span>
-          )}
+          {card.status && <StatusMark status={card.status} className="ml-auto" />}
         </span>
         <CardMetaLine card={card} summary={summary} files={files} />
         {card.preview && (

@@ -32,6 +32,7 @@ export const FrameNode = memo(function FrameNode({
     onStart: () => board.dragStart('frame', frame.id),
     onMove: board.dragMove,
     onEnd: board.dragEnd,
+    onPan: board.panBy,
   })
 
   return (

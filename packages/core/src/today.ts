@@ -8,7 +8,7 @@ const minutes = (hhmm: string) => {
 
 /**
  * Następne miejsce dnia na Pulpicie: najbliższe z godziną (z 15 min zapasu wstecz — „właśnie
- * wychodzimy”), a bez takich pierwsze bez godziny. Pomija zaliczone i noclegi.
+ * wychodzimy”), a bez takich pierwsze bez godziny. Pomija noclegi.
  */
 export function nextPlace(
   cards: CardSnapshot[],
@@ -16,7 +16,7 @@ export function nextPlace(
   now: string,
 ): MappedCard | undefined {
   const day = cards
-    .filter((c) => !c.deletedAt && c.date === today && c.status !== 'done' && c.type !== 'stay')
+    .filter((c) => !c.deletedAt && c.date === today && c.type !== 'stay')
     .filter(hasCoords)
   const timed = day
     .filter((c) => c.time && minutes(c.time) >= minutes(now) - 15)

@@ -140,11 +140,6 @@ body {
 .pop-menu { transform-origin: bottom right; animation: pop-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both; }
 .pop-menu > * { animation: pop-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i, 0) * 30ms); }
 
-/* Filtry przewijane w bok: wygaszona krawędź mówi, że jest ich więcej. */
-.fade-x {
-  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-}
-
 /* Lista: oś dnia łącząca karty, jak strzałki na Tablicy. */
 .day-rail {
   position: relative;

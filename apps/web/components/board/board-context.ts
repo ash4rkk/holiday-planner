@@ -10,6 +10,7 @@ export type BoardApi = {
   dragStart: (kind: 'card' | 'frame', id: string) => void
   dragMove: (dx: number, dy: number) => void
   dragEnd: () => void
+  panBy: (dx: number, dy: number) => void
   togglePin: (id: string) => void
   trash: (id: string) => void
   renameFrame: (id: string) => void

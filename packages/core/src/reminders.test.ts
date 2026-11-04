@@ -15,7 +15,6 @@ describe('computeReminders', () => {
     createCard(doc, { type: 'food', date: '2027-07-14', time: '20:00', remindMin: 30 })
     createCard(doc, { type: 'note', date: '2027-07-14', time: '12:00' }) // notatka: bez przypomnienia
     createCard(doc, { type: 'sight', date: '2027-07-14' }) // bez godziny
-    createCard(doc, { type: 'sight', date: '2027-07-14', time: '09:00', status: 'done' })
     const rows = computeReminders(readCards(doc), 'Rzym', 'Europe/Rome')
     expect(rows.map((r) => r.fireAt.toISOString())).toEqual([
       '2027-07-14T05:00:00.000Z', // 10:00 CEST − 3 h

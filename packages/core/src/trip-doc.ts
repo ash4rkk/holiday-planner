@@ -183,6 +183,8 @@ export function readCard(id: string, card: CardMap): CardSnapshot {
   const preview = rest.join(' · ')
   return {
     ...fields,
+    // Stare karty mają jeszcze status „zaliczone”: bilet był, więc to rzecz ogarnięta.
+    status: (fields.status as string) === 'done' ? 'booked' : fields.status,
     attachmentIds: fields.attachmentIds ?? [],
     pinned: fields.pinned ?? false,
     id,

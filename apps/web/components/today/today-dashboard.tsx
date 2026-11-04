@@ -53,7 +53,7 @@ function daysLabel(n: number) {
  * Przed wyjazdem: odliczanie i plan pierwszego dnia. Po wyjeździe: wydatki całego wyjazdu.
  */
 export function TodayDashboard({ userName }: { userName: string }) {
-  const { trip } = useTrip()
+  const { trip, user } = useTrip()
   const cards = useCards()
   const sheet = useCardSheet()
   const today = todayLocal()
@@ -114,6 +114,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
         title={trip.title}
         back={TRIPS_BACK}
         morph={`trip-${trip.id}`}
+        profile={user.name}
         actions={
           <>
             <TripStatus />
@@ -235,14 +236,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
                     title={CARD_TYPE_LABELS[card.type]}
                   />
                   <span className="min-w-0 flex-1">
-                    <span
-                      className={cx(
-                        'block truncate font-bold',
-                        card.status === 'done' && 'text-subtle line-through',
-                      )}
-                    >
-                      {card.title || 'bez tytułu'}
-                    </span>
+                    <span className="block truncate font-bold">{card.title || 'bez tytułu'}</span>
                     <span className="block truncate text-xs text-subtle italic">
                       {[
                         fieldsSummary({ ...card, time: undefined }),

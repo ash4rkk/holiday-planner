@@ -11,7 +11,9 @@ type GestureState = {
   x: number
   y: number
   mouse: boolean
-  mode: 'pending' | 'drag' | 'cancelled'
+  mode: 'pending' | 'drag' | 'pan'
+  lastX: number
+  lastY: number
   timer?: ReturnType<typeof setTimeout>
 }
 
@@ -21,11 +23,13 @@ type Handlers = {
   /** Przesunięcie od początku gestu w pikselach ekranu. */
   onMove: (dx: number, dy: number) => void
   onEnd: () => void
+  /** Palec ruszył przed przytrzymaniem: przesuwa widok o tyle pikseli od ostatniego ruchu. */
+  onPan?: (dx: number, dy: number) => void
 }
 
 /**
  * Gest na elemencie tablicy: tap = onTap; palec: przytrzymanie (350 ms) zaczyna przeciąganie,
- * ruch przed czasem anuluje gest; mysz: przeciąganie od razu po kilku pikselach.
+ * ruch przed czasem przesuwa widok jak po tle; mysz: przeciąganie od razu po kilku pikselach.
  */
 export function useHoldDrag(handlers: Handlers) {
   const h = useRef(handlers)
@@ -45,6 +49,8 @@ export function useHoldDrag(handlers: Handlers) {
         pointerId: e.pointerId,
         x: e.clientX,
         y: e.clientY,
+        lastX: e.clientX,
+        lastY: e.clientY,
         mouse: e.pointerType === 'mouse',
         mode: 'pending',
       }
@@ -66,10 +72,13 @@ export function useHoldDrag(handlers: Handlers) {
       const dy = e.clientY - s.y
       if (s.mode === 'pending' && Math.hypot(dx, dy) > (s.mouse ? 3 : MOVE_PX)) {
         if (s.timer) clearTimeout(s.timer)
-        s.mode = s.mouse ? 'drag' : 'cancelled'
+        s.mode = s.mouse ? 'drag' : 'pan'
         if (s.mouse) h.current.onStart()
       }
       if (s.mode === 'drag') h.current.onMove(dx, dy)
+      if (s.mode === 'pan') h.current.onPan?.(e.clientX - s.lastX, e.clientY - s.lastY)
+      s.lastX = e.clientX
+      s.lastY = e.clientY
     },
     onPointerUp(e: React.PointerEvent) {
       const s = state.current

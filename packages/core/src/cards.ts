@@ -11,13 +11,14 @@ export const CARD_TYPE_LABELS: Record<CardType, string> = {
   note: 'notatka',
 }
 
-export const CARD_STATUSES = ['idea', 'booked', 'done'] as const
+// Brak statusu też jest poprawny: karta nie wymaga niczego załatwiać.
+export const CARD_STATUSES = ['idea', 'booked', 'missing'] as const
 export type CardStatus = (typeof CARD_STATUSES)[number]
 
 export const CARD_STATUS_LABELS: Record<CardStatus, string> = {
   idea: 'pomysł',
-  booked: 'potwierdzone',
-  done: 'zaliczone',
+  booked: 'ogarnięte',
+  missing: 'do ogarnięcia',
 }
 
 export type CardLocation = {

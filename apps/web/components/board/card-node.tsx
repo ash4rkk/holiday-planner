@@ -1,11 +1,6 @@
 'use client'
 
-import {
-  CARD_STATUS_LABELS,
-  CARD_TYPE_LABELS,
-  type CardSnapshot,
-  formatShortDate,
-} from '@planer/core'
+import { CARD_TYPE_LABELS, type CardSnapshot, formatShortDate } from '@planer/core'
 import {
   Handle,
   type Node,
@@ -19,6 +14,7 @@ import { memo } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardMetaLine } from '@/components/card/card-tile'
+import { StatusMark } from '@/components/card/status-mark'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { cx } from '@/components/ui'
 import { useBoard } from './board-context'
@@ -41,6 +37,7 @@ export const CardNode = memo(function CardNode({
     onStart: () => board.dragStart('card', id),
     onMove: board.dragMove,
     onEnd: board.dragEnd,
+    onPan: board.panBy,
   })
   const style = TYPE_STYLE[card.type]
   const Icon = style.icon
@@ -72,7 +69,7 @@ export const CardNode = memo(function CardNode({
         </div>
       </NodeToolbar>
 
-      {/* nopan: przesuwanie tablicy jednym palcem tylko po tle; karta reaguje na tap i przytrzymanie. */}
+      {/* nopan: React Flow nie zaczyna tu własnego przesuwania; robi to gest karty, a karta reaguje na tap i przytrzymanie. */}
       <div
         {...gesture}
         className={cx(
@@ -110,16 +107,7 @@ export const CardNode = memo(function CardNode({
         {(meta || card.status) && (
           <div className="flex items-center gap-2 text-xs">
             {meta && <span className="truncate text-subtle italic">{meta}</span>}
-            {card.status && (
-              <span
-                className={cx(
-                  'ml-auto shrink-0 rounded-small px-1.5 text-[11px]',
-                  card.status === 'booked' ? 'bg-green/15 text-green' : 'bg-raised text-subtle',
-                )}
-              >
-                {CARD_STATUS_LABELS[card.status]}
-              </span>
-            )}
+            {card.status && <StatusMark status={card.status} className="ml-auto" />}
           </div>
         )}
         <CardMetaLine card={card} files={files} />

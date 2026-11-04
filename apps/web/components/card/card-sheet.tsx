@@ -17,7 +17,7 @@ import {
 } from '@planer/core'
 import type { Editor } from '@tiptap/react'
 import { ChevronDown, Navigation, Pin, Trash2 } from 'lucide-react'
-import { type PointerEvent, useEffect, useRef, useState } from 'react'
+import { type PointerEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
 import { CardAttachments } from '@/components/attachments/card-attachments'
 import { cx } from '@/components/ui'
 import { offerUndo } from '@/lib/undo'
@@ -30,6 +30,8 @@ import { TYPE_STYLE } from './type-style'
 
 const CLOSE_MS = 190
 const DRAG_CLOSE_PX = 110
+// Gest zamykania łapie górę ekranu; niżej palec przewija treść i zaznacza tekst.
+const DRAG_ZONE_PX = 170
 
 /**
  * Pełnoekranowy arkusz edycji karty: wjeżdża od dołu, przeciągnięcie uchwytu w dół zamyka.
@@ -52,6 +54,7 @@ export function CardSheet({
   const [closing, setClosing] = useState(false)
   const [dragY, setDragY] = useState(0)
   const dragFrom = useRef<number | null>(null)
+  const scroller = useRef<HTMLDivElement>(null)
 
   // Bez przewijania strony pod arkuszem.
   useEffect(() => {
@@ -89,6 +92,11 @@ export function CardSheet({
     onClose()
   }
 
+  const release = () => {
+    dragFrom.current = null
+    if (dragY > DRAG_CLOSE_PX) dismiss()
+    else setDragY(0)
+  }
   const grip = {
     onPointerDown: (e: PointerEvent) => {
       dragFrom.current = e.clientY
@@ -97,10 +105,20 @@ export function CardSheet({
     onPointerMove: (e: PointerEvent) => {
       if (dragFrom.current !== null) setDragY(Math.max(0, e.clientY - dragFrom.current))
     },
-    onPointerUp: () => {
-      dragFrom.current = null
-      if (dragY > DRAG_CLOSE_PX) dismiss()
-      else setDragY(0)
+    onPointerUp: release,
+  }
+  // Na telefonie cała góra arkusza: przeciągnięcie w dół zamyka, gdy treść nie jest przewinięta.
+  const touch = {
+    onTouchStart: (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY
+      if (y !== undefined && y < DRAG_ZONE_PX && !scroller.current?.scrollTop) dragFrom.current = y
+    },
+    onTouchMove: (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY
+      if (dragFrom.current !== null && y !== undefined) setDragY(Math.max(0, y - dragFrom.current))
+    },
+    onTouchEnd: () => {
+      if (dragFrom.current !== null) release()
     },
   }
   const summary = [
@@ -122,6 +140,7 @@ export function CardSheet({
         dragFrom.current === null && dragY > 0 && 'transition-transform duration-200',
       )}
       style={dragY ? { transform: `translateY(${dragY}px)` } : undefined}
+      {...touch}
     >
       <div
         {...grip}
@@ -183,7 +202,7 @@ export function CardSheet({
         </button>
       </div>
 
-      <div className="mt-1 flex-1 overflow-y-auto px-0.5 pb-24">
+      <div ref={scroller} className="mt-1 flex-1 overflow-y-auto overscroll-y-contain px-0.5 pb-24">
         <div
           className={cx('island overflow-hidden', card.aiDraft && 'border-dashed border-accent')}
         >

@@ -79,10 +79,8 @@ async function processJob(doc: Y.Doc, job: ImportJob): Promise<string> {
       ...(d.time && { time: d.time }),
       ...(d.endDate && { endDate: d.endDate }),
       ...(d.location && { location: d.location }),
-      // Bilet i rezerwacja to rzeczy potwierdzone; paragon — już zapłacone.
-      ...(d.type === 'food' && !d.time
-        ? { status: 'done' as const }
-        : d.type !== 'note' && { status: 'booked' as const }),
+      // Bilet, rezerwacja i paragon to rzeczy już ogarnięte.
+      ...(d.type !== 'note' && { status: 'booked' as const }),
       aiDraft: true,
     },
     new Date(),

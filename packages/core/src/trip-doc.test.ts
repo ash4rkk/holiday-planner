@@ -165,3 +165,15 @@ describe('miejsce karty na Tablicy', () => {
     expect(readCards(doc).find((c) => c.id === id)?.x).toBe(800)
   })
 })
+
+describe('status karty', () => {
+  it('stare „zaliczone” czyta się jako ogarnięte, brak statusu zostaje brakiem', () => {
+    const doc = new Y.Doc()
+    const old = createCard(doc, { type: 'sight' })
+    cardsOf(doc).get(old)?.set('status', 'done')
+    createCard(doc, { type: 'note' })
+    const [a, b] = readCards(doc)
+    expect(a?.status).toBe('booked')
+    expect(b?.status).toBeUndefined()
+  })
+})

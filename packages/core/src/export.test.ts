@@ -46,7 +46,7 @@ describe('eksport', () => {
     expect(md).toContain('## Przypięte\n\n### Lista rzeczy')
     expect(md).toMatch(/## śr\., 14 lipca · dzień 1 · 300\s?zł/)
     expect(md).toMatch(
-      /### Lot LO 319\n\n\*transport · 10:00 · potwierdzone · ⌖ Lotnisko Chopina · 300\s?zł\*\n\nodprawa do 8:30 \/\+300\n\nZałączniki: bilet\.pdf/,
+      /### Lot LO 319\n\n\*transport · 10:00 · ogarnięte · ⌖ Lotnisko Chopina · 300\s?zł\*\n\nodprawa do 8:30 \/\+300\n\nZałączniki: bilet\.pdf/,
     )
     expect(md).toContain('## pt., 16 lipca · dzień 3\n\n*(nic nie zaplanowano)*')
     expect(md).not.toContain('Usunięta')
