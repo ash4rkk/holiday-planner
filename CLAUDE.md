@@ -83,7 +83,7 @@ pnpm db:migrate          # wymaga DATABASE_URL
 
 ## Auth
 
-- `apps/web/proxy.ts` (Next 16: dawny middleware) weryfikuje `Cf-Access-Jwt-Assertion` (lub cookie `CF_Authorization`) przez JWKS zespołu, sprawdza `aud`, `iss` i allowlistę `ALLOWED_EMAILS`, potem ustawia `x-user-email` (nagłówek z zewnątrz jest zawsze usuwany).
+- `apps/web/proxy.ts` (Next 16: dawny middleware) weryfikuje `Cf-Access-Jwt-Assertion` (lub cookie `CF_Authorization`) przez JWKS zespołu, sprawdza `aud`, `iss` i opcjonalną allowlistę `ALLOWED_EMAILS` (pusta = decyduje polityka Access), potem ustawia `x-user-email` (nagłówek z zewnątrz jest zawsze usuwany).
 - Poza logowaniem: `/api/health`, `/p/*` (link dla rodziny, tylko pod ważnym tokenem), statyki, manifest, ikony, worker mapy.
 - `AUTH_DEV_EMAIL` działa tylko przy `NODE_ENV=development`.
 - W kodzie serwerowym: `getCurrentUser()` z `lib/auth/user.ts`.

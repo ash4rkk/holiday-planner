@@ -86,6 +86,17 @@ describe('verifyAccessToken', () => {
     expect(await verifyAccessToken(token, config, jwks)).toMatchObject({ ok: false, status: 403 })
   })
 
+  it('bez listy e-maili decyduje polityka Access, token nadal jest sprawdzany', async () => {
+    const open = { ...config, allowedEmails: [] }
+    const token = await sign({ email: 'ktos@example.com' })
+    expect(await verifyAccessToken(token, open, jwks)).toMatchObject({
+      ok: true,
+      email: 'ktos@example.com',
+    })
+    expect(await verifyAccessToken('zly', open, jwks)).toMatchObject({ ok: false, status: 401 })
+    expect(await verifyAccessToken(null, open, jwks)).toMatchObject({ ok: false, status: 401 })
+  })
+
   it('bez konfiguracji nikogo nie wpuszcza', async () => {
     const token = await sign({ email: 'arek@example.com' })
     const empty = readAccessConfig({ NODE_ENV: 'test' })

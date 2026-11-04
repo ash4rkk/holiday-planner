@@ -30,8 +30,9 @@ Zakłada role `planer_app` i `planer_readonly`, bazę `planer` (bez `CONNECT` dl
 `/srv/planer/.env` z `DATABASE_URL` i `/srv/planer/.readonly-password`. Odmawia, jeśli coś już
 istnieje. Nocny `/srv/scripts/backup.sh` (`pg_dumpall`) obejmie bazę `planer` bez zmian.
 
-Potem uzupełnij w `/srv/planer/.env`: `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` (krok 4),
-`ALLOWED_EMAILS`, `USER_NAMES`. `AUTH_DEV_EMAIL` na serwerze nie ustawiaj (i tak działa tylko w dev).
+Potem uzupełnij w `/srv/planer/.env`: `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` (krok 4; oba widać też w
+adresie przekierowania na logowanie: host i parametr `kid`). `ALLOWED_EMAILS` i `USER_NAMES` są
+opcjonalne. `AUTH_DEV_EMAIL` na serwerze nie ustawiaj (i tak działa tylko w dev).
 
 Hasło `planer_readonly` przenieś do lokalnego `~/.pgpass` (wpis dla `localhost:15432`, jak
 `portfolio_readonly`) i usuń plik z serwera.
@@ -99,8 +100,9 @@ docker exec caddy caddy validate --config /etc/caddy/Caddyfile
    bez danych) i `/maplibre-gl-worker.mjs` (mapa). Aplikacja i tak pomija weryfikację JWT dla tych
    ścieżek; dane wyjazdu pokazuje tylko pod ważnym, nieunieważnionym tokenem.
 
-`ALLOWED_EMAILS` to druga linia obrony: inne kontenery w sieci `edge` mogą sięgnąć do `planer-web`
-z pominięciem Access, a bez ważnego JWT dla adresu z listy dostaną 401/403.
+Inne kontenery w sieci `edge` mogą sięgnąć do `planer-web` z pominięciem Access, ale bez ważnego JWT
+tej aplikacji dostaną 401. Kto ma dostęp, decyduje polityka Access; `ALLOWED_EMAILS` może to tylko
+dodatkowo zawęzić.
 
 ### 5. Start [S]
 

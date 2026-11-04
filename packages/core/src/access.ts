@@ -52,7 +52,7 @@ export async function verifyAccessToken(
   config: AccessConfig,
   getKey: JWTVerifyGetKey = remoteJwks(config.teamDomain),
 ): Promise<AccessResult> {
-  if (!config.teamDomain || !config.aud || config.allowedEmails.length === 0) {
+  if (!config.teamDomain || !config.aud) {
     return { ok: false, status: 401, reason: 'brak konfiguracji Cloudflare Access' }
   }
   if (!token) return { ok: false, status: 401, reason: 'brak tokenu' }
@@ -73,7 +73,8 @@ export async function verifyAccessToken(
     return { ok: false, status: 403, reason: 'token bez e-maila' }
   }
   const normalized = email.toLowerCase()
-  if (!config.allowedEmails.includes(normalized)) {
+  // Lista opcjonalna: token z tym `aud` wystawia tylko Access po przejściu polityki aplikacji.
+  if (config.allowedEmails.length && !config.allowedEmails.includes(normalized)) {
     return { ok: false, status: 403, reason: 'konto spoza listy' }
   }
   return { ok: true, email: normalized }

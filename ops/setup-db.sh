@@ -59,5 +59,5 @@ echo "$RO_PW" > "$RO_FILE"
 chmod 600 "$ENV_FILE" "$RO_FILE"
 
 echo "OK: role planer_app i planer_readonly, baza planer, $ENV_FILE, $RO_FILE"
-echo "Uzupełnij w $ENV_FILE: CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD, ALLOWED_EMAILS, USER_NAMES"
+echo "Uzupełnij w $ENV_FILE: CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD"
 "${PSQL[@]}" -c "select datname, datacl from pg_database where datname = 'planer'" </dev/null

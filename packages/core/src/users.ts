@@ -24,6 +24,9 @@ export function defaultName(email: string): string {
 }
 
 export function cursorColor(email: string, allowed: string[]): string {
-  const i = allowed.indexOf(email.toLowerCase())
-  return CURSOR_COLORS[Math.max(i, 0) % CURSOR_COLORS.length] as string
+  const address = email.toLowerCase()
+  const i = allowed.indexOf(address)
+  // Bez listy e-maili kolor z adresu, żeby dwie osoby nie dostały tego samego.
+  const n = i >= 0 ? i : [...address].reduce((sum, c) => sum + c.charCodeAt(0), 0)
+  return CURSOR_COLORS[n % CURSOR_COLORS.length] as string
 }
