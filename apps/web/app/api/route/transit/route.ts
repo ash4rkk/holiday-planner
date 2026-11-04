@@ -1,10 +1,11 @@
 import { isIsoDate, isIsoTime } from '@planer/core'
 import { z } from 'zod'
+import { takeRouteRequest } from '@/lib/routes-usage'
 import { getTrip } from '@/lib/trips'
 
 // Czas przejazdu komunikacją (Google Routes API) na żądanie. Warunki EOG pozwalają pokazywać go
 // obok MapLibre, o ile bez kroków trasy, ale nie zapisywać, więc nie ma tu żadnego cache.
-// Dzienny limit chroni przed nabiciem rachunku przez błąd.
+// Limit miesięczny (kwota z env) jest w bazie; dzienny dodatkowo zatrzymuje błąd w pętli.
 
 const DAILY_LIMIT = 300
 let used = { day: '', count: 0 }
@@ -36,6 +37,8 @@ export async function POST(request: Request) {
   if (used.day !== day) used = { day, count: 0 }
   if (used.count >= DAILY_LIMIT)
     return Response.json({ error: 'dzienny limit sprawdzeń' }, { status: 429 })
+  if (!(await takeRouteRequest()))
+    return Response.json({ error: 'miesięczny limit sprawdzeń' }, { status: 429 })
   used.count++
 
   const departure = Temporal.PlainDateTime.from(`${date}T${time}`)

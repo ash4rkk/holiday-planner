@@ -1,14 +1,17 @@
 import { formatAmount } from '@planer/core'
-import { Sparkles } from 'lucide-react'
+import { Route, Sparkles } from 'lucide-react'
 import { PushSettings } from '@/components/settings/push-settings'
 import { TopBar } from '@/components/top-bar'
 import { MONTHLY_BUDGET_PLN, spentThisMonthPln } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured } from '@/lib/ai/client'
+import { ROUTES_BUDGET_PLN, ROUTES_MONTHLY_LIMIT, routesUsedThisMonth } from '@/lib/routes-usage'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
   const spent = await spentThisMonthPln().catch(() => 0)
+  const routes = Boolean(process.env.GOOGLE_ROUTES_API_KEY)
+  const checks = routes ? await routesUsedThisMonth().catch(() => 0) : 0
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
       <TopBar title="ustawienia" back={{ href: '/trips', label: 'wróć do wyjazdów' }} />
@@ -39,6 +42,27 @@ export default async function SettingsPage() {
           )}
         </div>
       </section>
+      {routes && (
+        <section className="island flex items-start gap-3 p-4 text-sm">
+          <Route className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="font-bold">dojazdy komunikacją</p>
+            <p className="mt-1">
+              w tym miesiącu: <b>{checks}</b> z {ROUTES_MONTHLY_LIMIT} sprawdzeń
+            </p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-raised" aria-hidden="true">
+              <div
+                className="h-full bg-accent"
+                style={{ width: `${Math.min(100, (checks / ROUTES_MONTHLY_LIMIT) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-subtle italic">
+              limit kwoty {formatAmount({ value: ROUTES_BUDGET_PLN, currency: 'PLN' })} · po jego
+              wyczerpaniu sprawdzanie wyłącza się do końca miesiąca
+            </p>
+          </div>
+        </section>
+      )}
       <p className="px-3 pt-2 text-xs text-subtle italic">
         Powiadomienia działają w zainstalowanej aplikacji (Chrome → „Zainstaluj aplikację”). Godzina
         przypomnienia liczy się w strefie czasowej wyjazdu (ustawienia wyjazdu).

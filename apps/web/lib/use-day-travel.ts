@@ -14,10 +14,11 @@ export type TravelCheck = { minutes: number; mode: 'pieszo' | 'komunikacją'; la
 export function useDayTravel(date: string, gaps: DayGap[]) {
   const { trip } = useTrip()
   const [checks, setChecks] = useState<Map<string, TravelCheck | null>>(new Map())
-  const [state, setState] = useState<'idle' | 'busy' | 'error'>('idle')
+  const [state, setState] = useState<'idle' | 'busy' | 'error' | 'limit'>('idle')
 
   const check = async () => {
     setState('busy')
+    let limited = false
     const entries = await Promise.all(
       gaps.flatMap((gap) => {
         const route = gap.route
@@ -30,7 +31,10 @@ export function useDayTravel(date: string, gaps: DayGap[]) {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ tripId: trip.id, ...route, date, time: gap.leaveAt }),
-              }).then((r) => (r.ok ? (r.json() as Promise<{ minutes: number | null }>) : null)),
+              }).then((r) => {
+                if (r.status === 429) limited = true
+                return r.ok ? (r.json() as Promise<{ minutes: number | null }>) : null
+              }),
               fetch(`/api/route?from=${at(route.from)}&to=${at(route.to)}`)
                 .then((r) => (r.ok ? (r.json() as Promise<Route>) : null))
                 .catch(() => null),
@@ -56,7 +60,7 @@ export function useDayTravel(date: string, gaps: DayGap[]) {
       return
     }
     setChecks(new Map(entries))
-    setState('idle')
+    setState(limited ? 'limit' : 'idle')
   }
 
   return { checks, state, check }

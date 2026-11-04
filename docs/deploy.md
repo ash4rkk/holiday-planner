@@ -61,6 +61,10 @@ Klucz Google Routes API → `/srv/planer/.env`: `GOOGLE_ROUTES_API_KEY`. Rachune
 EOG, bo tylko warunki EOG dopuszczają użycie obok mapy innej niż Google. Klucz ogranicz do Routes API i
 ustaw dzienny limit w Google Cloud. Bez klucza zostaje link „dojazd ›” do Map Google.
 
+`GOOGLE_ROUTES_MONTHLY_BUDGET_PLN` (domyślnie 0) to twardy limit kwoty: aplikacja liczy zapytania w tabeli
+`routes_usage` i po wyczerpaniu przestaje pytać Google do końca miesiąca. Budżet w Google Cloud tylko
+ostrzega. Licznik jest w ustawieniach aplikacji. Zakłada, że ten rachunek nie używa Routes nigdzie indziej.
+
 ### 3. Caddy [S]
 
 Blok w `/srv/edge/Caddyfile` na wzór bloku `portfolio.wiergowsky.com` (ten sam sposób nasłuchu —

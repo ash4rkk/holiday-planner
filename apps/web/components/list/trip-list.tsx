@@ -337,7 +337,9 @@ function DayCards({
               ? 'sprawdzam…'
               : state === 'error'
                 ? '● nie udało się — spróbuj ponownie'
-                : 'sprawdź dojazdy ›'}
+                : state === 'limit'
+                  ? '● limit sprawdzeń wyczerpany — zostają czasy pieszo'
+                  : 'sprawdź dojazdy ›'}
           </button>
           {checks.size > 0 && (
             <span className="font-sans text-xs whitespace-nowrap text-attrib">Google Maps</span>

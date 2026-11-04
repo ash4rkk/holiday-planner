@@ -190,6 +190,12 @@ export const aiUsage = pgTable('ai_usage', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/** Zapytania do Google Routes w miesiącu (YYYY-MM) — twardy limit kosztu; czasów przejazdu tu nie ma. */
+export const routesUsage = pgTable('routes_usage', {
+  month: text('month').primaryKey(),
+  requests: integer('requests').notNull().default(0),
+})
+
 /** Linki tylko do odczytu dla rodziny (/p/<token>): długi losowy token, można unieważnić. */
 export const shareLinks = pgTable('share_links', {
   token: text('token').primaryKey(),
