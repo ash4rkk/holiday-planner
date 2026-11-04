@@ -44,7 +44,7 @@ export default async function PublicTripPage({ params }: PageProps<'/p/[token]'>
   }))
 
   return (
-    <main className="app mx-auto flex min-h-dvh max-w-xl flex-col gap-1 px-0.5 pt-1 pb-8">
+    <main className="app mx-auto flex min-h-dvh max-w-xl flex-col gap-1 px-px pt-1 pb-8">
       <header className="island border-t-2 border-t-accent p-4">
         <h1 className="text-xl font-bold">{trip.title}</h1>
         <p className="text-sm text-subtle italic">

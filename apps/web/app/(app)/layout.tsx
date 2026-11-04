@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const trip = await defaultTrip()
   return (
     <NavVisibility>
-      <div className="app px-0.5 pt-1 pb-[100px]">
+      <div className="app px-px pt-1 pb-[100px]">
         <ViewTransition>{children}</ViewTransition>
       </div>
       <BottomNav fallbackTripId={trip?.id} />

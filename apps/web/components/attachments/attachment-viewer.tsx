@@ -33,7 +33,7 @@ export function AttachmentViewer({
       aria-label={attachment.name}
       className="fixed inset-0 z-50 flex flex-col bg-bg"
     >
-      <div className="flex shrink-0 items-center gap-1 px-0.5 pt-1">
+      <div className="flex shrink-0 items-center gap-1 px-px pt-1">
         <button
           type="button"
           onClick={onClose}

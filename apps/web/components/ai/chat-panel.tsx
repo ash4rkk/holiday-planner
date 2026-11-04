@@ -279,7 +279,7 @@ function ChatPanel({
         onClick={onClose}
         className="min-h-12 flex-1"
       />
-      <section className="island sheet-in mx-0.5 mb-0.5 flex h-[85dvh] flex-col overflow-hidden">
+      <section className="island sheet-in mx-px mb-px flex h-[85dvh] flex-col overflow-hidden">
         <header className="flex items-center gap-1 border-b border-line p-1">
           <Sparkles className="ml-2 size-4 text-accent" aria-hidden="true" />
           <h2 className="flex-1 truncate px-1 text-sm font-bold">czat · {trip.title}</h2>

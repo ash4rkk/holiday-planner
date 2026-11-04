@@ -149,7 +149,7 @@ export function CardSheet({
       >
         <span className="h-1 w-10 rounded-full bg-line" />
       </div>
-      <div className="flex shrink-0 gap-1 px-0.5">
+      <div className="flex shrink-0 gap-1 px-px">
         <button
           type="button"
           onClick={dismiss}
@@ -202,7 +202,7 @@ export function CardSheet({
         </button>
       </div>
 
-      <div ref={scroller} className="mt-1 flex-1 overflow-y-auto overscroll-y-contain px-0.5 pb-24">
+      <div ref={scroller} className="mt-1 flex-1 overflow-y-auto overscroll-y-contain px-px pb-24">
         <div
           className={cx('island overflow-hidden', card.aiDraft && 'border-dashed border-accent')}
         >

@@ -1,8 +1,15 @@
 'use client'
 
+import Link from 'next/link'
 import { ProfilePhoto } from '@/components/profile/profile-photo'
 import { cx } from '@/components/ui'
-import { type PresenceUser, type SyncStatus, usePresence, useSyncStatus } from '@/lib/yjs/trip-doc'
+import {
+  type PresenceUser,
+  type SyncStatus,
+  usePresence,
+  useSyncStatus,
+  useTrip,
+} from '@/lib/yjs/trip-doc'
 
 const STATUS: Record<SyncStatus, { label: string; dot: string }> = {
   live: { label: 'na żywo', dot: 'bg-green' },
@@ -11,14 +18,22 @@ const STATUS: Record<SyncStatus, { label: string; dot: string }> = {
   login: { label: 'sesja wygasła', dot: 'bg-red' },
 }
 
-/** Wysepka w nagłówku wyjazdu: kto jeszcze jest w wyjeździe i stan synchronizacji. */
+/** Wysepka w nagłówku wyjazdu i przycisk ustawień aplikacji: Twoje zdjęcie, kto jeszcze jest, stan sync. */
 export function TripStatus() {
   const status = useSyncStatus()
-  const others = usePresence<{ user: PresenceUser }>()
+  const { user } = useTrip()
+  // Twoje drugie urządzenie to też Ty, więc zdjęcie się nie dubluje.
+  const others = usePresence<{ user: PresenceUser }>().filter((o) => o.user.name !== user.name)
   const { label, dot } = STATUS[status]
 
   return (
-    <div className="island flex h-11 shrink-0 items-center gap-1 px-2" title={label}>
+    <Link
+      href="/settings"
+      aria-label="ustawienia aplikacji"
+      title={label}
+      className="island flex h-11 shrink-0 items-center gap-1 px-2 hover:border-accent"
+    >
+      <ProfilePhoto name={user.name} className="size-7 overflow-hidden rounded-full text-xs" />
       {others.map(({ clientId, user }) => (
         <span
           key={clientId}
@@ -31,7 +46,7 @@ export function TripStatus() {
       ))}
       <span className={cx('size-2.5 rounded-full', dot)} aria-hidden="true" />
       <span className="sr-only">{label}</span>
-    </div>
+    </Link>
   )
 }
 

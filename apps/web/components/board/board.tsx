@@ -108,7 +108,7 @@ function DayPlans({
 }
 
 function BoardCanvas() {
-  const { trip, user, doc, ready, provider, templates } = useTrip()
+  const { trip, doc, ready, provider, templates } = useTrip()
   const cards = useCards()
   const frames = useFrames()
   const edges = useEdges()
@@ -596,13 +596,12 @@ function BoardCanvas() {
           <Background variant={BackgroundVariant.Dots} gap={28} size={1.6} />
         </ReactFlow>
 
-        <div className="pointer-events-none absolute inset-x-0.5 top-1 z-10 [&>*]:pointer-events-auto">
+        <div className="pointer-events-none absolute inset-x-px top-1 z-10 [&>*]:pointer-events-auto">
           <TopBar
             theme={false}
             title={trip.title}
             back={TRIPS_BACK}
             morph={`trip-${trip.id}`}
-            profile={user.name}
             actions={
               <>
                 <TripStatus />

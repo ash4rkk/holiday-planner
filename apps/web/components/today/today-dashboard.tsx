@@ -53,7 +53,7 @@ function daysLabel(n: number) {
  * Przed wyjazdem: odliczanie i plan pierwszego dnia. Po wyjeździe: wydatki całego wyjazdu.
  */
 export function TodayDashboard({ userName }: { userName: string }) {
-  const { trip, user } = useTrip()
+  const { trip } = useTrip()
   const cards = useCards()
   const sheet = useCardSheet()
   const today = todayLocal()
@@ -114,7 +114,6 @@ export function TodayDashboard({ userName }: { userName: string }) {
         title={trip.title}
         back={TRIPS_BACK}
         morph={`trip-${trip.id}`}
-        profile={user.name}
         actions={
           <>
             <TripStatus />

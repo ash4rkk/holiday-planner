@@ -5,7 +5,7 @@ export const dynamic = 'force-static'
 
 export default function OfflinePage() {
   return (
-    <main className="app mx-auto flex max-w-xl flex-col gap-1 px-0.5 pt-1">
+    <main className="app mx-auto flex max-w-xl flex-col gap-1 px-px pt-1">
       <div className="island p-4">
         <p className="font-bold">brak połączenia</p>
         <p className="mt-1 text-sm text-muted">

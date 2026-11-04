@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { type ReactNode, ViewTransition } from 'react'
-import { ProfilePhoto } from './profile/profile-photo'
 import { ThemeToggle } from './theme-toggle'
 
 /** Wyjście z widoków wyjazdu do wyboru wyjazdów. */
@@ -14,7 +13,6 @@ export function TopBar({
   actions,
   theme = true,
   morph,
-  profile,
 }: {
   title: ReactNode
   subtitle?: ReactNode
@@ -24,8 +22,6 @@ export function TopBar({
   theme?: boolean
   /** Nazwa wspólnego elementu: tytuł płynnie przechodzi z kafelka wyjazdu do nagłówka. */
   morph?: string
-  /** Imię zalogowanej osoby: jej zdjęcie w pasku prowadzi do ustawień aplikacji. */
-  profile?: string
 }) {
   return (
     <header className="flex gap-1">
@@ -47,16 +43,6 @@ export function TopBar({
         </ViewTransition>
         {subtitle && (
           <span className="ml-auto shrink-0 text-xs text-subtle italic">{subtitle}</span>
-        )}
-        {profile && (
-          <Link
-            href="/settings"
-            aria-label="ustawienia aplikacji"
-            title="ustawienia aplikacji"
-            className="-mr-3 ml-auto flex size-11 shrink-0 items-center justify-center"
-          >
-            <ProfilePhoto name={profile} className="size-8 overflow-hidden rounded-full text-xs" />
-          </Link>
         )}
       </div>
       {actions}

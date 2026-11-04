@@ -45,7 +45,7 @@ import { useTripNow } from '@/lib/use-trip-now'
 import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function TripList() {
-  const { trip, user, doc, ready, templates } = useTrip()
+  const { trip, doc, ready, templates } = useTrip()
   // Waluta główna wyjazdu (pierwsza z listy); bez walut — same złotówki.
   const main = trip.currencies[0] ?? 'PLN'
   const cards = useCards()
@@ -101,7 +101,6 @@ export function TripList() {
           title={trip.title}
           back={TRIPS_BACK}
           morph={`trip-${trip.id}`}
-          profile={user.name}
           actions={
             <>
               <TripStatus />
@@ -121,7 +120,7 @@ export function TripList() {
         <SessionBanner />
 
         <div
-          className="relative mt-1 flex w-fit max-w-full items-center self-center overflow-x-auto rounded-island border border-line bg-panel p-1"
+          className="relative -mx-px mt-1 flex items-center justify-[safe_center] overflow-x-auto border-y border-line bg-panel p-1"
           role="group"
           aria-label="filtry"
         >
@@ -425,7 +424,7 @@ function MoveSheet({
       className="fade-in fixed inset-0 z-50 flex flex-col justify-end bg-bg/70"
     >
       <button type="button" aria-label="anuluj" onClick={onClose} className="min-h-12 flex-1" />
-      <section className="island sheet-in mx-0.5 mb-0.5 flex max-h-[70dvh] flex-col overflow-hidden">
+      <section className="island sheet-in mx-px mb-px flex max-h-[70dvh] flex-col overflow-hidden">
         <h2 className="truncate border-b border-line px-4 py-3 text-sm font-bold">
           przenieś: {card.title || 'bez tytułu'}
         </h2>

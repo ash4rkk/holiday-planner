@@ -108,7 +108,7 @@ function groupNearby<T extends { card: MappedCard }>(m: MapLibreMap, pins: T[]):
 }
 
 export function TripMap() {
-  const { trip, user } = useTrip()
+  const { trip } = useTrip()
   const cards = useCards()
   const sheet = useCardSheet()
   const style = useMapStyle()
@@ -354,13 +354,12 @@ export function TripMap() {
           <div ref={container} className="size-full" />
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0.5 top-1 z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
+        <div className="pointer-events-none absolute inset-x-px top-1 z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
           <TopBar
             theme={false}
             title={trip.title}
             back={TRIPS_BACK}
             morph={`trip-${trip.id}`}
-            profile={user.name}
             actions={
               <>
                 <TripStatus />
@@ -420,7 +419,7 @@ export function TripMap() {
         )}
         <SessionBanner />
 
-        <div className="pointer-events-none absolute inset-x-0.5 bottom-[calc(80px+env(safe-area-inset-bottom))] z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
+        <div className="pointer-events-none absolute inset-x-px bottom-[calc(80px+env(safe-area-inset-bottom))] z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
           <div className="island flex items-center self-end">
             <button
               type="button"
