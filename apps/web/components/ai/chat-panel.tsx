@@ -1,8 +1,16 @@
 'use client'
 
-import { formatAmount } from '@planer/core'
-import { RotateCcw, Send, Sparkles, X } from 'lucide-react'
+import {
+  CARD_TYPE_LABELS,
+  type CardProposal,
+  createCard,
+  formatAmount,
+  formatShortDate,
+  proposalText,
+} from '@planer/core'
+import { Check, RotateCcw, Send, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { TYPE_STYLE } from '@/components/card/type-style'
 import { cx } from '@/components/ui'
 import { useTrip } from '@/lib/yjs/trip-doc'
 import { AiMarkdown } from './markdown'
@@ -13,6 +21,7 @@ type Msg = {
   text: string
   sources: { title: string; url: string }[]
   author?: string | null
+  proposals?: CardProposal[]
 }
 type Budget = { spent: number; limit: number }
 
@@ -20,6 +29,7 @@ const SUGGESTIONS = [
   'Co mamy jutro?',
   'Czy zdążymy z lotniska do hotelu?',
   'Czego brakuje w planie?',
+  'Zaproponuj coś na wolne popołudnie',
   'Ile wydaliśmy na jedzenie?',
 ]
 
@@ -46,6 +56,102 @@ export function ChatButton({ onOpenCard }: { onOpenCard: (id: string) => void })
         />
       )}
     </>
+  )
+}
+
+/** Propozycje kart z czatu: do planu trafia tylko to, co zatwierdzi osoba. */
+function Proposals({ cards }: { cards: CardProposal[] }) {
+  const { doc } = useTrip()
+  const [decided, setDecided] = useState<Map<number, 'added' | 'skipped'>>(new Map())
+  const mark = (i: number, value: 'added' | 'skipped') =>
+    setDecided((d) => new Map(d).set(i, value))
+  const add = (i: number) => {
+    const { type, date, time, durationMin, location } = cards[i] as CardProposal
+    createCard(
+      doc,
+      {
+        type,
+        ...(date && { date }),
+        ...(time && { time }),
+        ...(durationMin && { durationMin }),
+        ...(location && { location }),
+      },
+      new Date(),
+      proposalText(cards[i] as CardProposal),
+    )
+    mark(i, 'added')
+  }
+  const open = cards.map((_, i) => i).filter((i) => !decided.has(i))
+
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      {cards.map((card, i) => {
+        const Icon = TYPE_STYLE[card.type].icon
+        const state = decided.get(i)
+        const meta = [
+          card.date && formatShortDate(card.date),
+          card.time,
+          card.location?.name,
+          card.amount && formatAmount(card.amount),
+        ].filter(Boolean)
+        return (
+          <section
+            key={i}
+            className={cx(
+              'pop-in rounded-small border border-dashed border-accent p-2',
+              state && 'border-solid border-line opacity-60',
+            )}
+          >
+            <p className="flex items-center gap-2 text-sm font-bold">
+              <Icon
+                className={cx('size-4 shrink-0', TYPE_STYLE[card.type].text)}
+                aria-hidden="true"
+              />
+              <span className="sr-only">{CARD_TYPE_LABELS[card.type]}</span>
+              <span className="min-w-0 flex-1 truncate">{card.title}</span>
+            </p>
+            {meta.length > 0 && (
+              <p className="truncate text-xs text-subtle italic">{meta.join(' · ')}</p>
+            )}
+            {card.notes && <p className="text-xs text-muted">{card.notes}</p>}
+            {state ? (
+              <p className="mt-1 flex items-center gap-1 text-xs text-subtle">
+                {state === 'added' && <Check className="size-3.5" aria-hidden="true" />}
+                {state === 'added' ? 'dodano do planu' : 'pominięto'}
+              </p>
+            ) : (
+              <div className="mt-1 grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => add(i)}
+                  className="min-h-11 rounded-small bg-accent text-xs font-bold text-on-accent"
+                >
+                  dodaj
+                </button>
+                <button
+                  type="button"
+                  onClick={() => mark(i, 'skipped')}
+                  className="min-h-11 rounded-small border border-line text-xs text-muted"
+                >
+                  pomiń
+                </button>
+              </div>
+            )}
+          </section>
+        )
+      })}
+      {open.length > 1 && (
+        <button
+          type="button"
+          onClick={() => {
+            for (const i of open) add(i)
+          }}
+          className="min-h-11 text-xs font-bold text-accent"
+        >
+          dodaj wszystkie ({open.length})
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -132,6 +238,8 @@ function ChatPanel({
             setStatus(undefined)
             patch((m) => ({ ...m, text: m.text + data.delta }))
           } else if (event === 'status') setStatus(data.text)
+          else if (event === 'proposal')
+            patch((m) => ({ ...m, proposals: [...(m.proposals ?? []), ...data.cards] }))
           else if (event === 'done') {
             patch((m) => ({ ...m, sources: data.sources }))
             setBudget(data.budget)
@@ -163,7 +271,7 @@ function ChatPanel({
       role="dialog"
       aria-modal="true"
       aria-label="czat AI"
-      className="fixed inset-0 z-[45] flex flex-col bg-bg/70"
+      className="fade-in fixed inset-0 z-[45] flex flex-col bg-bg/70"
     >
       <button
         type="button"
@@ -171,7 +279,7 @@ function ChatPanel({
         onClick={onClose}
         className="min-h-12 flex-1"
       />
-      <section className="island mx-0.5 mb-0.5 flex h-[85dvh] flex-col overflow-hidden">
+      <section className="island sheet-in mx-0.5 mb-0.5 flex h-[85dvh] flex-col overflow-hidden">
         <header className="flex items-center gap-1 border-b border-line p-1">
           <Sparkles className="ml-2 size-4 text-accent" aria-hidden="true" />
           <h2 className="flex-1 truncate px-1 text-sm font-bold">czat · {trip.title}</h2>
@@ -203,7 +311,8 @@ function ChatPanel({
           {loaded && messages.length === 0 && (
             <div className="flex flex-col gap-2">
               <p className="text-xs text-subtle italic">
-                AI czyta cały plan wyjazdu i pliki, szuka w sieci — niczego nie zmienia.
+                AI czyta cały plan wyjazdu i pliki, szuka w sieci i proponuje karty — do planu
+                trafiają dopiero po Twoim zatwierdzeniu.
               </p>
               <div className="flex flex-wrap gap-1">
                 {SUGGESTIONS.map((s) => (
@@ -233,6 +342,7 @@ function ChatPanel({
                 ) : (
                   <p className="text-subtle italic">myślę…</p>
                 )}
+                {m.proposals && m.proposals.length > 0 && <Proposals cards={m.proposals} />}
                 {m.sources.length > 0 && (
                   <ul className="mt-2 flex flex-col gap-0.5 text-[11px]">
                     {m.sources.map((s) => (

@@ -134,10 +134,15 @@ export const SketchEdge = memo(function SketchEdge({
   )
 })
 
-export type OrderEdgeType = Edge<Record<string, never>, 'order'>
+export type OrderEdgeType = Edge<{ warn?: boolean }, 'order'>
 
 /** Strzałka kolejności w dniu (z godzin kart, niezapisana): cieńsza, w kolorze obrysu dnia, bez gestów. */
-export const OrderEdge = memo(function OrderEdge({ id, source, target }: EdgeProps<OrderEdgeType>) {
+export const OrderEdge = memo(function OrderEdge({
+  id,
+  source,
+  target,
+  data,
+}: EdgeProps<OrderEdgeType>) {
   const geo = useArrow(id, source, target)
   if (!geo) return null
   return geo.paths.map((d, i) => (
@@ -145,9 +150,13 @@ export const OrderEdge = memo(function OrderEdge({ id, source, target }: EdgePro
       key={i}
       d={d}
       fill="none"
-      strokeWidth={1.4}
+      strokeWidth={data?.warn ? 2 : 1.4}
       strokeLinecap="round"
-      className="pointer-events-none stroke-teal/80"
+      pathLength={1}
+      className={cx(
+        'order-arrow pointer-events-none',
+        data?.warn ? 'stroke-red' : 'stroke-teal/80',
+      )}
     />
   ))
 })

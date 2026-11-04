@@ -9,33 +9,36 @@ import {
   type CardStatus,
   type CardType,
   createCard,
+  dayGaps,
   formatDayHeader,
   formatShortDate,
   groupCardsByDay,
+  moveCardToDay,
   restoreCard,
   todayLocal,
 } from '@planer/core'
-import { Plus, Settings2 } from 'lucide-react'
+import { Luggage, Plus, Settings2 } from 'lucide-react'
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { AddButton } from '@/components/add-button'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { TotalsText } from '@/components/amounts'
 import { CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
+import { DayGapRow } from '@/components/card/day-gap'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
-import { useNavHidden } from '@/components/nav/nav-context'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
-import { cx, SectionLabel } from '@/components/ui'
+import { buttonClass, cx, SectionLabel } from '@/components/ui'
 import { DayWeather } from '@/components/weather'
 import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
 import { useCardSheet } from '@/lib/use-card-sheet'
+import { useDayTravel } from '@/lib/use-day-travel'
 import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function TripList() {
@@ -49,7 +52,7 @@ export function TripList() {
   const [types, setTypes] = useState<Set<CardType>>(new Set())
   const [statuses, setStatuses] = useState<Set<CardStatus>>(new Set())
   const [showTrash, setShowTrash] = useState(false)
-  const hidden = useNavHidden()
+  const [moving, setMoving] = useState<CardSnapshot | null>(null)
   const today = todayLocal()
 
   const filtered = useMemo(
@@ -76,7 +79,13 @@ export function TripList() {
   }
 
   const tile = (c: CardSnapshot) => (
-    <CardTile key={c.id} card={c} files={fileCounts.get(c.id)} onOpen={() => open(c.id)} />
+    <CardTile
+      key={c.id}
+      card={c}
+      files={fileCounts.get(c.id)}
+      onOpen={() => open(c.id)}
+      onHold={() => setMoving(c)}
+    />
   )
   const live = cards.filter((c) => !c.deletedAt).length
 
@@ -88,6 +97,7 @@ export function TripList() {
           theme={false}
           title={trip.title}
           back={TRIPS_BACK}
+          morph={`trip-${trip.id}`}
           actions={
             <>
               <TripStatus />
@@ -107,7 +117,7 @@ export function TripList() {
         <SessionBanner />
 
         <div
-          className="-mx-0.5 flex gap-1 overflow-x-auto px-0.5 py-1"
+          className="fade-x -mx-0.5 flex gap-1 overflow-x-auto px-0.5 py-1 pr-7"
           role="group"
           aria-label="filtry"
         >
@@ -121,7 +131,7 @@ export function TripList() {
                 aria-pressed={on}
                 onClick={() => toggle(types, t, setTypes)}
                 className={cx(
-                  'flex min-h-9 shrink-0 items-center gap-1 rounded-small border px-2 text-xs transition-colors',
+                  'flex min-h-11 shrink-0 items-center gap-1 rounded-small border px-2 text-xs transition-colors',
                   on ? 'border-accent bg-accent/20 text-accent' : 'border-line bg-panel text-muted',
                 )}
               >
@@ -140,7 +150,7 @@ export function TripList() {
                 aria-pressed={on}
                 onClick={() => toggle(statuses, s, setStatuses)}
                 className={cx(
-                  'min-h-9 shrink-0 rounded-small border px-2 text-xs transition-colors',
+                  'min-h-11 shrink-0 rounded-small border px-2 text-xs transition-colors',
                   on ? 'border-accent bg-accent/20 text-accent' : 'border-line bg-panel text-muted',
                 )}
               >
@@ -158,9 +168,16 @@ export function TripList() {
         )}
 
         {ready && live === 0 && (
-          <p className="island p-4 text-sm text-muted">
-            ● brak kart — dodaj pierwszą przyciskiem +
-          </p>
+          <section className="island pop-in flex flex-col items-center gap-2 p-6 text-center">
+            <span className="flex size-16 items-center justify-center rounded-full border border-dashed border-teal text-teal">
+              <Luggage className="size-7" aria-hidden="true" strokeWidth={1.5} />
+            </span>
+            <p className="font-bold">pusty plan</p>
+            <p className="text-sm text-muted">dodaj pierwszą kartę albo wklej link z Map Google</p>
+            <button type="button" onClick={() => add()} className={buttonClass('primary', 'mt-1')}>
+              + pierwsza karta
+            </button>
+          </section>
         )}
 
         {groups.pinned.length > 0 && (
@@ -199,11 +216,7 @@ export function TripList() {
                 </button>
               </div>
               <TotalsText cards={day.cards} mainCurrency={main} className="-mt-2 px-3 text-xs" />
-              {day.cards.length ? (
-                day.cards.map(tile)
-              ) : (
-                <p className="px-3 text-xs text-dim italic">pusto</p>
-              )}
+              {day.cards.length > 0 && <DayCards date={day.date} cards={day.cards} tile={tile} />}
             </section>
           )
         })}
@@ -244,7 +257,6 @@ export function TripList() {
         )}
 
         <AddButton
-          hidden={hidden}
           onNew={() => add()}
           templates={templates}
           onImport={(files) =>
@@ -261,6 +273,128 @@ export function TripList() {
         <DraftReview onEdit={(id) => open(id)} />
       </main>
       {openId && <CardSheet key={openId} cardId={openId} isNew={isNew} onClose={close} />}
+      {moving && (
+        <MoveSheet
+          card={moving}
+          days={groups.days.map((d) => d.date)}
+          onPick={(date) => {
+            moveCardToDay(doc, moving.id, date)
+            setMoving(null)
+          }}
+          onClose={() => setMoving(null)}
+        />
+      )}
     </>
+  )
+}
+
+/** Karty dnia na osi: między nimi przerwy, nakładanie się i (z kluczem) sprawdzanie dojazdów. */
+function DayCards({
+  date,
+  cards,
+  tile,
+}: {
+  date: string
+  cards: CardSnapshot[]
+  tile: (c: CardSnapshot) => React.ReactNode
+}) {
+  const { trip } = useTrip()
+  const gaps = useMemo(() => dayGaps(cards.filter((c) => c.date === date)), [cards, date])
+  const { checks, state, check } = useDayTravel(date, gaps)
+  const checkable = trip.routes && date >= todayLocal() && gaps.some((g) => g.route)
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="day-rail flex flex-col gap-1">
+        {cards.map((c) => {
+          const gap = gaps.find((g) => g.from === c.id)
+          return (
+            <Fragment key={c.id}>
+              <div className="relative">
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'absolute top-5 -left-[12px] size-2 rounded-full',
+                    TYPE_STYLE[c.type].bar,
+                  )}
+                />
+                {tile(c)}
+              </div>
+              {gap && <DayGapRow gap={gap} check={checks.get(gap.from)} />}
+            </Fragment>
+          )
+        })}
+      </div>
+      {checkable && (
+        <div className="flex items-center gap-3 pl-3">
+          <button
+            type="button"
+            onClick={() => void check()}
+            disabled={state === 'busy'}
+            className="min-h-11 text-xs text-accent disabled:opacity-50"
+          >
+            {state === 'busy'
+              ? 'sprawdzam…'
+              : state === 'error'
+                ? '● nie udało się — spróbuj ponownie'
+                : 'sprawdź dojazdy ›'}
+          </button>
+          {checks.size > 0 && (
+            <span className="font-sans text-xs whitespace-nowrap text-attrib">Google Maps</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Przytrzymanie karty: wybór dnia. Godzina zostaje, nocleg zachowuje liczbę nocy. */
+function MoveSheet({
+  card,
+  days,
+  onPick,
+  onClose,
+}: {
+  card: CardSnapshot
+  days: string[]
+  onPick: (date: string | undefined) => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="przenieś kartę"
+      className="fade-in fixed inset-0 z-50 flex flex-col justify-end bg-bg/70"
+    >
+      <button type="button" aria-label="anuluj" onClick={onClose} className="min-h-12 flex-1" />
+      <section className="island sheet-in mx-0.5 mb-0.5 flex max-h-[70dvh] flex-col overflow-hidden">
+        <h2 className="truncate border-b border-line px-4 py-3 text-sm font-bold">
+          przenieś: {card.title || 'bez tytułu'}
+        </h2>
+        <div className="flex flex-col overflow-y-auto p-1">
+          {days.map((date) => (
+            <button
+              key={date}
+              type="button"
+              disabled={date === card.date}
+              onClick={() => onPick(date)}
+              className="flex min-h-11 items-center rounded-[9px] px-3 text-left text-sm hover:bg-raised disabled:text-accent"
+            >
+              {formatDayHeader(date)}
+              {date === card.date && ' · teraz'}
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={!card.date}
+            onClick={() => onPick(undefined)}
+            className="flex min-h-11 items-center rounded-[9px] px-3 text-left text-sm text-muted hover:bg-raised"
+          >
+            bez daty
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }

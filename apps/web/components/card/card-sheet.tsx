@@ -7,23 +7,34 @@ import {
   cardsOf,
   contentOf,
   type EditableCardFields,
+  formatShortDate,
   fragmentLines,
+  hasCoords,
+  navigationUrl,
+  restoreCard,
   trashCard,
   updateCard,
 } from '@planer/core'
 import type { Editor } from '@tiptap/react'
-import { ChevronDown, Pin, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ChevronDown, Navigation, Pin, Trash2 } from 'lucide-react'
+import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { CardAttachments } from '@/components/attachments/card-attachments'
 import { cx } from '@/components/ui'
+import { offerUndo } from '@/lib/undo'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { CardEditor } from './card-editor'
-import { CardFields } from './card-fields'
+import { CardFields, fieldsSummary } from './card-fields'
 import { FormatToolbar } from './format-toolbar'
 import { LinkPreviewBlock } from './link-preview'
 import { TYPE_STYLE } from './type-style'
 
-/** Pełnoekranowy arkusz edycji karty. Pusta karta (bez treści i pól) znika przy zamknięciu. */
+const CLOSE_MS = 190
+const DRAG_CLOSE_PX = 110
+
+/**
+ * Pełnoekranowy arkusz edycji karty: wjeżdża od dołu, przeciągnięcie uchwytu w dół zamyka.
+ * Treść na górze, pola zwinięte do podsumowania. Pusta karta znika przy zamknięciu.
+ */
 export function CardSheet({
   cardId,
   isNew,
@@ -37,6 +48,10 @@ export function CardSheet({
   const card = useCards().find((c) => c.id === cardId)
   const cardMap = cardsOf(doc).get(cardId)
   const [editor, setEditor] = useState<Editor | null>(null)
+  const [fieldsOpen, setFieldsOpen] = useState(isNew)
+  const [closing, setClosing] = useState(false)
+  const [dragY, setDragY] = useState(0)
+  const dragFrom = useRef<number | null>(null)
 
   // Bez przewijania strony pod arkuszem.
   useEffect(() => {
@@ -62,22 +77,63 @@ export function CardSheet({
     onClose()
   }
 
+  const dismiss = () => {
+    if (closing) return
+    setClosing(true)
+    setTimeout(close, CLOSE_MS)
+  }
+
   const remove = () => {
     trashCard(doc, cardId)
+    offerUndo('karta w koszu', () => restoreCard(doc, cardId))
     onClose()
   }
+
+  const grip = {
+    onPointerDown: (e: PointerEvent) => {
+      dragFrom.current = e.clientY
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    onPointerMove: (e: PointerEvent) => {
+      if (dragFrom.current !== null) setDragY(Math.max(0, e.clientY - dragFrom.current))
+    },
+    onPointerUp: () => {
+      dragFrom.current = null
+      if (dragY > DRAG_CLOSE_PX) dismiss()
+      else setDragY(0)
+    },
+  }
+  const summary = [
+    card.date && formatShortDate(card.date),
+    fieldsSummary(card),
+    card.location?.name && `⌖ ${card.location.name}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="karta"
-      className="fixed inset-0 z-40 flex flex-col bg-bg"
+      className={cx(
+        'fixed inset-0 z-40 flex flex-col bg-bg',
+        closing ? 'sheet-out' : 'sheet-in',
+        dragFrom.current === null && dragY > 0 && 'transition-transform duration-200',
+      )}
+      style={dragY ? { transform: `translateY(${dragY}px)` } : undefined}
     >
-      <div className="flex shrink-0 gap-1 px-0.5 pt-1">
+      <div
+        {...grip}
+        aria-hidden="true"
+        className="flex h-4 shrink-0 touch-none items-center justify-center"
+      >
+        <span className="h-1 w-10 rounded-full bg-line" />
+      </div>
+      <div className="flex shrink-0 gap-1 px-0.5">
         <button
           type="button"
-          onClick={close}
+          onClick={dismiss}
           aria-label="zamknij kartę"
           className="island flex size-11 items-center justify-center text-muted hover:text-accent"
         >
@@ -151,17 +207,46 @@ export function CardSheet({
               </button>
             </div>
           )}
-          <CardFields card={card} onChange={change} />
+          <CardEditor
+            cardId={cardId}
+            fragment={contentOf(cardMap)}
+            autoFocus={isNew}
+            onEditor={setEditor}
+          />
+          <div className="flex items-center border-t border-line">
+            <button
+              type="button"
+              onClick={() => setFieldsOpen((v) => !v)}
+              aria-expanded={fieldsOpen}
+              className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-4 text-left text-xs text-subtle italic"
+            >
+              <ChevronDown
+                className={cx(
+                  'size-4 shrink-0 transition-transform duration-200',
+                  fieldsOpen && 'rotate-180',
+                )}
+                aria-hidden="true"
+              />
+              <span className="truncate">{summary || 'data, godzina, miejsce, status'}</span>
+            </button>
+            {hasCoords(card) && (
+              <a
+                href={navigationUrl(card.location)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex min-h-11 shrink-0 items-center gap-1 px-4 text-xs font-bold text-accent"
+              >
+                <Navigation className="size-3.5" aria-hidden="true" /> nawiguj
+              </a>
+            )}
+          </div>
+          {fieldsOpen && (
+            <div className="fade-in">
+              <CardFields card={card} onChange={change} />
+            </div>
+          )}
           {card.linkPreview && <LinkPreviewBlock preview={card.linkPreview} />}
           <CardAttachments cardId={cardId} />
-          <div className="border-t border-line">
-            <CardEditor
-              cardId={cardId}
-              fragment={contentOf(cardMap)}
-              autoFocus={isNew}
-              onEditor={setEditor}
-            />
-          </div>
         </div>
         <SaveAsTemplate card={card} editor={editor} />
       </div>

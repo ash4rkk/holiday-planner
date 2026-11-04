@@ -5,9 +5,9 @@
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --bg: #f3f1ed; --panel: #fbfaf7; --raised: #ebe8e3;
+  --bg: #f3f1ed; --panel: #fbfaf7; --raised: #ebe8e3; --attrib: #5e5e5e;
   --line: #dcd8d1; --sel: #cfcac2;
-  --text: #2b2a30; --muted: #55555f; --subtle: #66667a; --dim: #a7a5ae;
+  --text: #2b2a30; --muted: #55555f; --subtle: #66667a; --dim: #6f6d78;
   --accent: #9c5859; --accent-hover: #874a4b; --on-accent: #fbfaf7;
   --plum: #85638a; --blue: #3f6b8c; --lavender: #62629a; --teal: #3f7480;
   --amber: #9a6a34; --orange: #a3621f; --green: #4f7637; --red: #ad3f58;
@@ -15,9 +15,9 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #1e1e22; --panel: #26262b; --raised: #2c2c32;
+  --bg: #1e1e22; --panel: #26262b; --raised: #2c2c32; --attrib: #ffffff;
   --line: #36363f; --sel: #44444e;
-  --text: #dedede; --muted: #a8a8b6; --subtle: #8f8fa8; --dim: #5a5a6c;
+  --text: #dedede; --muted: #a8a8b6; --subtle: #8f8fa8; --dim: #8b8b9c;
   --accent: #c48282; --accent-hover: #d49a9a; --on-accent: #1e1e22;
   --plum: #bb9dbd; --blue: #6e94b2; --lavender: #aeaed1; --teal: #9bb4bc;
   --amber: #e8b589; --orange: #e0a363; --green: #7fa563; --red: #d8647e;
@@ -33,6 +33,7 @@
   --color-bg: var(--bg);
   --color-panel: var(--panel);
   --color-raised: var(--raised);
+  --color-attrib: var(--attrib);
   --color-line: var(--line);
   --color-sel: var(--sel);
   --color-text: var(--text);
@@ -79,20 +80,82 @@ body {
   background-attachment: fixed;
 }
 
-.island {
-  background-color: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-island);
-}
-
-* {
-  transition-duration: 0.2s;
+/* W warstwie, żeby klasy Tailwind (obramowanie, tło) mogły to nadpisać. */
+@layer components {
+  .island {
+    background-color: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-island);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after,
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
     transition: none !important;
+    animation: none !important;
   }
+}
+
+/* Przejścia między ekranami (React ViewTransition): krótkie przenikanie, menu stoi w miejscu. */
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+.bottom-nav {
+  view-transition-name: bottom-nav;
+}
+
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+}
+@keyframes sheet-out {
+  to { transform: translateY(100%); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+}
+@keyframes check-pop {
+  50% { transform: scale(1.25); }
+}
+@keyframes draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.sheet-in { animation: sheet-in 260ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.sheet-out { animation: sheet-out 200ms cubic-bezier(0.4, 0, 1, 1) both; }
+.fade-in { animation: fade-in 200ms ease-out both; }
+.pop-in { animation: pop-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.pop-menu { transform-origin: bottom right; animation: pop-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.pop-menu > * { animation: pop-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i, 0) * 30ms); }
+
+/* Filtry przewijane w bok: wygaszona krawędź mówi, że jest ich więcej. */
+.fade-x {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+/* Lista: oś dnia łącząca karty, jak strzałki na Tablicy. */
+.day-rail {
+  position: relative;
+  padding-left: 14px;
+}
+.day-rail::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--line);
 }
 
 /* Treść karty (Tiptap). */
@@ -116,7 +179,12 @@ body {
 .card-prose ul[data-type="taskList"] li > label { margin-top: 0.2em; }
 .card-prose ul[data-type="taskList"] li > label input { width: 18px; height: 18px; accent-color: var(--accent); }
 .card-prose ul[data-type="taskList"] li > div { flex: 1; }
-.card-prose ul[data-type="taskList"] li[data-checked="true"] > div { color: #606079; text-decoration: line-through; }
+.card-prose ul[data-type="taskList"] li > div {
+  text-decoration: line-through transparent;
+  transition: color 200ms ease-out, text-decoration-color 200ms ease-out;
+}
+.card-prose ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--subtle); text-decoration-color: currentColor; }
+.card-prose ul[data-type="taskList"] li[data-checked="true"] > label input { animation: check-pop 220ms ease-out; }
 .card-prose p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: var(--dim);
@@ -128,6 +196,13 @@ body {
 }
 
 /* Tablica (React Flow): kolory z motywu, własne tło zamiast „mgły”. */
+.planer-board.is-arranging .react-flow__node {
+  transition: transform 350ms cubic-bezier(0.23, 1, 0.32, 1), width 350ms, height 350ms;
+}
+.planer-board.is-arranging .order-arrow {
+  stroke-dasharray: 1;
+  animation: draw 320ms ease-out 260ms both;
+}
 .planer-board {
   --xy-background-color: var(--bg);
   --xy-background-pattern-color: var(--sel);
@@ -197,6 +272,17 @@ body {
   font-size: 12px;
   font-weight: 700;
   color: var(--on-accent);
+}
+.map-cluster {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 2px solid var(--panel);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
 .map-pin.is-active .map-pin__shape {
   border-color: var(--text);

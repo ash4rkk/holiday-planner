@@ -135,6 +135,11 @@ export function navigationUrl({ lat, lng }: LatLng): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
 }
 
+/** Mapy Google z trasą komunikacją miejską między dwoma miejscami. */
+export function transitUrl(from: LatLng, to: LatLng): string {
+  return `https://www.google.com/maps/dir/?api=1&origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}&travelmode=transit`
+}
+
 /** Link do miejsca: oryginalny z udostępnienia, a bez niego wyszukiwanie po współrzędnych/nazwie. */
 export function placeUrl(location: {
   mapsUrl?: string

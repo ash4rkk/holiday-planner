@@ -7,6 +7,7 @@ import {
   createCard,
   createEdge,
   createFrame,
+  dayGaps,
   dayIndexOf,
   dayOrder,
   deleteEdge,
@@ -18,8 +19,10 @@ import {
   type Positions,
   renameFrame,
   resizeFrame,
+  restoreCard,
   restorePositions,
   setEdgeLabel,
+  todayLocal,
   trashCard,
   updateCard,
   visibleEdges,
@@ -49,6 +52,7 @@ import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
+import { offerUndo } from '@/lib/undo'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useAttachments, useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
 import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
@@ -94,6 +98,7 @@ function BoardCanvas() {
     null,
   )
   const [undo, setUndo] = useState<Positions | null>(null)
+  const [arranging, setArranging] = useState(false)
   const [savedViewport] = useState(() =>
     typeof window === 'undefined' ? undefined : readViewport(trip.id),
   )
@@ -209,6 +214,13 @@ function BoardCanvas() {
   const shownEdges = useMemo(() => {
     const drawn = visibleEdges(edges, cards)
     const linked = new Set(drawn.flatMap((e) => [`${e.from}>${e.to}`, `${e.to}>${e.from}`]))
+    const overlapping = new Set(
+      days.flatMap(({ date }) =>
+        dayGaps(live.filter((c) => c.date === date))
+          .filter((g) => g.freeMin < 0)
+          .map((g) => g.from),
+      ),
+    )
     // Kolejność w dniu: strzałka do następnej karty, chyba że ta para ma już własną strzałkę.
     const order = days.flatMap(({ ids }) =>
       ids.slice(1).flatMap((to, i) => {
@@ -222,6 +234,7 @@ function BoardCanvas() {
             type: 'order' as const,
             selectable: false,
             focusable: false,
+            data: { warn: overlapping.has(from) },
           },
         ]
       }),
@@ -238,7 +251,7 @@ function BoardCanvas() {
         data: { label: e.label },
       })),
     ]
-  }, [edges, cards, days, selection])
+  }, [edges, cards, days, live, selection])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)),
@@ -250,8 +263,14 @@ function BoardCanvas() {
   useEffect(() => {
     if (!ready || savedViewport || fitted.current || !nodes.length) return
     fitted.current = true
-    requestAnimationFrame(() => rf.fitView({ padding: 0.2, maxZoom: 1 }))
-  }, [ready, savedViewport, nodes.length, rf])
+    // Na telefonie cały wyjazd byłby nieczytelną miniaturą — start na dzisiejszym dniu.
+    const today = todayLocal()
+    const day = days.find((d) => d.date === today) ?? days[0]
+    const focus = window.innerWidth < 640 ? day?.ids.map((id) => ({ id })) : undefined
+    requestAnimationFrame(() =>
+      rf.fitView({ padding: focus ? 0.1 : 0.2, maxZoom: 1, nodes: focus }),
+    )
+  }, [ready, savedViewport, nodes.length, rf, days])
 
   const nodesRef = useRef(nodes)
   nodesRef.current = nodes
@@ -306,6 +325,7 @@ function BoardCanvas() {
     trash: (id) => {
       setSelection(null)
       trashCard(doc, id)
+      offerUndo('karta w koszu', () => restoreCard(doc, id))
     },
     renameFrame: (id) => {
       const current = framesOf(doc).get(id)?.get('title') as string | undefined
@@ -390,6 +410,8 @@ function BoardCanvas() {
 
   const arrange = () => {
     setSelection(null)
+    setArranging(true)
+    setTimeout(() => setArranging(false), 700)
     setUndo(arrangeByDays(doc, cards, trip))
     requestAnimationFrame(() => rf.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }))
   }
@@ -455,7 +477,7 @@ function BoardCanvas() {
           nodesDraggable={false}
           connectionRadius={40}
           proOptions={{ hideAttribution: true }}
-          className="planer-board"
+          className={cx('planer-board', arranging && 'is-arranging')}
         >
           <Background variant={BackgroundVariant.Dots} gap={28} size={1.6} />
         </ReactFlow>
@@ -465,6 +487,7 @@ function BoardCanvas() {
             theme={false}
             title={trip.title}
             back={TRIPS_BACK}
+            morph={`trip-${trip.id}`}
             actions={
               <>
                 <TripStatus />

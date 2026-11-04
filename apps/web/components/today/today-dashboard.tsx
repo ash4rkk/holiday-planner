@@ -3,6 +3,7 @@
 import {
   CARD_TYPE_LABELS,
   type CardSnapshot,
+  dayGaps,
   daysBetween,
   formatAmount,
   hasCoords,
@@ -17,10 +18,13 @@ import { LocateFixed, Navigation, Settings2 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import type { Route } from '@/app/api/route/route'
+import { ChatButton } from '@/components/ai/chat-panel'
 import { TotalsText } from '@/components/amounts'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
+import { DayGapRow } from '@/components/card/day-gap'
 import { TYPE_STYLE } from '@/components/card/type-style'
+import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
@@ -73,8 +77,12 @@ export function TodayDashboard({ userName }: { userName: string }) {
   const next = during ? nextPlace(live, today, now) : undefined
   const main = trip.currencies[0] ?? 'PLN'
   const place = weatherPlace(cards, planDate)
-  const status = during
-    ? `dzień ${daysBetween(startDate as string, today) + 1}`
+  const weather = useWeather(place)
+  const gaps = useMemo(() => dayGaps(todays), [todays])
+  const tripDays = startDate && endDate ? daysBetween(startDate, endDate) + 1 : undefined
+  const dayNumber = during && startDate ? daysBetween(startDate, today) + 1 : undefined
+  const status = dayNumber
+    ? `dzień ${dayNumber}${tripDays ? ` z ${tripDays}` : ''}`
     : before
       ? daysLabel(daysBetween(today, startDate as string))
       : after
@@ -87,9 +95,12 @@ export function TodayDashboard({ userName }: { userName: string }) {
         theme={false}
         title={trip.title}
         back={TRIPS_BACK}
+        morph={`trip-${trip.id}`}
         actions={
           <>
             <TripStatus />
+            <ChatButton onOpenCard={(id) => sheet.open(id)} />
+            <InboxButton />
             <Link
               href={`/trips/${trip.id}/settings`}
               aria-label="ustawienia wyjazdu"
@@ -102,7 +113,12 @@ export function TodayDashboard({ userName }: { userName: string }) {
       />
       <SessionBanner />
 
-      <section className="island border-t-2 border-t-accent p-4">
+      <section
+        className={cx(
+          'island overflow-hidden border-t-2 border-t-accent p-4 transition-colors duration-500',
+          heroTone(weather?.current?.code),
+        )}
+      >
         <p className="text-xl font-bold">cześć, {userName}</p>
         <p className="mt-1 text-sm text-muted">
           {status} ·{' '}
@@ -115,11 +131,24 @@ export function TodayDashboard({ userName }: { userName: string }) {
             nocleg: {stay.title || stay.location.name}
           </p>
         )}
+        {dayNumber && tripDays && (
+          <div className="mt-3 h-1 overflow-hidden rounded-full bg-raised" aria-hidden="true">
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-500"
+              style={{ width: `${Math.min(100, (dayNumber / tripDays) * 100)}%` }}
+            />
+          </div>
+        )}
       </section>
 
       <div className="grid grid-cols-2 gap-1">
         {(during || place) && !after && <WeatherTile at={place} today={planDate} />}
-        <section className="island flex flex-col justify-center p-3">
+        <section
+          className={cx(
+            'island flex flex-col justify-center p-3',
+            (after || (!during && !place)) && 'col-span-2',
+          )}
+        >
           <p className="text-xs text-subtle italic">
             {during ? 'wydatki dzisiaj' : 'wydatki wyjazdu'}
           </p>
@@ -149,6 +178,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
             // Kreska „teraz” między ostatnią minioną a pierwszą przyszłą pozycją z godziną.
             const nowLine =
               during && card.time && card.time > now && (!prev?.time || prev.time <= now)
+            const gap = gaps.find((g) => g.from === card.id)
             return (
               <li key={card.id}>
                 {nowLine && (
@@ -197,6 +227,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
                     </span>
                   </span>
                 </button>
+                {gap && <DayGapRow gap={gap} />}
               </li>
             )
           })}
@@ -213,6 +244,14 @@ export function TodayDashboard({ userName }: { userName: string }) {
       )}
     </>
   )
+}
+
+/** Delikatne tło powitania zależne od pogody. */
+function heroTone(code: number | undefined): string | undefined {
+  if (code === undefined) return undefined
+  if (code <= 2) return 'bg-amber/10'
+  if (code <= 48) return 'bg-blue/10'
+  return 'bg-teal/15'
 }
 
 function WeatherTile({ at, today }: { at?: LatLng; today: string }) {

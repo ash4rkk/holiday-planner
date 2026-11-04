@@ -8,6 +8,7 @@ import { cx } from '@/components/ui'
 import { useNavHidden } from './nav-context'
 
 const LAST_TRIP_KEY = 'planer-last-trip'
+export const NAV_SLOT = 'nav-slot'
 
 /**
  * Pływająca kapsuła wyjazdu: dziś, tablica, lista, mapa. Poza wyjazdem prowadzi do ostatnio
@@ -45,7 +46,7 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
     <nav
       aria-label="menu"
       className={cx(
-        'fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[max(8px,env(safe-area-inset-bottom))]',
+        'bottom-nav fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[max(8px,env(safe-area-inset-bottom))]',
         'pointer-events-none transition-transform duration-200 motion-reduce:transition-none',
         hidden && 'translate-y-[calc(100%+8px)]',
       )}
@@ -67,6 +68,8 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
             </Link>
           </li>
         ))}
+        {/* Tu widoki wyjazdu wstawiają przycisk „+” (AddButton), żeby nie zasłaniał treści. */}
+        <li id={NAV_SLOT} className="empty:hidden" />
       </ul>
     </nav>
   )

@@ -1,20 +1,35 @@
 import { CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot } from '@planer/core'
 import { Paperclip } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { cx } from '@/components/ui'
 import { fieldsSummary } from './card-fields'
 import { TYPE_STYLE } from './type-style'
 
+const HOLD_MS = 450
+const FRESH_MS = 2500
+
 export function CardTile({
   card,
   files = 0,
   onOpen,
+  onHold,
 }: {
   card: CardSnapshot
   /** Liczba załączników karty. */
   files?: number
   onOpen: () => void
+  /** Przytrzymanie karty (przeniesienie na inny dzień). */
+  onHold?: () => void
 }) {
+  // Świeżo dodana karta wskakuje na miejsce; reszta listy się nie rusza.
+  const [fresh] = useState(() => Date.now() - Date.parse(card.createdAt) < FRESH_MS)
+  const hold = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const held = useRef(false)
+  const cancelHold = () => {
+    if (hold.current) clearTimeout(hold.current.timer)
+    hold.current = null
+  }
   const style = TYPE_STYLE[card.type]
   const Icon = style.icon
   const summary = fieldsSummary(card)
@@ -23,10 +38,30 @@ export function CardTile({
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={() => {
+        if (held.current) held.current = false
+        else onOpen()
+      }}
+      onPointerDown={(e) => {
+        if (!onHold) return
+        const timer = setTimeout(() => {
+          held.current = true
+          navigator.vibrate?.(10)
+          onHold()
+        }, HOLD_MS)
+        hold.current = { x: e.clientX, y: e.clientY, timer }
+      }}
+      onPointerMove={(e) => {
+        const h = hold.current
+        if (h && Math.hypot(e.clientX - h.x, e.clientY - h.y) > 8) cancelHold()
+      }}
+      onPointerUp={cancelHold}
+      onPointerCancel={cancelHold}
+      onContextMenu={(e) => onHold && e.preventDefault()}
       className={cx(
-        'island relative flex w-full gap-3 overflow-hidden py-3 pr-3 pl-4 text-left transition-colors hover:border-sel',
+        'island relative flex w-full gap-3 overflow-hidden py-3 pr-3 pl-4 text-left transition-colors select-none hover:border-sel',
         card.aiDraft && 'border-dashed border-accent',
+        fresh && 'pop-in',
       )}
     >
       <span className={cx('absolute inset-y-0 left-0 w-1', style.bar)} aria-hidden="true" />

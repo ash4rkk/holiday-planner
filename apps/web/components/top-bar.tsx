@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import { type ReactNode, ViewTransition } from 'react'
 import { ThemeToggle } from './theme-toggle'
 
 /** Wyjście z widoków wyjazdu do wyboru wyjazdów. */
@@ -12,6 +12,7 @@ export function TopBar({
   back,
   actions,
   theme = true,
+  morph,
 }: {
   title: ReactNode
   subtitle?: ReactNode
@@ -19,6 +20,8 @@ export function TopBar({
   actions?: ReactNode
   /** Przełącznik motywu — w widokach wyjazdu wyłączony, żeby zmieścił się tytuł i przyciski wyjazdu. */
   theme?: boolean
+  /** Nazwa wspólnego elementu: tytuł płynnie przechodzi z kafelka wyjazdu do nagłówka. */
+  morph?: string
 }) {
   return (
     <header className="flex gap-1">
@@ -35,7 +38,9 @@ export function TopBar({
         </Link>
       )}
       <div className="island flex min-h-11 min-w-0 flex-1 items-center gap-2 px-4 py-1">
-        <h1 className="truncate text-lg font-bold">{title}</h1>
+        <ViewTransition name={morph}>
+          <h1 className="truncate text-lg font-bold">{title}</h1>
+        </ViewTransition>
         {subtitle && (
           <span className="ml-auto shrink-0 text-xs text-subtle italic">{subtitle}</span>
         )}

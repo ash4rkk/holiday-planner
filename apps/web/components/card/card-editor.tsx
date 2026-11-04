@@ -71,5 +71,13 @@ export function CardEditor({
     return () => onEditor?.(null)
   }, [editor, onEditor])
 
-  return <EditorContent editor={editor} />
+  return (
+    <EditorContent
+      editor={editor}
+      // Odhaczenie zadania czuć pod palcem.
+      onChange={(e) =>
+        (e.target as HTMLInputElement).type === 'checkbox' && navigator.vibrate?.(10)
+      }
+    />
+  )
 }

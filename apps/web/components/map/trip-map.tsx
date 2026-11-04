@@ -46,6 +46,20 @@ const EMPTY_LINE = {
 
 type Tab = 'all' | string
 
+const CLUSTER_PX = 34
+
+/** Łączy pinezki bliższe niż CLUSTER_PX na ekranie przy obecnym przybliżeniu. */
+function groupNearby<T extends { card: MappedCard }>(m: MapLibreMap, pins: T[]): T[][] {
+  const groups: { x: number; y: number; items: T[] }[] = []
+  for (const pin of pins) {
+    const { x, y } = m.project([pin.card.location.lng, pin.card.location.lat])
+    const near = groups.find((g) => Math.hypot(g.x - x, g.y - y) < CLUSTER_PX)
+    if (near) near.items.push(pin)
+    else groups.push({ x, y, items: [pin] })
+  }
+  return groups.map((g) => g.items)
+}
+
 export function TripMap() {
   const { trip } = useTrip()
   const cards = useCards()
@@ -58,6 +72,7 @@ export function TripMap() {
   const [loaded, setLoaded] = useState(false)
   const [tab, setTab] = useState<Tab>('all')
   const [selected, setSelected] = useState<string | null>(null)
+  const [zoom, setZoom] = useState(0)
 
   const days = useMemo(() => mapDays(cards, trip), [cards, trip])
   const live = useMemo(() => cards.filter((c) => !c.deletedAt), [cards])
@@ -92,6 +107,7 @@ export function TripMap() {
       m.touchZoomRotate.disableRotation()
       m.addControl(new AttributionControl({ compact: true }), 'bottom-left')
       m.on('load', () => setLoaded(true))
+      m.on('zoomend', () => setZoom(m.getZoom()))
       m.on('click', () => setSelected(null))
       map.current = m
     })
@@ -115,10 +131,29 @@ export function TripMap() {
     const m = map.current
     if (!m || !loaded) return
     let cancelled = false
-    void loadMapLibre().then(({ Marker }) => {
+    void loadMapLibre().then(({ Marker, LngLatBounds }) => {
       if (cancelled) return
       for (const marker of markers.current) marker.remove()
-      markers.current = pins.map(({ card, label }) => {
+      // Widok wszystkich miejsc: pinezki leżące na sobie łączą się w grupę z liczbą.
+      const groups = route ? pins.map((p) => [p]) : groupNearby(m, pins)
+      markers.current = groups.map((group) => {
+        const { card, label } = group[0] as (typeof pins)[number]
+        if (group.length > 1) {
+          const el = document.createElement('button')
+          el.type = 'button'
+          el.className = 'map-cluster'
+          el.textContent = String(group.length)
+          el.setAttribute('aria-label', `${group.length} miejsc, przybliż`)
+          el.addEventListener('click', (e) => {
+            e.stopPropagation()
+            const bounds = new LngLatBounds()
+            for (const p of group) bounds.extend([p.card.location.lng, p.card.location.lat])
+            m.fitBounds(bounds, { padding: 90, maxZoom: 17, duration: 350 })
+          })
+          return new Marker({ element: el })
+            .setLngLat([card.location.lng, card.location.lat])
+            .addTo(m)
+        }
         const el = document.createElement('button')
         el.type = 'button'
         el.className = cx('map-pin', selected === card.id && 'is-active')
@@ -144,7 +179,7 @@ export function TripMap() {
     return () => {
       cancelled = true
     }
-  }, [pins, loaded, selected])
+  }, [pins, route, loaded, selected, zoom])
 
   // ---------- trasa dnia: przerywana linia w akcencie + strzałki kierunku ----------
   const arrows = useRef<Marker[]>([])
@@ -242,6 +277,7 @@ export function TripMap() {
             theme={false}
             title={trip.title}
             back={TRIPS_BACK}
+            morph={`trip-${trip.id}`}
             actions={
               <>
                 <TripStatus />

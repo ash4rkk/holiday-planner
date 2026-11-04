@@ -126,6 +126,8 @@ export type TripMeta = {
   inboxCount: number
   /** Szablony kart (z serwera; w zapisanej stronie działają też offline). */
   templates: Template[]
+  /** Serwer ma klucz Google Routes — można sprawdzać dojazdy komunikacją. */
+  routes?: boolean
 }
 
 type Ctx = {

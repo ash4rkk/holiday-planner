@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
+import { normalizeProposals } from '@planer/core'
 import { aiMessages, and, asc, eq, getDb, users } from '@planer/core/db'
 import { z } from 'zod'
 import { budgetLeftPln, MONTHLY_BUDGET_PLN, recordUsage, spentThisMonthPln } from '@/lib/ai/budget'
@@ -7,6 +8,7 @@ import { attachmentBlock } from '@/lib/ai/files'
 import { CHAT_INSTRUCTIONS } from '@/lib/ai/prompts'
 import { attachmentInDoc, loadTripDoc, nowInTrip, tripContextFor } from '@/lib/ai/trip-data'
 import { getCurrentUser } from '@/lib/auth/user'
+import { resolvePlace } from '@/lib/maps-resolve'
 import { getTrip } from '@/lib/trips'
 
 type Param = Anthropic.Beta.BetaMessageParam
@@ -20,6 +22,53 @@ const READ_ATTACHMENT: Anthropic.Beta.BetaTool = {
     type: 'object',
     properties: { id: { type: 'string', description: 'identyfikator pliku bez prefiksu att:' } },
     required: ['id'],
+    additionalProperties: false,
+  },
+  strict: true,
+  eager_input_streaming: true,
+}
+const nullable = (type: 'string' | 'number', description: string) => ({
+  type: [type, 'null'],
+  description,
+})
+const PROPOSE_CARDS: Anthropic.Beta.BetaTool = {
+  name: 'propose_cards',
+  description:
+    'Proponuje nowe karty planu. Pokazują się w czacie z przyciskiem „dodaj”; do planu trafiają dopiero po zatwierdzeniu przez osobę. Najwyżej 8 kart.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      cards: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['stay', 'sight', 'food', 'transport', 'note'] },
+            title: { type: 'string', description: 'krótki tytuł karty' },
+            date: nullable('string', 'YYYY-MM-DD'),
+            time: nullable('string', 'HH:MM, czas lokalny miejsca'),
+            duration_min: nullable('number', 'czas trwania w minutach'),
+            place: nullable('string', 'nazwa miejsca z miastem'),
+            amount: nullable('number', 'koszt'),
+            currency: nullable('string', 'kod ISO, np. EUR'),
+            notes: nullable('string', 'krótka notatka'),
+          },
+          required: [
+            'type',
+            'title',
+            'date',
+            'time',
+            'duration_min',
+            'place',
+            'amount',
+            'currency',
+            'notes',
+          ],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['cards'],
     additionalProperties: false,
   },
   strict: true,
@@ -68,7 +117,7 @@ export async function DELETE(request: Request) {
 }
 
 /**
- * Pytanie do czatu → odpowiedź strumieniem SSE (event: text | status | done | error).
+ * Pytanie do czatu → odpowiedź strumieniem SSE (event: text | status | proposal | done | error).
  * Każda zakończona tura zapisuje się jako dwie wiadomości (pytanie tak, jak poszło do modelu, i tekst
  * odpowiedzi). Historia wraca do modelu bez bloków rozumowania, więc opis wyjazdu w prompcie
  * systemowym może się zmieniać między pytaniami bez unieważniania niczego (tylko cache).
@@ -120,7 +169,7 @@ export async function POST(request: Request) {
                 { type: 'text', text: CHAT_INSTRUCTIONS },
                 { type: 'text', text: context, cache_control: { type: 'ephemeral' } },
               ],
-              tools: [WEB_SEARCH, READ_ATTACHMENT],
+              tools: [WEB_SEARCH, READ_ATTACHMENT, PROPOSE_CARDS],
               messages: [
                 ...(history.map((h) => ({ role: h.role, content: h.content })) as Param[]),
                 ...turn,
@@ -159,6 +208,26 @@ export async function POST(request: Request) {
           )
           const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
           for (const call of calls) {
+            if (call.name === 'propose_cards') {
+              const cards = normalizeProposals(call.input)
+              send('status', { text: 'szukam miejsc na mapie…' })
+              // Kolejno, nie równolegle: Nominatim przyjmuje jedno zapytanie na sekundę.
+              for (const card of cards) {
+                if (!card.place) continue
+                const place = await resolvePlace({ text: card.place }).catch(() => null)
+                card.location = {
+                  name: card.place,
+                  ...(place?.lat !== undefined && { lat: place.lat, lng: place.lng }),
+                }
+              }
+              send('proposal', { cards })
+              results.push({
+                type: 'tool_result',
+                tool_use_id: call.id,
+                content: `Pokazano propozycji: ${cards.length}. Czekają na zatwierdzenie osoby — jeszcze ich nie ma w planie.`,
+              })
+              continue
+            }
             const id = (call.input as { id?: unknown })?.id
             if (
               call.name !== 'read_attachment' ||

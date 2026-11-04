@@ -55,6 +55,12 @@ Klucz API z console.anthropic.com → `/srv/planer/.env`: `ANTHROPIC_API_KEY`. O
 tylko `planer-web`; przeglądarka go nie dostaje. Koszt każdego wywołania zapisuje się w `ai_usage`,
 licznik jest w ustawieniach aplikacji.
 
+### 2c. Dojazdy komunikacją [L] (opcjonalnie)
+
+Klucz Google Routes API → `/srv/planer/.env`: `GOOGLE_ROUTES_API_KEY`. Rachunek rozliczeniowy z adresem w
+EOG, bo tylko warunki EOG dopuszczają użycie obok mapy innej niż Google. Klucz ogranicz do Routes API i
+ustaw dzienny limit w Google Cloud. Bez klucza zostaje link „dojazd ›” do Map Google.
+
 ### 3. Caddy [S]
 
 Blok w `/srv/edge/Caddyfile` na wzór bloku `portfolio.wiergowsky.com` (ten sam sposób nasłuchu —

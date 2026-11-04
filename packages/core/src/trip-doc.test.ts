@@ -6,6 +6,7 @@ import {
   createCard,
   fragmentLines,
   groupCardsByDay,
+  moveCardToDay,
   purgeTrash,
   readCards,
   restoreCard,
@@ -111,5 +112,56 @@ describe('groupCardsByDay', () => {
     expect(g.days[2]?.cards.map((c) => c.type)).toEqual(['stay', 'food', 'sight'])
     expect(g.undated).toHaveLength(1)
     expect(g.trash).toHaveLength(1)
+  })
+})
+
+describe('moveCardToDay', () => {
+  it('zmienia dzień i zachowuje godzinę', () => {
+    const doc = new Y.Doc()
+    const id = createCard(doc, { type: 'sight', date: '2027-07-14', time: '10:00' })
+    moveCardToDay(doc, id, '2027-07-16')
+    expect(readCards(doc)[0]).toMatchObject({ date: '2027-07-16', time: '10:00' })
+  })
+
+  it('nocleg zachowuje liczbę nocy', () => {
+    const doc = new Y.Doc()
+    const id = createCard(doc, { type: 'stay', date: '2027-07-14', endDate: '2027-07-17' })
+    moveCardToDay(doc, id, '2027-07-20')
+    expect(readCards(doc)[0]).toMatchObject({ date: '2027-07-20', endDate: '2027-07-23' })
+  })
+
+  it('bez dnia karta traci obie daty', () => {
+    const doc = new Y.Doc()
+    const id = createCard(doc, { type: 'stay', date: '2027-07-14', endDate: '2027-07-17' })
+    moveCardToDay(doc, id, undefined)
+    expect(readCards(doc)[0]?.date).toBeUndefined()
+    expect(readCards(doc)[0]?.endDate).toBeUndefined()
+  })
+})
+
+describe('miejsce karty na Tablicy', () => {
+  it('nowa karta z datą staje pod kartami swojego dnia', () => {
+    const doc = new Y.Doc()
+    createCard(doc, { type: 'sight', date: '2027-07-14', x: 500, y: 100 })
+    createCard(doc, { type: 'note', x: 2000, y: 2000 })
+    const id = createCard(doc, { type: 'food', date: '2027-07-14' })
+    const card = readCards(doc).find((c) => c.id === id)
+    expect(card?.x).toBe(500)
+    expect(card?.y).toBeGreaterThan(100)
+  })
+
+  it('jawna pozycja wygrywa', () => {
+    const doc = new Y.Doc()
+    createCard(doc, { type: 'sight', date: '2027-07-14', x: 500, y: 100 })
+    const id = createCard(doc, { type: 'food', date: '2027-07-14', x: 7, y: 9 })
+    expect(readCards(doc).find((c) => c.id === id)).toMatchObject({ x: 7, y: 9 })
+  })
+
+  it('zmiana dnia przenosi kartę do kolumny nowego dnia', () => {
+    const doc = new Y.Doc()
+    createCard(doc, { type: 'sight', date: '2027-07-15', x: 800, y: 100 })
+    const id = createCard(doc, { type: 'food', date: '2027-07-14', x: 100, y: 100 })
+    moveCardToDay(doc, id, '2027-07-15')
+    expect(readCards(doc).find((c) => c.id === id)?.x).toBe(800)
   })
 })

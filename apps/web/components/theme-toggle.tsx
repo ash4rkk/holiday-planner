@@ -2,6 +2,7 @@
 
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
@@ -14,7 +15,13 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      onClick={() => {
+        const next = isDark ? 'light' : 'dark'
+        // Przenikanie całego ekranu; bez wsparcia przeglądarki zmiana od razu.
+        if (document.startViewTransition)
+          document.startViewTransition(() => flushSync(() => setTheme(next)))
+        else setTheme(next)
+      }}
       aria-label={label}
       title={label}
       className="island flex size-11 items-center justify-center text-muted transition-colors hover:text-accent"

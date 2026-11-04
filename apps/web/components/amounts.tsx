@@ -8,7 +8,7 @@ import {
   todayLocal,
   totals,
 } from '@planer/core'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { cx } from '@/components/ui'
 import { rateDate, useRates } from '@/lib/use-rates'
 
@@ -25,6 +25,30 @@ export function AmountBadge({ amounts, className }: { amounts: Amount[]; classNa
       {sumByCurrency(amounts).map(formatAmount).join(' + ')}
     </span>
   )
+}
+
+/** Liczba dochodzi do nowej wartości w ~300 ms zamiast przeskakiwać. */
+function useAnimatedNumber(target: number): number {
+  const [shown, setShown] = useState(target)
+  const from = useRef(target)
+  useEffect(() => {
+    const start = from.current
+    if (start === target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      from.current = target
+      setShown(target)
+      return
+    }
+    const began = performance.now()
+    let frame = requestAnimationFrame(function step(now) {
+      const p = Math.min(1, (now - began) / 300)
+      const value = start + (target - start) * (1 - (1 - p) ** 3)
+      from.current = value
+      setShown(p === 1 ? target : Math.round(value * 100) / 100)
+      if (p < 1) frame = requestAnimationFrame(step)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [target])
+  return shown
 }
 
 /** Sumy kart w PLN i walucie głównej wyjazdu, po kursach NBP z dat kart. */
@@ -54,13 +78,15 @@ export function TotalsText({
   className?: string
 }) {
   const t = useTotals(cards, mainCurrency)
+  const pln = useAnimatedNumber(t.pln)
+  const main = useAnimatedNumber(t.main?.value ?? 0)
   const any = cards.some((c) => !c.deletedAt && c.amounts?.length)
   if (!any) return null
   return (
     <span className={cx('text-orange', className)}>
       {[
-        t.pln > 0 && formatAmount({ value: t.pln, currency: 'PLN' }),
-        t.main && t.main.value > 0 && `≈ ${formatAmount(t.main)}`,
+        t.pln > 0 && formatAmount({ value: pln, currency: 'PLN' }),
+        t.main && t.main.value > 0 && `≈ ${formatAmount({ ...t.main, value: main })}`,
         ...t.unconverted.map((a) => `+ ${formatAmount(a)} (bez kursu)`),
       ]
         .filter(Boolean)

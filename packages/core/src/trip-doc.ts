@@ -9,13 +9,26 @@ import {
   type EditableCardFields,
   TRASH_DAYS,
 } from './cards'
-import { addDays, dateRange } from './dates'
+import { addDays, dateRange, daysBetween } from './dates'
 
 // Dokument Yjs wyjazdu (docs/plan.md, „Dokument Yjs wyjazdu”):
 //   cards:  Y.Map<cardId, Y.Map>  — pola CardFields + `content: Y.XmlFragment`
 //   frames, edges — etap 2
 
 export type CardMap = Y.Map<unknown>
+
+const DAY_STACK_GAP = 56
+
+/** Miejsce pod kartami danego dnia na Tablicy — inaczej obrys dnia rozjechałby się po całej planszy. */
+function daySlot(doc: Y.Doc, date: string, except?: string): { x: number; y: number } | undefined {
+  let slot: { x: number; y: number } | undefined
+  for (const [id, card] of cardsOf(doc).entries()) {
+    if (id === except || card.get('date') !== date || card.get('deletedAt')) continue
+    const y = (card.get('y') as number) + ((card.get('h') as number) ?? CARD_SIZE.h) + DAY_STACK_GAP
+    if (!slot || y > slot.y) slot = { x: card.get('x') as number, y }
+  }
+  return slot
+}
 
 export function cardsOf(doc: Y.Doc): Y.Map<CardMap> {
   return doc.getMap<CardMap>('cards')
@@ -38,6 +51,7 @@ export function createCard(
   const fields: CardFields = {
     x: (n % 4) * (CARD_SIZE.w + 40),
     y: Math.floor(n / 4) * (CARD_SIZE.h + 40),
+    ...(init.date && daySlot(doc, init.date)),
     ...CARD_SIZE,
     attachmentIds: [],
     pinned: false,
@@ -65,6 +79,16 @@ export function createCard(
   return id
 }
 
+/** Przenosi kartę na inny dzień; nocleg zachowuje długość. `undefined` = karta bez daty. */
+export function moveCardToDay(doc: Y.Doc, id: string, date: string | undefined) {
+  const card = cardsOf(doc).get(id)
+  if (!card) return
+  const from = card.get('date') as string | undefined
+  const end = card.get('endDate') as string | undefined
+  const endDate = date && from && end ? addDays(date, daysBetween(from, end)) : undefined
+  updateCard(doc, id, { date, endDate })
+}
+
 /** Zmienia pola karty; `undefined` usuwa pole (np. wyczyszczona data). */
 export function updateCard(
   doc: Y.Doc,
@@ -75,9 +99,14 @@ export function updateCard(
   const card = cardsOf(doc).get(id)
   if (!card) return
   doc.transact(() => {
+    const slot = patch.date && patch.date !== card.get('date') && daySlot(doc, patch.date, id)
     for (const [key, value] of Object.entries(patch)) {
       if (value === undefined || value === '') card.delete(key)
       else card.set(key, value)
+    }
+    if (slot) {
+      card.set('x', slot.x)
+      card.set('y', slot.y)
     }
     card.set('updatedAt', now.toISOString())
   })

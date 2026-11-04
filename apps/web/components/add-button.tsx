@@ -1,18 +1,19 @@
 'use client'
 
 import { Camera, ChevronLeft, ClipboardPaste, LayoutTemplate, Plus, SquarePlus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { type CSSProperties, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { NAV_SLOT } from '@/components/nav/bottom-nav'
 import { cx } from '@/components/ui'
 import type { Template } from '@/lib/card-templates'
 
-/** Duży „+”: nowa karta, z szablonu, wklejony link, zdjęcie albo PDF do importu AI. */
+/** „+” w menu dolnym: nowa karta, z szablonu, wklejony link, zdjęcie albo PDF do importu AI. */
 export function AddButton({
   onNew,
   onPaste,
   onTemplate,
   templates = [],
   onImport,
-  hidden,
 }: {
   onNew: () => void
   onPaste: () => Promise<void>
@@ -20,13 +21,14 @@ export function AddButton({
   templates?: Template[]
   /** Zdjęcie albo PDF do importu AI (szkic karty). */
   onImport?: (files: File[]) => void
-  hidden?: boolean
 }) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
   const root = useRef<HTMLDivElement>(null)
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  useEffect(() => setSlot(document.getElementById(NAV_SLOT)), [])
 
   useEffect(() => {
     if (!open) {
@@ -73,20 +75,19 @@ export function AddButton({
           : []),
       ]
 
-  return (
-    <div
-      ref={root}
-      className={cx(
-        'fixed right-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 flex flex-col items-end gap-1',
-        'transition-transform duration-200 motion-reduce:transition-none',
-        hidden && !open && 'translate-y-[calc(100%+90px)]',
-      )}
-    >
+  if (!slot) return null
+  return createPortal(
+    <div ref={root} className="relative">
       {open && (
-        <div role="menu" className="island flex max-h-[60vh] min-w-44 flex-col overflow-y-auto p-1">
-          {items.map(({ label, icon: Icon, run, keepOpen }) => (
+        <div
+          key={picking ? 'templates' : 'main'}
+          role="menu"
+          className="island pop-menu absolute right-0 bottom-[calc(100%+12px)] flex max-h-[60vh] min-w-48 flex-col overflow-y-auto p-1"
+        >
+          {items.map(({ label, icon: Icon, run, keepOpen }, i) => (
             <button
               key={label}
+              style={{ '--i': i } as CSSProperties}
               type="button"
               role="menuitem"
               disabled={busy}
@@ -127,13 +128,14 @@ export function AddButton({
         onClick={() => setOpen((v) => !v)}
         aria-label="dodaj"
         aria-expanded={open}
-        className="flex size-14 items-center justify-center rounded-island bg-accent text-on-accent transition-transform hover:bg-accent-hover"
+        className="flex size-11 items-center justify-center rounded-[9px] bg-accent text-on-accent transition-colors hover:bg-accent-hover"
       >
         <Plus
-          className={cx('size-6 transition-transform', open && 'rotate-45')}
+          className={cx('size-6 transition-transform duration-200', open && 'rotate-45')}
           aria-hidden="true"
         />
       </button>
-    </div>
+    </div>,
+    slot,
   )
 }

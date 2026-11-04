@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { UndoToast } from '@/components/undo-toast'
 import { getCurrentUser } from '@/lib/auth/user'
 import { countInbox } from '@/lib/inbox'
 import { listTemplates } from '@/lib/templates'
@@ -17,10 +18,21 @@ export default async function TripLayout({ params, children }: LayoutProps<'/tri
   const { id, title, startDate, endDate, currencies, archived } = trip
   return (
     <TripProvider
-      trip={{ id, title, startDate, endDate, currencies, archived, inboxCount, templates }}
+      trip={{
+        id,
+        title,
+        startDate,
+        endDate,
+        currencies,
+        archived,
+        inboxCount,
+        templates,
+        routes: Boolean(process.env.GOOGLE_ROUTES_API_KEY),
+      }}
       user={{ name: user.name, color: user.color }}
     >
       {children}
+      <UndoToast />
     </TripProvider>
   )
 }
