@@ -233,3 +233,25 @@ body {
 .public-content li.done { text-decoration: line-through; color: var(--dim); }
 .public-content a { color: var(--accent); text-decoration: underline; }
 .public-content blockquote { border-left: 2px solid var(--line); padding-left: 8px; }
+
+/* Wybór profilu: zdjęcie zbliża się przed wejściem do wyjazdów. */
+@keyframes profile-zoom {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.profile-zoom {
+  animation: profile-zoom 300ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-zoom {
+    animation: none;
+  }
+}

@@ -11,7 +11,7 @@ export default async function SettingsPage() {
   const spent = await spentThisMonthPln().catch(() => 0)
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
-      <TopBar title="ustawienia" back={{ href: '/', label: 'wróć do pulpitu' }} />
+      <TopBar title="ustawienia" back={{ href: '/trips', label: 'wróć do wyjazdów' }} />
       <PushSettings publicKey={process.env.VAPID_PUBLIC_KEY} />
       <section className="island flex items-start gap-3 p-4 text-sm">
         <Sparkles className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />

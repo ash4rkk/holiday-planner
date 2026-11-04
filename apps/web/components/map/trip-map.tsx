@@ -21,7 +21,7 @@ import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
-import { TopBar } from '@/components/top-bar'
+import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
 import { useCardSheet } from '@/lib/use-card-sheet'
@@ -241,6 +241,7 @@ export function TripMap() {
           <TopBar
             theme={false}
             title={trip.title}
+            back={TRIPS_BACK}
             actions={
               <>
                 <TripStatus />

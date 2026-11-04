@@ -73,7 +73,7 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
 
   const cancel = async () => {
     if (share && share.id !== 'query') await shareStore.delete('pending', share.id)
-    router.replace('/')
+    router.replace('/trips')
   }
 
   if (share === undefined) return null

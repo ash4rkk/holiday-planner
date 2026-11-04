@@ -13,7 +13,7 @@ import {
   staysOver,
   todayLocal,
 } from '@planer/core'
-import { LocateFixed, Navigation } from 'lucide-react'
+import { LocateFixed, Navigation, Settings2 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import type { Route } from '@/app/api/route/route'
@@ -21,6 +21,8 @@ import { TotalsText } from '@/components/amounts'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
 import { TYPE_STYLE } from '@/components/card/type-style'
+import { TopBar, TRIPS_BACK } from '@/components/top-bar'
+import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
 import { useWeather, weatherIcon, weatherPlace } from '@/components/weather'
 import { useCardSheet } from '@/lib/use-card-sheet'
@@ -31,7 +33,14 @@ import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 const nowHHMM = (d = new Date()) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
-/** Pulpit w trakcie wyjazdu: oś dnia, następne miejsce z dojazdem, pogoda, wydatki dzisiaj. */
+function daysLabel(n: number) {
+  return n === 1 ? 'jutro' : `za ${n} dni`
+}
+
+/**
+ * „Dziś” wyjazdu. W trakcie: oś dnia, następne miejsce z dojazdem, pogoda, wydatki dzisiaj.
+ * Przed wyjazdem: odliczanie i plan pierwszego dnia. Po wyjeździe: wydatki całego wyjazdu.
+ */
 export function TodayDashboard({ userName }: { userName: string }) {
   const { trip } = useTrip()
   const cards = useCards()
@@ -44,29 +53,61 @@ export function TodayDashboard({ userName }: { userName: string }) {
   }, [])
 
   const live = useMemo(() => cards.filter((c) => !c.deletedAt), [cards])
+  const { startDate, endDate } = trip
+  const before = Boolean(startDate && today < startDate)
+  const after = Boolean(endDate && today > endDate)
+  const during = Boolean(startDate) && !before && !after
+  // Plan: dziś, a przed wyjazdem pierwszy dzień.
+  const planDate = before && startDate ? startDate : today
   const todays = useMemo(
     () =>
       live
-        .filter((c) => c.date === today)
+        .filter((c) => c.date === planDate)
         .sort(
           (a, b) =>
             (a.time ?? '').localeCompare(b.time ?? '') || a.createdAt.localeCompare(b.createdAt),
         ),
-    [live, today],
+    [live, planDate],
   )
-  const stay = live.filter(hasCoords).find((c) => staysOver(c, today))
-  const next = nextPlace(live, today, now)
-  const dayIndex = trip.startDate ? daysBetween(trip.startDate, today) + 1 : undefined
+  const stay = during ? live.filter(hasCoords).find((c) => staysOver(c, today)) : undefined
+  const next = during ? nextPlace(live, today, now) : undefined
   const main = trip.currencies[0] ?? 'PLN'
+  const place = weatherPlace(cards, planDate)
+  const status = during
+    ? `dzień ${daysBetween(startDate as string, today) + 1}`
+    : before
+      ? daysLabel(daysBetween(today, startDate as string))
+      : after
+        ? 'wyjazd zakończony'
+        : 'bez dat'
 
   return (
     <>
+      <TopBar
+        theme={false}
+        title={trip.title}
+        back={TRIPS_BACK}
+        actions={
+          <>
+            <TripStatus />
+            <Link
+              href={`/trips/${trip.id}/settings`}
+              aria-label="ustawienia wyjazdu"
+              className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
+            >
+              <Settings2 className="size-5" aria-hidden="true" />
+            </Link>
+          </>
+        }
+      />
+      <SessionBanner />
+
       <section className="island border-t-2 border-t-accent p-4">
         <p className="text-xl font-bold">cześć, {userName}</p>
         <p className="mt-1 text-sm text-muted">
-          {dayIndex && `dzień ${dayIndex} · `}
+          {status} ·{' '}
           <Link href={`/trips/${trip.id}/list`} className="text-accent">
-            {trip.title} ›
+            lista ›
           </Link>
         </p>
         {stay && (
@@ -77,11 +118,17 @@ export function TodayDashboard({ userName }: { userName: string }) {
       </section>
 
       <div className="grid grid-cols-2 gap-1">
-        <WeatherTile at={weatherPlace(cards, today)} today={today} />
+        {(during || place) && !after && <WeatherTile at={place} today={planDate} />}
         <section className="island flex flex-col justify-center p-3">
-          <p className="text-xs text-subtle italic">wydatki dzisiaj</p>
-          {todays.some((c) => c.amounts?.length) ? (
-            <TotalsText cards={todays} mainCurrency={main} className="text-sm font-bold" />
+          <p className="text-xs text-subtle italic">
+            {during ? 'wydatki dzisiaj' : 'wydatki wyjazdu'}
+          </p>
+          {(during ? todays : live).some((c) => c.amounts?.length) ? (
+            <TotalsText
+              cards={during ? todays : live}
+              mainCurrency={main}
+              className="text-sm font-bold"
+            />
           ) : (
             <p className="text-sm text-dim">{formatAmount({ value: 0, currency: 'PLN' })}</p>
           )}
@@ -90,15 +137,18 @@ export function TodayDashboard({ userName }: { userName: string }) {
 
       {next && <NextPlace card={next} from={stay} onOpen={() => sheet.open(next.id)} />}
 
-      <SectionLabel>plan dnia</SectionLabel>
-      {todays.length === 0 ? (
-        <p className="island p-4 text-sm text-muted">● na dziś nic nie zaplanowano</p>
+      {!after && <SectionLabel>{before ? 'pierwszy dzień' : 'plan dnia'}</SectionLabel>}
+      {after ? null : todays.length === 0 ? (
+        <p className="island p-4 text-sm text-muted">
+          ● {before ? 'na pierwszy dzień' : 'na dziś'} nic nie zaplanowano
+        </p>
       ) : (
         <ol className="island flex flex-col p-2" aria-label="plan dnia">
           {todays.map((card, i) => {
             const prev = todays[i - 1]
             // Kreska „teraz” między ostatnią minioną a pierwszą przyszłą pozycją z godziną.
-            const nowLine = card.time && card.time > now && (!prev?.time || prev.time <= now)
+            const nowLine =
+              during && card.time && card.time > now && (!prev?.time || prev.time <= now)
             return (
               <li key={card.id}>
                 {nowLine && (
@@ -115,7 +165,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
                   onClick={() => sheet.open(card.id)}
                   className={cx(
                     'flex w-full items-start gap-3 rounded-[9px] px-2 py-2 text-left hover:bg-raised',
-                    card.time && card.time < now && 'opacity-60',
+                    during && card.time && card.time < now && 'opacity-60',
                   )}
                 >
                   <span className="w-12 shrink-0 pt-0.5 text-right text-xs font-bold text-subtle">

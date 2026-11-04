@@ -30,6 +30,9 @@ export function rateDate(date: string | undefined, today = todayLocal()): string
   return date && date <= today ? date : today
 }
 
+// Kurs pobiera pierwszy komponent, który go potrzebuje; po odpowiedzi przeliczają się wszystkie sumy.
+const listeners = new Set<() => void>()
+
 export function useRates(pairs: { currency: string; date: string }[]): RateLookup {
   const [version, setVersion] = useState(0)
   const keys = useMemo(
@@ -43,23 +46,27 @@ export function useRates(pairs: { currency: string; date: string }[]): RateLooku
 
   useEffect(() => {
     loadStored()
+    const refresh = () => setVersion((v) => v + 1)
+    listeners.add(refresh)
     const missing = keyString.split(',').filter((k) => k && !memory.has(k) && !requested.has(k))
-    if (!missing.length) {
-      setVersion((v) => v + 1)
-      return
+    if (!missing.length) refresh()
+    else {
+      for (const k of missing) requested.add(k)
+      const q = missing.map((k) => k.replace('|', ':')).join(',')
+      void fetch(`/api/fx?q=${q}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((body: { rates: Record<string, number> } | null) => {
+          for (const [k, v] of Object.entries(body?.rates ?? {})) memory.set(k, v)
+          store()
+          for (const notify of listeners) notify()
+        })
+        .catch(() => {
+          for (const k of missing) requested.delete(k) // spróbujemy przy następnym renderze z siecią
+        })
     }
-    for (const k of missing) requested.add(k)
-    const q = missing.map((k) => k.replace('|', ':')).join(',')
-    void fetch(`/api/fx?q=${q}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body: { rates: Record<string, number> } | null) => {
-        for (const [k, v] of Object.entries(body?.rates ?? {})) memory.set(k, v)
-        store()
-        setVersion((v) => v + 1)
-      })
-      .catch(() => {
-        for (const k of missing) requested.delete(k) // spróbujemy przy następnym renderze z siecią
-      })
+    return () => {
+      listeners.delete(refresh)
+    }
   }, [keyString])
 
   // `version` rośnie po każdym dociągnięciu kursów — nowa funkcja = ponowne przeliczenie sum.

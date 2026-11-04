@@ -14,6 +14,7 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Etap 7 (AI) — zrobiony na gałęzi `etap-7`: czat (`/api/ai/chat`, SSE; kontekst wyjazdu z `trip_docs` przez `tripContext` w core; wyszukiwanie w sieci; narzędzie `read_attachment`; historia `ai_messages`), import zdjęć/PDF-ów do szkiców kart (`/api/ai/import`, ustrukturyzowane wyjście; kolejka offline w IndexedDB `imports`; okienko Zatwierdź/Popraw/Odrzuć), koszt w `ai_usage` i limit miesięczny (`lib/ai/budget.ts`).
 - Etap 8 (eksport i kopie) — zrobiony na gałęzi `etap-8`: konwersja treści kart Yjs → Markdown/HTML (`packages/core/src/rich-text.ts`), eksport `.md`, widok do druku i PDF z Chromium (`/api/export/[tripId]`, `lib/export/`), link dla rodziny `/p/<token>` (`share_links`, `app/p/[token]`), nocna kopia bazy i plików w workerze (`apps/worker/src/backup.ts`).
 - Audyt po etapie 8: `docs/audyt-2026-11.md`; poprawione punkty 1, 2, 4, 5, 6, 7 i ponowienie `tar`.
+- Po wdrożeniu: wybór profilu na `/` (raz na sesję, `components/profile/`), „dziś” wyjazdu `/trips/<id>/today` (Pulpit zastąpiony), wyjście „‹” do `/trips`, pogoda w nagłówku dnia i w obrysie dnia na Tablicy.
 - Wszystkie etapy z planu są zrobione; dalej: wdrożenie, testy na telefonach, poprawki.
 
 ## Stos
@@ -76,6 +77,7 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - Moduły `@planer/core/fx`, `/push`, `/reminders-db` używają bazy — tylko serwer (API, sync, worker).
 - W obrazach sync i worker `CMD` to Node wprost, nie `pnpm`: pnpm nie przekazuje SIGTERM, więc `server.destroy()` nie zapisałby dokumentów. `init: true` tego nie naprawia.
 - Push tylko na hosty z `isPushEndpoint`, sync tylko z `Origin` aplikacji (`isAppOrigin`, `APP_ORIGIN`) — to ochrona przed SSRF i obcymi stronami, nie poluzowuj.
+- Zdjęcia profili tylko na serwerze (`UPLOAD_DIR/profiles/<imię>.jpg`, `/api/profile-photo/<imię>`), nigdy w repo — jest publiczne. E-maile profili też tylko w `.env`.
 - Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.
 - `pnpm dev` dla sync/worker uruchamia `tsx watch` jako osobny proces `node` — zabicie powłoki go nie zatrzymuje; przy testach sprawdzaj `ps`, bo stary worker potrafi przejąć przypomnienia.
 - Wartości z `;` w `.env` (np. `USER_NAMES`) w cudzysłowie, inaczej `source .env` w powłoce je ucina.

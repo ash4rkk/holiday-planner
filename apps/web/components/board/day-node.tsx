@@ -2,6 +2,8 @@
 
 import type { Node, NodeProps } from '@xyflow/react'
 import { memo, useMemo } from 'react'
+import { DayWeather } from '@/components/weather'
+import { useCards } from '@/lib/yjs/trip-doc'
 import { seedOf, sketchRoundRect } from './sketch'
 
 export type DayNodeType = Node<{ date: string; label: string; sub?: string }, 'day'>
@@ -13,6 +15,7 @@ export type DayNodeType = Node<{ date: string; label: string; sub?: string }, 'd
 export const DayNode = memo(function DayNode({ data, width, height }: NodeProps<DayNodeType>) {
   const w = width ?? 0
   const h = height ?? 0
+  const cards = useCards()
   const paths = useMemo(() => sketchRoundRect(w, h, seedOf(data.date)), [w, h, data.date])
 
   return (
@@ -47,6 +50,11 @@ export const DayNode = memo(function DayNode({ data, width, height }: NodeProps<
         <span className="font-bold text-sm text-teal">{data.label}</span>
         {data.sub && <span className="text-xs text-subtle italic">{data.sub}</span>}
       </div>
+      <DayWeather
+        date={data.date}
+        cards={cards}
+        className="pointer-events-none absolute top-0 right-2 -translate-y-1/2 rounded-small border border-line bg-panel px-2 py-1.5"
+      />
     </>
   )
 })

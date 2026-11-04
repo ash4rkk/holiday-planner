@@ -7,7 +7,7 @@ export type Weather = {
 
 const cache = memoCache<Weather>(30 * 60_000)
 
-/** Pogoda z Open-Meteo (bez klucza): teraz i 16 dni naprzód, dni w strefie miejsca. */
+/** Pogoda z Open-Meteo (bez klucza): teraz, 7 dni wstecz i 16 naprzód, dni w strefie miejsca. */
 export async function GET(request: Request) {
   const at = parseLatLng(new URL(request.url).searchParams.get('at'))
   if (!at) return Response.json({ error: 'brak współrzędnych' }, { status: 400 })
@@ -22,6 +22,7 @@ export async function GET(request: Request) {
         current: 'temperature_2m,weather_code',
         daily: 'weather_code,temperature_2m_max,temperature_2m_min',
         timezone: 'auto',
+        past_days: '7',
         forecast_days: '16',
       }).toString()
       const res = await fetch(url, { signal: AbortSignal.timeout(8000) })

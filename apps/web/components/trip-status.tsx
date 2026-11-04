@@ -1,5 +1,6 @@
 'use client'
 
+import { ProfilePhoto } from '@/components/profile/profile-photo'
 import { cx } from '@/components/ui'
 import { type PresenceUser, type SyncStatus, usePresence, useSyncStatus } from '@/lib/yjs/trip-doc'
 
@@ -22,10 +23,10 @@ export function TripStatus() {
         <span
           key={clientId}
           title={user.name}
-          className="flex size-7 items-center justify-center rounded-full border-2 text-xs font-bold"
+          className="size-7 overflow-hidden rounded-full border-2 text-xs"
           style={{ borderColor: user.color, color: user.color }}
         >
-          {user.name.charAt(0).toUpperCase()}
+          <ProfilePhoto name={user.name} className="size-full" />
         </span>
       ))}
       <span className={cx('size-2.5 rounded-full', dot)} aria-hidden="true" />

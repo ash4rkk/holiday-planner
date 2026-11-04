@@ -15,7 +15,9 @@ export const getCurrentUser = cache(async (): Promise<User> => {
     .insert(users)
     .values({
       email,
-      name: parseUserNames(process.env.USER_NAMES).get(email) ?? defaultName(email),
+      name:
+        parseUserNames(process.env.USER_NAMES).get(email) ??
+        (process.env.DEFAULT_PROFILE || defaultName(email)),
       color: cursorColor(email, parseEmailList(process.env.ALLOWED_EMAILS)),
     })
     .onConflictDoNothing({ target: users.email })

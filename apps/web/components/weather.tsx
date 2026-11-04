@@ -51,7 +51,7 @@ export function weatherPlace(cards: CardSnapshot[], date: string): LatLng | unde
   return pick ? { lat: pick.location.lat, lng: pick.location.lng } : undefined
 }
 
-/** Ikona i temperatura przy nagłówku dnia w Liście (Open-Meteo: do 16 dni naprzód). */
+/** Ikona i temperatura dnia: Lista i obrys dnia na Tablicy (Open-Meteo: 7 dni wstecz, 16 naprzód). */
 export function DayWeather({
   date,
   cards,
@@ -62,7 +62,7 @@ export function DayWeather({
   className?: string
 }) {
   const today = todayLocal()
-  const inRange = date >= today && date <= addDays(today, 15)
+  const inRange = date >= addDays(today, -7) && date <= addDays(today, 15)
   const weather = useWeather(inRange ? weatherPlace(cards, date) : undefined)
   const day = weather?.daily.find((d) => d.date === date)
   if (!day) return null

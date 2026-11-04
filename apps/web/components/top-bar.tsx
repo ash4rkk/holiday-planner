@@ -2,6 +2,9 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { ThemeToggle } from './theme-toggle'
 
+/** Wyjście z widoków wyjazdu do wyboru wyjazdów. */
+export const TRIPS_BACK = { href: '/trips', label: 'wszystkie wyjazdy' }
+
 /** Nagłówek ekranu: wysepka z tytułem, opcjonalny powrót i akcje, przełącznik motywu. */
 export function TopBar({
   title,

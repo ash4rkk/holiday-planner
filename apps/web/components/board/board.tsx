@@ -42,7 +42,7 @@ import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { CardSheet } from '@/components/card/card-sheet'
 import { InboxButton } from '@/components/inbox/inbox-button'
-import { TopBar } from '@/components/top-bar'
+import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
 import { enqueueImport, runImports } from '@/lib/ai-import'
@@ -464,6 +464,7 @@ function BoardCanvas() {
           <TopBar
             theme={false}
             title={trip.title}
+            back={TRIPS_BACK}
             actions={
               <>
                 <TripStatus />

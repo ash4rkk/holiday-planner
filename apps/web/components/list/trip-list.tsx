@@ -9,7 +9,6 @@ import {
   type CardStatus,
   type CardType,
   createCard,
-  formatDateSpan,
   formatDayHeader,
   formatShortDate,
   groupCardsByDay,
@@ -28,7 +27,7 @@ import { CardTile } from '@/components/card/card-tile'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { useNavHidden } from '@/components/nav/nav-context'
-import { TopBar } from '@/components/top-bar'
+import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
 import { DayWeather } from '@/components/weather'
@@ -88,7 +87,7 @@ export function TripList() {
         <TopBar
           theme={false}
           title={trip.title}
-          subtitle={formatDateSpan(trip.startDate, trip.endDate)}
+          back={TRIPS_BACK}
           actions={
             <>
               <TripStatus />
@@ -180,17 +179,16 @@ export function TripList() {
               aria-label={formatDayHeader(day.date)}
             >
               <div className="flex items-center gap-2 pt-3 pl-3">
-                <h2 className={cx('text-sm font-bold', isToday && 'text-accent')}>
+                <DayWeather date={day.date} cards={cards} className="shrink-0" />
+                <h2 className={cx('truncate text-sm font-bold', isToday && 'text-accent')}>
                   {formatDayHeader(day.date)}
                 </h2>
-                <span className="text-xs text-subtle italic">
+                <span className="shrink-0 text-xs text-subtle italic">
                   {[isToday && 'dziś', day.dayIndex && `dzień ${day.dayIndex}`]
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
-                <DayWeather date={day.date} cards={cards} />
                 <span className="flex-1" />
-                <TotalsText cards={day.cards} mainCurrency={main} className="text-xs" />
                 <button
                   type="button"
                   onClick={() => add(day.date)}
@@ -200,6 +198,7 @@ export function TripList() {
                   <Plus className="size-4" aria-hidden="true" />
                 </button>
               </div>
+              <TotalsText cards={day.cards} mainCurrency={main} className="-mt-2 px-3 text-xs" />
               {day.cards.length ? (
                 day.cards.map(tile)
               ) : (

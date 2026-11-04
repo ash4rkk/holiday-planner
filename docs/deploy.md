@@ -32,7 +32,8 @@ istnieje. Nocny `/srv/scripts/backup.sh` (`pg_dumpall`) obejmie bazę `planer` b
 
 Potem uzupełnij w `/srv/planer/.env`: `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` (krok 4; oba widać też w
 adresie przekierowania na logowanie: host i parametr `kid`). `ALLOWED_EMAILS` i `USER_NAMES` są
-opcjonalne. `AUTH_DEV_EMAIL` na serwerze nie ustawiaj (i tak działa tylko w dev).
+opcjonalne. `DEFAULT_PROFILE` to imię każdej innej osoby wpuszczonej przez Access, więc wystarczy
+`USER_NAMES="<twój e-mail>=Arek"` i `DEFAULT_PROFILE=Wera`. `AUTH_DEV_EMAIL` na serwerze nie ustawiaj (i tak działa tylko w dev).
 
 Hasło `planer_readonly` przenieś do lokalnego `~/.pgpass` (wpis dla `localhost:15432`, jak
 `portfolio_readonly`) i usuń plik z serwera.
@@ -130,6 +131,10 @@ Każda nowa migracja = też lokalna baza: `pnpm db:migrate` (inaczej lokalny `ne
 
 Bilety, rezerwacje i paragony leżą na wolumenie `planer_uploads` (`/data/uploads` w `planer-web`),
 po jednym katalogu na wyjazd. Limit pliku: 20 MB (aplikacja), Cloudflare przepuszcza do 100 MB.
+
+Zdjęcia profili też leżą na tym wolumenie, poza gitem: `/data/uploads/profiles/<imię>.jpg`. Bez pliku
+aplikacja pokazuje pierwszą literę imienia. Imię zapisuje się przy pierwszym logowaniu, późniejsza zmiana
+`USER_NAMES` nie zmienia go w tabeli `users`.
 
 ## Kopie zapasowe
 

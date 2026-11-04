@@ -5,7 +5,7 @@ import Link from 'next/link'
 export function TripRow({ trip, note }: { trip: Trip; note?: string }) {
   return (
     <Link
-      href={`/trips/${trip.id}/list`}
+      href={`/trips/${trip.id}/today`}
       className="island flex min-h-14 items-center gap-3 px-4 py-3 transition-colors hover:border-accent"
     >
       <div className="min-w-0 flex-1">

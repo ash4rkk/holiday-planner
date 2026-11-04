@@ -1,20 +1,36 @@
 import { daysBetween, todayLocal } from '@planer/core'
 import Link from 'next/link'
+import { ProfilePhoto } from '@/components/profile/profile-photo'
 import { TopBar } from '@/components/top-bar'
 import { TripRow } from '@/components/trips/trip-row'
 import { buttonClass, SectionLabel } from '@/components/ui'
+import { getCurrentUser } from '@/lib/auth/user'
 import { listTrips } from '@/lib/trips'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TripsPage() {
-  const { current, upcoming, past, archived } = await listTrips()
+  const [user, { current, upcoming, past, archived }] = await Promise.all([
+    getCurrentUser(),
+    listTrips(),
+  ])
   const today = todayLocal()
   const empty = !current.length && !upcoming.length && !past.length && !archived.length
 
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
-      <TopBar title="wyjazdy" back={{ href: '/', label: 'wróć do pulpitu' }} />
+      <TopBar
+        title="wyjazdy"
+        actions={
+          <Link
+            href="/settings"
+            aria-label="ustawienia"
+            className="island flex size-11 shrink-0 items-center justify-center overflow-hidden text-muted hover:border-accent"
+          >
+            <ProfilePhoto name={user.name} className="size-full text-sm" />
+          </Link>
+        }
+      />
 
       <Link href="/trips/new" className={buttonClass('primary', 'mt-1')}>
         + nowy wyjazd
