@@ -108,6 +108,19 @@ export function shiftClock(time: string, delta: number): string {
   return clock((minutes(time) + delta + 1440) % 1440)
 }
 
+/** Kiedy będziecie na miejscu, ruszając teraz: z odjazdu z rozkładu albo od razu. */
+export function arrivalClock(plan: { minutes: number; departAt?: string }, now: string): string {
+  return shiftClock(plan.departAt ?? now, plan.minutes)
+}
+
+/** Spóźnienie wobec godziny karty; ujemne = zapas. Różnice ponad pół doby to przejście przez północ. */
+export function lateBy(arrival: string, cardTime: string): number {
+  const diff = minutes(arrival) - minutes(cardTime)
+  if (diff > 720) return diff - 1440
+  if (diff < -720) return diff + 1440
+  return diff
+}
+
 /** Ile minut brakuje, żeby zdążyć: wyjście z zapasem wobec końca poprzedniej karty. */
 export function legShortfall(
   leg: DayGap,

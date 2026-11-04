@@ -302,7 +302,13 @@ function DayCards({
   const { legs, plans, limited, refresh } = useDayPlans(date)
   const row = (leg: DayGap | undefined) =>
     leg && (
-      <LegRow leg={leg} plan={plans[leg.id]} bufferMin={trip.travelBufferMin} onRefresh={refresh} />
+      <LegRow
+        leg={leg}
+        date={date}
+        plan={plans[leg.id]}
+        bufferMin={trip.travelBufferMin}
+        onRefresh={refresh}
+      />
     )
 
   return (

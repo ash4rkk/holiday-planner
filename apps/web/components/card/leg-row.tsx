@@ -11,7 +11,9 @@ import {
 } from '@planer/core'
 import { ChevronDown, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
+import type { PlanResponse } from '@/app/api/route/plan/route'
 import { cx } from '@/components/ui'
+import { useTrip } from '@/lib/yjs/trip-doc'
 import { formatDuration } from './type-style'
 
 const LABELS: Record<DayGap['kind'], string | undefined> = {
@@ -39,16 +41,51 @@ function checkedText(iso: string): string {
 /** Odcinek między kartami: czy zdążycie, kiedy wyjść, po rozwinięciu linie i przesiadki. */
 export function LegRow({
   leg,
-  plan,
+  date,
+  plan: base,
   bufferMin,
   onRefresh,
 }: {
   leg: DayGap
+  date: string
   plan?: LegPlan | null
   bufferMin: number
   onRefresh?: () => void
 }) {
+  const { trip } = useTrip()
   const [open, setOpen] = useState(false)
+  // Wybrane inne połączenie; zostaje do wyjścia z ekranu, plan dnia się nie zmienia.
+  const [other, setOther] = useState<LegPlan | null>(null)
+  const [searching, setSearching] = useState(false)
+  const plan = other ?? base
+
+  const shift = async (direction: 'earlier' | 'later') => {
+    const first = plan?.steps.find((s) => s.kind === 'transit')
+    if (!leg.route || !first?.departs) return
+    setSearching(true)
+    const res = await fetch('/api/route/plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tripId: trip.id,
+        date,
+        ride: true,
+        legs: [
+          {
+            id: leg.id,
+            ...leg.route,
+            ...(direction === 'later'
+              ? { leaveAt: shiftClock(first.departs, 1) }
+              : { arriveBy: shiftClock(first.departs, first.minutes - 1) }),
+          },
+        ],
+      }),
+    }).catch(() => null)
+    const body = res?.ok ? ((await res.json()) as PlanResponse) : null
+    setSearching(false)
+    const found = body?.plans[leg.id]
+    if (found) setOther(found)
+  }
   const overlap = leg.freeMin !== undefined && leg.freeMin < 0
   if (!overlap && !leg.route) return null
 
@@ -75,11 +112,12 @@ export function LegRow({
             disabled={!details}
             className={cx(
               'flex min-h-7 items-center gap-1 text-left',
-              late ? 'text-red' : 'text-green',
+              late || plan.noService ? 'text-red' : 'text-green',
             )}
           >
             <span>
-              {late ? '●' : '•'} {label && `${label}: `}
+              {late || plan.noService ? '●' : '•'} {label && `${label}: `}
+              {plan.noService && 'już nic nie jedzie, '}
               {plan.minutes} min {TRAVEL_MODE_LABELS[plan.mode]}
               {leaveBy && !overlap && ` · wyjdź do ${leaveBy}`}
               {late && ` · brakuje ${short} min`}
@@ -108,6 +146,35 @@ export function LegRow({
           {plan.steps.map((s, i) => (
             <span key={i}>{stepText(s)}</span>
           ))}
+          {plan.mode === 'transit' && (
+            <span className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={searching}
+                onClick={() => void shift('earlier')}
+                className="min-h-9 text-accent disabled:opacity-50"
+              >
+                ‹ wcześniejsze
+              </button>
+              <button
+                type="button"
+                disabled={searching}
+                onClick={() => void shift('later')}
+                className="min-h-9 text-accent disabled:opacity-50"
+              >
+                późniejsze ›
+              </button>
+              {other && (
+                <button
+                  type="button"
+                  onClick={() => setOther(null)}
+                  className="min-h-9 text-subtle italic"
+                >
+                  wróć do planu
+                </button>
+              )}
+            </span>
+          )}
           <span className="flex items-center gap-2 text-dim italic">
             sprawdzono {checkedText(plan.checkedAt)}
             {plan.mode === 'transit' && (

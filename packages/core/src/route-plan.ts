@@ -20,6 +20,8 @@ export type LegStep = {
   /** Odjazd z rozkładu (HH:MM, czas miejsca). */
   departs?: string
   headsign?: string
+  /** Przebieg kroku (encoded polyline); po scaleniu pieszych odcinków może ich być kilka. */
+  lines?: string[]
 }
 
 export type LegPlan = {
@@ -31,7 +33,22 @@ export type LegPlan = {
   steps: LegStep[]
   /** Przebieg trasy w formacie encoded polyline. */
   polyline?: string
+  /** Powrót: o tej porze nie ma już sensownego połączenia, zostaje dojście pieszo. */
+  noService?: boolean
   checkedAt: string
+}
+
+/** Dłuższe czekanie na odjazd znaczy, że ostatnie połączenie już odjechało. */
+export const NO_SERVICE_WAIT_MIN = 60
+
+const clockMinutes = (time: string) => {
+  const [h = 0, m = 0] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** Minuty od `from` do `to` (HH:MM); odjazd po północy liczy się na następny dzień. */
+export function waitMinutes(from: string, to: string): number {
+  return (clockMinutes(to) - clockMinutes(from) + 1440) % 1440
 }
 
 /** Scala kolejne odcinki piesze: Google zwraca osobno każdy skręt. */
@@ -39,8 +56,10 @@ export function mergeWalks(steps: LegStep[]): LegStep[] {
   const out: LegStep[] = []
   for (const step of steps) {
     const last = out.at(-1)
-    if (step.kind === 'walk' && last?.kind === 'walk') last.minutes += step.minutes
-    else out.push({ ...step })
+    if (step.kind === 'walk' && last?.kind === 'walk') {
+      last.minutes += step.minutes
+      if (step.lines) last.lines = [...(last.lines ?? []), ...step.lines]
+    } else out.push({ ...step })
   }
   return out.filter((s) => s.kind === 'transit' || s.minutes > 0)
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  arrivalClock,
   CARD_TYPE_LABELS,
   type CardSnapshot,
   type DayGap,
@@ -9,6 +10,7 @@ import {
   hasCoords,
   type LatLng,
   type LegPlan,
+  lateBy,
   type MappedCard,
   navigationUrl,
   nextPlace,
@@ -20,6 +22,7 @@ import {
 import { LocateFixed, Navigation, Settings2 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import type { PlanResponse } from '@/app/api/route/plan/route'
 import type { Route } from '@/app/api/route/route'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { TotalsText } from '@/components/amounts'
@@ -35,7 +38,7 @@ import { useWeather, weatherIcon, weatherPlace } from '@/components/weather'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
 import { useFetchCached } from '@/lib/use-fetch-cached'
-import { usePosition } from '@/lib/use-position'
+import { locate, usePosition } from '@/lib/use-position'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 const nowHHMM = (d = new Date()) =>
@@ -85,7 +88,13 @@ export function TodayDashboard({ userName }: { userName: string }) {
   const { legs, plans, limited, refresh } = useDayPlans(after ? null : planDate)
   const legRow = (leg: (typeof legs)[number] | undefined) =>
     leg && (
-      <LegRow leg={leg} plan={plans[leg.id]} bufferMin={trip.travelBufferMin} onRefresh={refresh} />
+      <LegRow
+        leg={leg}
+        date={planDate}
+        plan={plans[leg.id]}
+        bufferMin={trip.travelBufferMin}
+        onRefresh={refresh}
+      />
     )
   const nextLeg = next && legs.find((l) => l.to === next.id)
   const tripDays = startDate && endDate ? daysBetween(startDate, endDate) + 1 : undefined
@@ -265,6 +274,85 @@ export function TodayDashboard({ userName }: { userName: string }) {
   )
 }
 
+type Check =
+  | { state: 'idle' | 'busy' | 'denied' | 'failed' }
+  | { state: 'done'; plan: LegPlan; now: string }
+
+/** „Zdążę?”: trasa z miejsca, w którym jesteś, liczona dopiero po naciśnięciu przycisku. */
+function CanWeMakeIt({ card }: { card: MappedCard }) {
+  const { trip } = useTrip()
+  const [check, setCheck] = useState<Check>({ state: 'idle' })
+
+  const run = async () => {
+    setCheck({ state: 'busy' })
+    const here = await locate().catch(() => null)
+    if (!here) return setCheck({ state: 'denied' })
+    const res = await fetch('/api/route/plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tripId: trip.id,
+        date: todayLocal(),
+        live: true,
+        legs: [
+          {
+            id: 'here',
+            from: here,
+            to: { lat: card.location.lat, lng: card.location.lng },
+          },
+        ],
+      }),
+    }).catch(() => null)
+    const body = res?.ok ? ((await res.json()) as PlanResponse) : null
+    const plan = body?.plans.here
+    if (!plan || !body?.now) return setCheck({ state: 'failed' })
+    setCheck({ state: 'done', plan, now: body.now })
+  }
+
+  const ride = check.state === 'done' && check.plan.steps.find((s) => s.kind === 'transit')
+  const arrival = check.state === 'done' ? arrivalClock(check.plan, check.now) : undefined
+  const late = arrival && card.time ? lateBy(arrival, card.time) : undefined
+
+  return (
+    <div className="mt-2 text-sm">
+      {check.state === 'done' && (
+        <div className="pop-in mb-1 rounded-small bg-raised p-2">
+          <p>
+            Jesteś {check.plan.minutes} min {TRAVEL_MODE_LABELS[check.plan.mode]} stąd
+            {ride && `, ${[ride.vehicle, ride.line].filter(Boolean).join(' ')} o ${ride.departs}`}.{' '}
+            Będziesz o {arrival}.
+          </p>
+          {late !== undefined && (
+            <p className={cx('font-bold', late > 0 ? 'text-red' : 'text-green')}>
+              {late > 0 ? `● spóźnienie ${late} min` : `• zdążysz, ${-late} min zapasu`}
+            </p>
+          )}
+          {check.plan.noService && <p className="text-red">● komunikacją już nic nie jedzie</p>}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => void run()}
+        disabled={check.state === 'busy'}
+        className="flex min-h-11 w-full items-center justify-center gap-1 rounded-small border border-line text-accent disabled:opacity-50"
+      >
+        <LocateFixed className="size-4" aria-hidden="true" />
+        {check.state === 'busy'
+          ? 'sprawdzam…'
+          : check.state === 'done'
+            ? 'sprawdź ponownie'
+            : 'zdążę stąd?'}
+      </button>
+      {check.state === 'denied' && (
+        <p className="mt-1 text-xs text-red">● brak dostępu do lokalizacji telefonu</p>
+      )}
+      {check.state === 'failed' && (
+        <p className="mt-1 text-xs text-red">● nie udało się sprawdzić trasy</p>
+      )}
+    </div>
+  )
+}
+
 /** Delikatne tło powitania zależne od pogody. */
 function heroTone(code: number | undefined): string | undefined {
   if (code === undefined) return undefined
@@ -364,6 +452,7 @@ function NextPlace({
           {!position && from ? ' z noclegu' : ''}
         </p>
       )}
+      <CanWeMakeIt card={card} />
       <a
         href={navigationUrl(card.location)}
         target="_blank"

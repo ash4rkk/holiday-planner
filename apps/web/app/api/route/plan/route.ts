@@ -9,33 +9,46 @@ const body = z.object({
   tripId: z.string(),
   date: z.string().refine(isIsoDate),
   refresh: z.boolean().optional(),
+  ride: z.boolean().optional(),
+  live: z.boolean().optional(),
   legs: z
     .array(z.object({ id: z.string(), from: point, to: point, leaveAt: time, arriveBy: time }))
     .max(16),
 })
 
-export type PlanResponse = { plans: Record<string, LegPlan | null>; limited: boolean }
+export type PlanResponse = {
+  plans: Record<string, LegPlan | null>
+  limited: boolean
+  /** Przy `live`: godzina na miejscu wyjazdu, od której liczono. */
+  now?: string
+}
 
 /** Plany odcinków jednego dnia. POST, bo service worker ma tego nie zapisywać obok bazy. */
 export async function POST(request: Request) {
   const parsed = body.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return Response.json({ error: 'złe dane' }, { status: 400 })
-  const { tripId, date, legs, refresh } = parsed.data
+  const { tripId, legs, refresh, ride, live } = parsed.data
   const trip = await getTrip(tripId)
   if (!trip) return Response.json({ error: 'nie ma takiego wyjazdu' }, { status: 404 })
+
+  // „Zdążę?”: rusza się teraz, czyli w strefie wyjazdu, a nie telefonu.
+  const local = Temporal.Now.zonedDateTimeISO(trip.timezone)
+  const now = `${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')}`
+  const date = live ? local.toPlainDate().toString() : parsed.data.date
 
   const plans: PlanResponse['plans'] = {}
   let limited = false
   // Kolejno: publiczny serwer OSRM nie lubi serii równoległych zapytań.
   for (const { id, ...leg } of legs) {
-    const result = await planLeg({ ...leg, date }, trip, { refresh }).catch((error) => {
+    const request = live ? { ...leg, date, leaveAt: now, arriveBy: undefined } : { ...leg, date }
+    const result = await planLeg(request, trip, { refresh, ride, live }).catch((error) => {
       console.warn('[routes] plan', String(error))
       return { plan: null, limited: false }
     })
     plans[id] = result.plan
     limited ||= Boolean(result.limited)
   }
-  return Response.json({ plans, limited } satisfies PlanResponse, {
+  return Response.json({ plans, limited, now } satisfies PlanResponse, {
     headers: { 'cache-control': 'no-store' },
   })
 }

@@ -3,6 +3,18 @@
 import type { LatLng } from '@planer/core'
 import { useCallback, useEffect, useState } from 'react'
 
+/** Świeża pozycja na żądanie; pyta o zgodę, jeśli jeszcze jej nie ma. */
+export function locate(): Promise<LatLng> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('brak lokalizacji'))
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      reject,
+      { enableHighAccuracy: true, maximumAge: 30_000, timeout: 12_000 },
+    )
+  })
+}
+
 /**
  * Bieżąca pozycja: automatycznie tylko przy już udzielonej zgodzie (bez pytania przy otwarciu Pulpitu);
  * `request()` pyta o zgodę na wyraźne życzenie.

@@ -134,7 +134,7 @@ export const SketchEdge = memo(function SketchEdge({
   )
 })
 
-export type OrderEdgeType = Edge<{ warn?: boolean }, 'order'>
+export type OrderEdgeType = Edge<{ warn?: boolean; label?: string }, 'order'>
 
 /** Strzałka kolejności w dniu (z godzin kart, niezapisana): cieńsza, w kolorze obrysu dnia, bez gestów. */
 export const OrderEdge = memo(function OrderEdge({
@@ -145,18 +145,37 @@ export const OrderEdge = memo(function OrderEdge({
 }: EdgeProps<OrderEdgeType>) {
   const geo = useArrow(id, source, target)
   if (!geo) return null
-  return geo.paths.map((d, i) => (
-    <path
-      key={i}
-      d={d}
-      fill="none"
-      strokeWidth={data?.warn ? 2 : 1.4}
-      strokeLinecap="round"
-      pathLength={1}
-      className={cx(
-        'order-arrow pointer-events-none',
-        data?.warn ? 'stroke-red' : 'stroke-teal/80',
+  return (
+    <>
+      {geo.paths.map((d, i) => (
+        <path
+          key={i}
+          d={d}
+          fill="none"
+          strokeWidth={data?.warn ? 2 : 1.4}
+          strokeLinecap="round"
+          pathLength={1}
+          className={cx(
+            'order-arrow pointer-events-none',
+            data?.warn ? 'stroke-red' : 'stroke-teal/80',
+          )}
+        />
+      ))}
+      {data?.label && (
+        <EdgeLabelRenderer>
+          <span
+            className={cx(
+              'pointer-events-none absolute rounded-small border bg-panel px-1.5 py-0.5 text-[10px] whitespace-nowrap',
+              data.warn ? 'border-red text-red' : 'border-line text-subtle',
+            )}
+            style={{
+              transform: `translate(-50%, -50%) translate(${geo.mid.x}px, ${geo.mid.y}px)`,
+            }}
+          >
+            {data.label}
+          </span>
+        </EdgeLabelRenderer>
       )}
-    />
-  ))
+    </>
+  )
 })

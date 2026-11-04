@@ -15,6 +15,8 @@ import {
   edgesOf,
   formatDayHeader,
   framesOf,
+  type LegPlan,
+  legShortfall,
   moveItems,
   type Positions,
   renameFrame,
@@ -22,6 +24,7 @@ import {
   restoreCard,
   restorePositions,
   setEdgeLabel,
+  TRAVEL_MODE_LABELS,
   todayLocal,
   trashCard,
   updateCard,
@@ -54,6 +57,7 @@ import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
 import { offerUndo } from '@/lib/undo'
 import { useCardSheet } from '@/lib/use-card-sheet'
+import { useDayPlans } from '@/lib/use-day-plans'
 import { useAttachments, useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
 import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
 import { CardNode } from './card-node'
@@ -85,6 +89,19 @@ function readViewport(tripId: string): Viewport | undefined {
   }
 }
 
+/** Plan jednego dnia dla strzałek; osobny komponent, bo dni jest zmienna liczba. */
+function DayPlans({
+  date,
+  onPlans,
+}: {
+  date: string
+  onPlans: (plans: Record<string, LegPlan | null>) => void
+}) {
+  const { plans } = useDayPlans(date)
+  useEffect(() => onPlans(plans), [plans, onPlans])
+  return null
+}
+
 function BoardCanvas() {
   const { trip, doc, ready, provider, templates } = useTrip()
   const cards = useCards()
@@ -99,6 +116,11 @@ function BoardCanvas() {
   )
   const [undo, setUndo] = useState<Positions | null>(null)
   const [arranging, setArranging] = useState(false)
+  const [legPlans, setLegPlans] = useState<Record<string, LegPlan | null>>({})
+  const addPlans = useCallback(
+    (plans: Record<string, LegPlan | null>) => setLegPlans((all) => ({ ...all, ...plans })),
+    [],
+  )
   const [savedViewport] = useState(() =>
     typeof window === 'undefined' ? undefined : readViewport(trip.id),
   )
@@ -214,13 +236,24 @@ function BoardCanvas() {
   const shownEdges = useMemo(() => {
     const drawn = visibleEdges(edges, cards)
     const linked = new Set(drawn.flatMap((e) => [`${e.from}>${e.to}`, `${e.to}>${e.from}`]))
-    const overlapping = new Set(
-      days.flatMap(({ date }) =>
-        dayGaps(live.filter((c) => c.date === date))
-          .filter((g) => (g.freeMin ?? 0) < 0)
-          .map((g) => g.from),
-      ),
-    )
+    // Opis strzałki: nakładanie się albo dojazd; kolor ostrzeżenia, gdy nie zdążycie.
+    const notes = new Map<string, { warn: boolean; label?: string }>()
+    for (const { date } of days) {
+      for (const gap of dayGaps(live.filter((c) => c.date === date))) {
+        const plan = legPlans[gap.id]
+        const short = plan ? legShortfall(gap, plan, trip.travelBufferMin) : undefined
+        const overlap = gap.freeMin !== undefined && gap.freeMin < 0
+        const ride = plan ? `${plan.minutes} min ${TRAVEL_MODE_LABELS[plan.mode]}` : undefined
+        notes.set(gap.id, {
+          warn: overlap || (short ?? 0) > 0,
+          label: overlap
+            ? `nakłada się o ${-(gap.freeMin as number)} min`
+            : short && short > 0
+              ? `${ride} · brakuje ${short}`
+              : ride,
+        })
+      }
+    }
     // Kolejność w dniu: strzałka do następnej karty, chyba że ta para ma już własną strzałkę.
     const order = days.flatMap(({ ids }) =>
       ids.slice(1).flatMap((to, i) => {
@@ -234,7 +267,7 @@ function BoardCanvas() {
             type: 'order' as const,
             selectable: false,
             focusable: false,
-            data: { warn: overlapping.has(from) },
+            data: notes.get(`${from}>${to}`) ?? {},
           },
         ]
       }),
@@ -251,7 +284,7 @@ function BoardCanvas() {
         data: { label: e.label },
       })),
     ]
-  }, [edges, cards, days, live, selection])
+  }, [edges, cards, days, live, selection, legPlans, trip.travelBufferMin])
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)),
@@ -418,6 +451,9 @@ function BoardCanvas() {
 
   return (
     <BoardContext.Provider value={api}>
+      {days.map(({ date }) => (
+        <DayPlans key={date} date={date} onPlans={addPlans} />
+      ))}
       <div
         inert={!!sheet.openId}
         className="fixed inset-0"

@@ -3,7 +3,15 @@ import { and, eq, getDb, isNull, routeCache, routesUsage, sql } from './db'
 import type { DayGap } from './gaps'
 import { dayLegs, shiftClock } from './gaps'
 import type { LatLng } from './maps'
-import { type LegPlan, type LegStep, mergeWalks, planMaxAgeMs, type TravelMode } from './route-plan'
+import {
+  type LegPlan,
+  type LegStep,
+  mergeWalks,
+  NO_SERVICE_WAIT_MIN,
+  planMaxAgeMs,
+  type TravelMode,
+  waitMinutes,
+} from './route-plan'
 import { routesMonthlyLimit } from './routes-budget'
 import { readCards } from './trip-doc'
 
@@ -73,6 +81,7 @@ async function osrm(profile: 'foot' | 'car', from: LatLng, to: LatLng): Promise<
 type GoogleStep = {
   travelMode?: string
   staticDuration?: string
+  polyline?: { encodedPolyline?: string }
   transitDetails?: {
     stopDetails?: {
       departureStop?: { name?: string }
@@ -106,9 +115,12 @@ const stepMinutes = (s: GoogleStep) => Number.parseInt(s.staticDuration ?? '0', 
 
 function readStep(s: GoogleStep): LegStep {
   const t = s.transitDetails
-  if (!t) return { kind: 'walk', minutes: stepMinutes(s) }
+  const line = s.polyline?.encodedPolyline
+  const lines = line ? [line] : undefined
+  if (!t) return { kind: 'walk', minutes: stepMinutes(s), lines }
   return {
     kind: 'transit',
+    lines,
     minutes: Math.round(stepMinutes(s)),
     line: t.transitLine?.nameShort ?? t.transitLine?.name,
     vehicle: VEHICLES[t.transitLine?.vehicle?.type ?? ''] ?? 'przejazd',
@@ -134,7 +146,7 @@ async function transit(
       'content-type': 'application/json',
       'x-goog-api-key': key,
       'x-goog-fieldmask':
-        'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.transitDetails',
+        'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.transitDetails,routes.legs.steps.polyline.encodedPolyline',
     },
     body: JSON.stringify({
       origin: waypoint(from),
@@ -187,8 +199,13 @@ export type TripTravel = { timezone: string; travelMode: TravelMode }
 
 const round = (p: LatLng) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`
 
-function legKey({ from, to, date, leaveAt, arriveBy }: LegRequest, mode: TravelMode): string {
-  return [mode, round(from), round(to), date, arriveBy ?? `od ${leaveAt}`].join('|')
+function legKey(
+  { from, to, date, leaveAt, arriveBy }: LegRequest,
+  mode: TravelMode,
+  ride = false,
+): string {
+  const when = arriveBy ?? `od ${leaveAt}`
+  return ['v2', mode, ride ? 'jazda' : 'plan', round(from), round(to), date, when].join('|')
 }
 
 function instant(date: string, time: string, timezone: string): string {
@@ -215,13 +232,17 @@ export type PlanResult = { plan: LegPlan | null; limited?: boolean }
 export async function planLeg(
   leg: LegRequest,
   trip: TripTravel,
-  options: { refresh?: boolean } = {},
+  // ride: tylko przejazd (inne połączenie), bez zamiany na dojście pieszo.
+  // live: z bieżącej pozycji; ta się zmienia, więc wyniku nie ma po co czytać ani zapisywać.
+  options: { refresh?: boolean; ride?: boolean; live?: boolean } = {},
 ): Promise<PlanResult> {
-  const key = legKey(leg, trip.travelMode)
+  const key = legKey(leg, trip.travelMode, options.ride)
   const db = getDb()
   const time = leg.arriveBy ?? leg.leaveAt ?? '12:00'
   const departure = Date.parse(instant(leg.date, time, trip.timezone))
-  const [row] = await db.select().from(routeCache).where(eq(routeCache.key, key))
+  const [row] = options.live
+    ? []
+    : await db.select().from(routeCache).where(eq(routeCache.key, key))
   const age = row ? Date.now() - row.checkedAt.getTime() : Number.POSITIVE_INFINITY
   if (row && !options.refresh && age < planMaxAgeMs(departure - Date.now()))
     return { plan: row.plan as LegPlan }
@@ -236,7 +257,8 @@ export async function planLeg(
     const walking = walk && fromRoute(walk, 'walk', leg.arriveBy)
     const apiKey = process.env.GOOGLE_ROUTES_API_KEY
     // Krótkie odcinki idzie się pieszo; nie ma po co pytać o rozkład.
-    if (trip.travelMode === 'walk' || !apiKey || (walk && walk.minutes <= 10)) plan = walking
+    const short = !options.ride && walk && walk.minutes <= 10
+    if (trip.travelMode === 'walk' || !apiKey || short) plan = walking
     else if (await takeRouteRequest()) {
       const ride = await transit(
         apiKey,
@@ -246,8 +268,17 @@ export async function planLeg(
           ? { arrivalTime: instant(leg.date, leg.arriveBy, trip.timezone) }
           : { departureTime: instant(leg.date, time, trip.timezone) },
       )
-      plan =
-        ride && walking ? (walking.minutes <= ride.minutes ? walking : ride) : (ride ?? walking)
+      const departs = ride?.steps.find((s) => s.kind === 'transit')?.departs
+      // Powrót nocą: Google poda poranny kurs, a to znaczy, że dziś już nic nie jedzie.
+      const stranded =
+        !leg.arriveBy &&
+        leg.leaveAt !== undefined &&
+        (!ride || (departs && waitMinutes(leg.leaveAt, departs) > NO_SERVICE_WAIT_MIN))
+      if (options.ride) plan = ride
+      else if (stranded) plan = walking && { ...walking, noService: true }
+      else
+        plan =
+          ride && walking ? (walking.minutes <= ride.minutes ? walking : ride) : (ride ?? walking)
     } else {
       limited = true
       plan = walking
@@ -258,6 +289,7 @@ export async function planLeg(
 
   const checkedAt = new Date()
   const saved: LegPlan = { ...plan, checkedAt: checkedAt.toISOString() }
+  if (options.live) return { plan: saved, limited }
   await db
     .insert(routeCache)
     .values({ key, plan: saved, checkedAt })

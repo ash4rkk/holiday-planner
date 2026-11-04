@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CardSnapshot } from './cards'
-import { dayGaps, dayLegs, legShortfall, shiftClock } from './gaps'
+import { arrivalClock, dayGaps, dayLegs, lateBy, legShortfall, shiftClock } from './gaps'
 
 const place = { name: 'x', lat: 1, lng: 2 }
 const card = (id: string, fields: Partial<CardSnapshot>) =>
@@ -125,5 +125,18 @@ describe('shiftClock', () => {
   it('przesuwa i zawija przez północ', () => {
     expect(shiftClock('10:05', -15)).toBe('09:50')
     expect(shiftClock('00:05', -10)).toBe('23:55')
+  })
+})
+
+describe('arrivalClock i lateBy', () => {
+  it('liczy przyjazd z odjazdu albo od teraz', () => {
+    expect(arrivalClock({ minutes: 18, departAt: '11:14' }, '11:08')).toBe('11:32')
+    expect(arrivalClock({ minutes: 10 }, '11:08')).toBe('11:18')
+  })
+
+  it('spóźnienie i zapas, także przez północ', () => {
+    expect(lateBy('11:52', '11:40')).toBe(12)
+    expect(lateBy('11:32', '11:40')).toBe(-8)
+    expect(lateBy('00:10', '23:50')).toBe(20)
   })
 })

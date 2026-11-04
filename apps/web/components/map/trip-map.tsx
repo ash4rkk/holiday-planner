@@ -5,10 +5,12 @@ import {
   bearing,
   CARD_TYPE_LABELS,
   type CardType,
+  type DayGap,
   dayRoute,
   decodePolyline,
   formatDayHeader,
   hasCoords,
+  type LegPlan,
   type MappedCard,
   mapDays,
   navigationUrl,
@@ -40,10 +42,52 @@ const TYPE_VAR: Record<CardType, string> = {
 }
 
 const ROUTE_SOURCE = 'day-route'
-const EMPTY_LINE = {
+
+// Rodzaje linii trasy dnia: komunikacja ciągła, pieszo w kropki, plan bez wyniku przerywany.
+const ROUTE_KINDS = ['plan', 'walk', 'drive', 'transit'] as const
+type RouteKind = (typeof ROUTE_KINDS)[number]
+const ROUTE_STYLE: Record<RouteKind, { color: string; label: string; dash?: number[] }> = {
+  transit: { color: '--blue', label: 'komunikacja' },
+  walk: { color: '--green', label: 'pieszo', dash: [0.5, 2] },
+  drive: { color: '--plum', label: 'autem' },
+  plan: { color: '--subtle', label: 'bez wyniku', dash: [1.5, 2] },
+}
+
+const lineFeature = (kind: RouteKind, coordinates: number[][]) => ({
   type: 'Feature' as const,
-  properties: {},
-  geometry: { type: 'LineString' as const, coordinates: [] as number[][] },
+  properties: { kind },
+  geometry: { type: 'LineString' as const, coordinates },
+})
+
+/** Linie trasy dnia: każdy krok w swoim kolorze; bez planu prosta między punktami. */
+function routeFeatures(legs: DayGap[], plans: Record<string, LegPlan | null>, stops: MappedCard[]) {
+  const features = legs.flatMap((leg) => {
+    const plan = plans[leg.id]
+    if (!leg.route) return []
+    if (!plan)
+      return [
+        lineFeature('plan', [
+          [leg.route.from.lng, leg.route.from.lat],
+          [leg.route.to.lng, leg.route.to.lat],
+        ]),
+      ]
+    const steps = plan.steps.flatMap((s) =>
+      (s.lines ?? []).map((l) =>
+        lineFeature(s.kind === 'transit' ? 'transit' : 'walk', decodePolyline(l)),
+      ),
+    )
+    if (steps.length) return steps
+    return plan.polyline ? [lineFeature(plan.mode, decodePolyline(plan.polyline))] : []
+  })
+  if (features.length) return features
+  return stops.length > 1
+    ? [
+        lineFeature(
+          'plan',
+          stops.map((c) => [c.location.lng, c.location.lat]),
+        ),
+      ]
+    : []
 }
 
 type Tab = 'all' | string
@@ -190,33 +234,29 @@ export function TripMap() {
     const m = map.current
     if (!m || !loaded) return
     const stops: MappedCard[] = route ? [...(route.start ? [route.start] : []), ...route.stops] : []
-    // Prawdziwy przebieg z planu dnia; bez niego prosta linia między punktami.
-    const lines = Object.values(dayPlans.plans).filter((p) => p?.polyline)
-    const coordinates = lines.length
-      ? dayPlans.legs.flatMap((leg) => {
-          const line = dayPlans.plans[leg.id]?.polyline
-          if (line) return decodePolyline(line)
-          return leg.route
-            ? [
-                [leg.route.from.lng, leg.route.from.lat],
-                [leg.route.to.lng, leg.route.to.lat],
-              ]
-            : []
-        })
-      : stops.map((c) => [c.location.lng, c.location.lat])
+    const features = routeFeatures(dayPlans.legs, dayPlans.plans, stops)
+    const lines = features.filter((f) => f.properties.kind !== 'plan')
 
     const draw = () => {
-      const data = { ...EMPTY_LINE, geometry: { type: 'LineString' as const, coordinates } }
+      const data = { type: 'FeatureCollection' as const, features }
       const source = m.getSource(ROUTE_SOURCE) as GeoJSONSource | undefined
       if (source) source.setData(data)
-      else {
-        m.addSource(ROUTE_SOURCE, { type: 'geojson', data })
+      else m.addSource(ROUTE_SOURCE, { type: 'geojson', data })
+      for (const kind of ROUTE_KINDS) {
+        const id = `${ROUTE_SOURCE}-${kind}`
+        if (m.getLayer(id)) continue
+        const { color, dash } = ROUTE_STYLE[kind]
         m.addLayer({
-          id: ROUTE_SOURCE,
+          id,
           type: 'line',
           source: ROUTE_SOURCE,
+          filter: ['==', ['get', 'kind'], kind],
           layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: { 'line-color': cssVar('--accent'), 'line-width': 3, 'line-dasharray': [1.5, 2] },
+          paint: {
+            'line-color': cssVar(color),
+            'line-width': kind === 'transit' ? 4 : 3,
+            ...(dash && { 'line-dasharray': dash }),
+          },
         })
       }
     }
@@ -269,6 +309,15 @@ export function TripMap() {
       })
     })
   }, [pins, tab, loaded])
+
+  const legendKinds = useMemo(() => {
+    if (!route) return []
+    const stops = [...(route.start ? [route.start] : []), ...route.stops]
+    const found = new Set(
+      routeFeatures(dayPlans.legs, dayPlans.plans, stops).map((f) => f.properties.kind),
+    )
+    return ROUTE_KINDS.filter((k) => found.has(k))
+  }, [route, dayPlans.legs, dayPlans.plans])
 
   const selectedCard = live.find((c) => c.id === selected)
   const offMap = route?.offMap ?? []
@@ -335,6 +384,26 @@ export function TripMap() {
           </div>
         </div>
 
+        {legendKinds.length > 0 && (
+          <ul
+            aria-label="legenda trasy"
+            className="island absolute top-[112px] right-1 z-10 flex flex-col gap-1 px-2 py-1.5 text-[11px] text-muted"
+          >
+            {legendKinds.map((kind) => (
+              <li key={kind} className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="w-5 border-t-[3px]"
+                  style={{
+                    borderColor: `var(${ROUTE_STYLE[kind].color})`,
+                    borderTopStyle: ROUTE_STYLE[kind].dash ? 'dotted' : 'solid',
+                  }}
+                />
+                {ROUTE_STYLE[kind].label}
+              </li>
+            ))}
+          </ul>
+        )}
         <SessionBanner />
 
         <div className="pointer-events-none absolute inset-x-0.5 bottom-[calc(80px+env(safe-area-inset-bottom))] z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
