@@ -16,6 +16,7 @@ export default async function TripLayout({ params, children }: LayoutProps<'/tri
   ])
   if (!trip) notFound()
   const { id, title, startDate, endDate, currencies, archived, travelMode, travelBufferMin } = trip
+  const { timezone } = trip
   return (
     <TripProvider
       trip={{
@@ -29,6 +30,7 @@ export default async function TripLayout({ params, children }: LayoutProps<'/tri
         templates,
         travelMode,
         travelBufferMin,
+        timezone,
       }}
       user={{ name: user.name, color: user.color }}
     >

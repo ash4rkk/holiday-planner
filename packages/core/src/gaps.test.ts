@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { CardSnapshot } from './cards'
-import { arrivalClock, dayGaps, dayLegs, lateBy, legShortfall, shiftClock } from './gaps'
+import {
+  arrivalClock,
+  cardIsPast,
+  dayGaps,
+  dayLegs,
+  lateBy,
+  legShortfall,
+  shiftClock,
+} from './gaps'
 
 const place = { name: 'x', lat: 1, lng: 2 }
 const card = (id: string, fields: Partial<CardSnapshot>) =>
@@ -138,5 +146,27 @@ describe('arrivalClock i lateBy', () => {
     expect(lateBy('11:52', '11:40')).toBe(12)
     expect(lateBy('11:32', '11:40')).toBe(-8)
     expect(lateBy('00:10', '23:50')).toBe(20)
+  })
+})
+
+describe('cardIsPast', () => {
+  const now = { date: '2027-07-14', time: '12:00' }
+
+  it('miniony dzień i skończona dziś pora', () => {
+    expect(cardIsPast({ date: '2027-07-13' }, now)).toBe(true)
+    expect(cardIsPast({ date: '2027-07-14', time: '09:00', durationMin: 60 }, now)).toBe(true)
+  })
+
+  it('trwająca, przyszła i bez godziny zostają', () => {
+    expect(cardIsPast({ date: '2027-07-14', time: '11:00', durationMin: 120 }, now)).toBe(false)
+    expect(cardIsPast({ date: '2027-07-14', time: '15:00' }, now)).toBe(false)
+    expect(cardIsPast({ date: '2027-07-14' }, now)).toBe(false)
+    expect(cardIsPast({ date: '2027-07-15' }, now)).toBe(false)
+    expect(cardIsPast({}, now)).toBe(false)
+  })
+
+  it('nocleg trwa do ostatniego dnia', () => {
+    expect(cardIsPast({ date: '2027-07-10', endDate: '2027-07-14' }, now)).toBe(false)
+    expect(cardIsPast({ date: '2027-07-10', endDate: '2027-07-13' }, now)).toBe(true)
   })
 })

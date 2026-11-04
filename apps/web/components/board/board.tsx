@@ -4,6 +4,8 @@ import '@xyflow/react/dist/base.css'
 import {
   arrangeByDays,
   CARD_SIZE,
+  type CardSnapshot,
+  cardIsPast,
   createCard,
   createEdge,
   createFrame,
@@ -14,6 +16,7 @@ import {
   deleteFrame,
   edgesOf,
   formatDayHeader,
+  formatShortDate,
   framesOf,
   type LegPlan,
   legShortfall,
@@ -41,7 +44,7 @@ import {
   useReactFlow,
   type Viewport,
 } from '@xyflow/react'
-import { Columns3, Plus, Undo2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Columns3, Plus, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AddButton } from '@/components/add-button'
 import { ChatButton } from '@/components/ai/chat-panel'
@@ -58,15 +61,17 @@ import { pasteAsCard } from '@/lib/place-card'
 import { offerUndo } from '@/lib/undo'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
+import { useTripNow } from '@/lib/use-trip-now'
 import { useAttachments, useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
 import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
 import { CardNode } from './card-node'
 import { DayNode } from './day-node'
 import { FrameNode } from './frame-node'
+import { NowNode } from './now-node'
 import { RemotePointers } from './remote-pointers'
 import { OrderEdge, SketchEdge } from './sketch-edge'
 
-const nodeTypes = { card: CardNode, frame: FrameNode, day: DayNode }
+const nodeTypes = { card: CardNode, frame: FrameNode, day: DayNode, now: NowNode }
 const edgeTypes = { sketch: SketchEdge, order: OrderEdge }
 // Margines obrysu dnia wokół kart; u góry miejsce na etykietę dnia.
 const DAY_PAD = { side: 22, top: 34, bottom: 22 }
@@ -186,6 +191,7 @@ function BoardCanvas() {
   }, [live, frames, fileCounts])
 
   const days = useMemo(() => dayOrder(live), [live])
+  const now = useTripNow()
 
   // Obrysy dni z bieżących pozycji węzłów (także w trakcie przeciągania).
   const dayNodes = useMemo(() => {
@@ -220,17 +226,65 @@ function BoardCanvas() {
     })
   }, [days, nodes, trip.startDate, trip.endDate])
 
+  // Linia „teraz” w dzisiejszej kolumnie: w przerwie między ostatnią rozpoczętą a następną kartą.
+  const nowNode = useMemo((): Node[] => {
+    const today = now && days.find((d) => d.date === now.date)
+    if (!now || !today) return []
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    const column = today.ids.flatMap((id) => {
+      const n = byId.get(id)
+      const card = live.find((c) => c.id === id)
+      if (!n || !card?.time) return []
+      const h = n.measured?.height ?? n.height ?? CARD_SIZE.h
+      return [{ time: card.time, x: n.position.x, top: n.position.y, bottom: n.position.y + h, n }]
+    })
+    if (!column.length) return []
+    const next = column.findIndex((c) => c.time > now.time)
+    const before = column[(next === -1 ? column.length : next) - 1]
+    const after = next === -1 ? undefined : column[next]
+    const y =
+      before && after
+        ? (before.bottom + after.top) / 2
+        : after
+          ? after.top - 16
+          : (before?.bottom ?? 0) + 16
+    const first = (after ?? before) as (typeof column)[number]
+    const w = first.n.measured?.width ?? first.n.width ?? CARD_SIZE.w
+    return [
+      {
+        id: 'now',
+        type: 'now',
+        position: { x: first.x, y: y - 9 },
+        width: w,
+        height: 18,
+        zIndex: 2,
+        selectable: false,
+        draggable: false,
+        focusable: false,
+        style: { pointerEvents: 'none' },
+        data: { time: now.time },
+      },
+    ]
+  }, [now, days, nodes, live])
+
   const shownNodes = useMemo(
     () => [
-      ...dayNodes,
+      ...dayNodes.map((n) => {
+        const { date } = n.data as { date: string }
+        return now && date < now.date ? { ...n, className: 'is-past' } : n
+      }),
+      ...nowNode,
       ...nodes.map((n) => {
         const selected =
           (selection?.kind === 'card' && selection.id === n.id) ||
           (selection?.kind === 'frame' && frameNodeId(selection.id) === n.id)
-        return n.selected === selected ? n : { ...n, selected }
+        const card = (n.data as { card?: CardSnapshot }).card
+        const past = Boolean(now && card && cardIsPast(card, now))
+        if (n.selected === selected && past === (n.className === 'is-past')) return n
+        return { ...n, selected, className: past ? 'is-past' : undefined }
       }),
     ],
-    [dayNodes, nodes, selection],
+    [dayNodes, nowNode, nodes, selection, now],
   )
 
   const shownEdges = useMemo(() => {
@@ -441,6 +495,26 @@ function BoardCanvas() {
     },
   ]
 
+  // Strzałki w rogu: kadr przeskakuje na poprzedni lub następny dzień.
+  const [focused, setFocused] = useState<string | null>(null)
+  const jump = (step: number) => {
+    const today = now?.date ?? todayLocal()
+    const current = focused && days.some((d) => d.date === focused) ? focused : undefined
+    const start = current
+      ? days.findIndex((d) => d.date === current)
+      : days.findIndex((d) => d.date >= today)
+    const index = current ? start + step : start === -1 ? days.length - 1 : start
+    const day = days[Math.min(days.length - 1, Math.max(0, index))]
+    if (!day) return
+    setFocused(day.date)
+    void rf.fitView({
+      nodes: [{ id: `day:${day.date}` }],
+      padding: 0.08,
+      maxZoom: 1,
+      duration: 350,
+    })
+  }
+
   const arrange = () => {
     setSelection(null)
     setArranging(true)
@@ -554,6 +628,32 @@ function BoardCanvas() {
             }
           />
         </div>
+
+        {days.length > 0 && (
+          <div className="island absolute bottom-[calc(72px+env(safe-area-inset-bottom))] left-1 z-10 flex items-center">
+            <button
+              type="button"
+              onClick={() => jump(-1)}
+              aria-label="poprzedni dzień"
+              className="flex size-11 items-center justify-center text-muted hover:text-accent"
+            >
+              <ChevronLeft className="size-5" aria-hidden="true" />
+            </button>
+            {focused && (
+              <span className="px-1 text-xs whitespace-nowrap text-subtle">
+                {formatShortDate(focused)}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => jump(1)}
+              aria-label="następny dzień"
+              className="flex size-11 items-center justify-center text-muted hover:text-accent"
+            >
+              <ChevronRight className="size-5" aria-hidden="true" />
+            </button>
+          </div>
+        )}
 
         <SessionBanner />
         <RemotePointers />

@@ -103,6 +103,18 @@ export function dayLegs(cards: CardSnapshot[], date: string): DayGap[] {
   return legs
 }
 
+/** Czy karta jest już za nami: minął jej dzień albo dziś skończyła się jej pora. */
+export function cardIsPast(
+  card: Pick<CardSnapshot, 'date' | 'endDate' | 'time' | 'durationMin'>,
+  now: { date: string; time: string },
+): boolean {
+  const last = card.endDate ?? card.date
+  if (!last) return false
+  if (last !== now.date) return last < now.date
+  if (card.endDate || !card.time) return false
+  return minutes(card.time) + (card.durationMin ?? 0) <= minutes(now.time)
+}
+
 /** Godzina przesunięta o minuty (HH:MM). */
 export function shiftClock(time: string, delta: number): string {
   return clock((minutes(time) + delta + 1440) % 1440)

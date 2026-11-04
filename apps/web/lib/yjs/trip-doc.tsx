@@ -129,6 +129,7 @@ export type TripMeta = {
   templates: Template[]
   travelMode: TravelMode
   travelBufferMin: number
+  timezone: string
 }
 
 type Ctx = {

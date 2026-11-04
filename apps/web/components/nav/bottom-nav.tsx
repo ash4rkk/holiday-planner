@@ -2,12 +2,14 @@
 
 import { LayoutDashboard, List, Map as MapIcon, Sun } from 'lucide-react'
 import Link from 'next/link'
-import { useParams, usePathname } from 'next/navigation'
+import { useParams, usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { cx } from '@/components/ui'
 import { useNavHidden } from './nav-context'
 
 const LAST_TRIP_KEY = 'planer-last-trip'
+const SWIPE_MIN_PX = 70
+const SWIPE_MAX_MS = 600
 export const NAV_SLOT = 'nav-slot'
 
 /**
@@ -39,6 +41,41 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
     { href: tripHref('list'), label: 'lista', icon: List, active: pathname.endsWith('/list') },
     { href: tripHref('map'), label: 'mapa', icon: MapIcon, active: pathname.endsWith('/map') },
   ]
+
+  // Przesunięcie palcem w bok zmienia ekran. Na Tablicy i Mapie palec rusza widokiem, więc tam nie.
+  const router = useRouter()
+  const order = tripId ? items.map((i) => i.href) : []
+  const orderKey = order.join()
+  useEffect(() => {
+    if (!/\/(today|list)$/.test(pathname) || !orderKey) return
+    const hrefs = orderKey.split(',')
+    let start: { x: number; y: number; at: number } | null = null
+    const down = (e: TouchEvent) => {
+      const t = e.touches[0]
+      const target = e.target as HTMLElement
+      // Filtry przewijane w bok, pola tekstowe i otwarte okna mają własne gesty.
+      const own = target.closest('.overflow-x-auto, input, textarea, [role=dialog]')
+      start =
+        t && e.touches.length === 1 && !own ? { x: t.clientX, y: t.clientY, at: e.timeStamp } : null
+    }
+    const up = (e: TouchEvent) => {
+      const t = e.changedTouches[0]
+      if (!start || !t) return
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      const quick = e.timeStamp - start.at < SWIPE_MAX_MS
+      start = null
+      if (!quick || Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dy) > Math.abs(dx) / 2) return
+      const next = hrefs[hrefs.indexOf(window.location.pathname) + (dx < 0 ? 1 : -1)]
+      if (next) router.push(next)
+    }
+    document.addEventListener('touchstart', down, { passive: true })
+    document.addEventListener('touchend', up, { passive: true })
+    return () => {
+      document.removeEventListener('touchstart', down)
+      document.removeEventListener('touchend', up)
+    }
+  }, [pathname, orderKey, router])
 
   if (pathname === '/') return null
 

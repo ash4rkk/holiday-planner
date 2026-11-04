@@ -8,6 +8,7 @@ import {
   type CardSnapshot,
   type CardStatus,
   type CardType,
+  cardIsPast,
   createCard,
   type DayGap,
   formatDayHeader,
@@ -39,6 +40,7 @@ import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
+import { useTripNow } from '@/lib/use-trip-now'
 import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function TripList() {
@@ -300,6 +302,12 @@ function DayCards({
 }) {
   const { trip } = useTrip()
   const { legs, plans, limited, refresh } = useDayPlans(date)
+  const now = useTripNow()
+  // Linia „teraz” przed pierwszą kartą, której pora jeszcze nie minęła.
+  const timed = cards.filter((c) => c.time)
+  const upcoming = now && timed.find((c) => (c.time as string) > now.time)
+  const lineBefore = now?.date === date && upcoming ? upcoming.id : undefined
+  const lineAtEnd = now?.date === date && !upcoming && timed.length > 0
   const row = (leg: DayGap | undefined) =>
     leg && (
       <LegRow
@@ -317,7 +325,13 @@ function DayCards({
         {row(legs.find((l) => l.kind === 'start'))}
         {cards.map((c) => (
           <Fragment key={c.id}>
-            <div className="relative">
+            {lineBefore === c.id && now && <NowLine time={now.time} />}
+            <div
+              className={cx(
+                'relative transition-opacity duration-500',
+                now && cardIsPast(c, now) && 'opacity-60',
+              )}
+            >
               <span
                 aria-hidden="true"
                 className={cx(
@@ -330,8 +344,21 @@ function DayCards({
             {row(legs.find((l) => l.from === c.id))}
           </Fragment>
         ))}
+        {lineAtEnd && now && <NowLine time={now.time} />}
       </div>
       <DayTravelSummary plans={plans} limited={limited} />
+    </div>
+  )
+}
+
+function NowLine({ time }: { time: string }) {
+  return (
+    <div
+      className="flex items-center gap-2 text-[11px] font-bold text-accent"
+      aria-label={`teraz ${time}`}
+    >
+      <span className="h-0.5 flex-1 rounded-full bg-accent" />
+      teraz {time}
     </div>
   )
 }

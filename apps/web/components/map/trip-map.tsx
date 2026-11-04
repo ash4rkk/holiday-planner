@@ -328,7 +328,8 @@ export function TripMap() {
       .filter((d) => d.date !== today)
       .map((d) => ({
         id: d.date,
-        label: formatDayHeader(d.date).replace(',', ''),
+        // Bez miesiąca: „pt. 6”, żeby na telefonie mieściło się więcej dni.
+        label: formatDayHeader(d.date).replace(',', '').split(' ').slice(0, 2).join(' '),
         dot: d.hasPlaces,
       })),
   ]
