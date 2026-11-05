@@ -130,6 +130,9 @@ export function LegRow({
             )}
           </button>
         )}
+        {plan === null && leg.route && (
+          <span className="text-orange">● {label && `${label}: `}nie znaleziono połączenia</span>
+        )}
         {leg.route && (
           <a
             href={transitUrl(leg.route.from, leg.route.to)}
@@ -215,9 +218,7 @@ export function DayTravelSummary({
     <p className="px-3 text-xs text-subtle italic">
       {summary &&
         `w drodze około ${formatDuration(minutes)}${km ? ` · ${String(Math.round(km * 10) / 10).replace('.', ',')} km` : ''}`}
-      {limited && (
-        <span className="text-red not-italic"> ● limit dojazdów wyczerpany, czasy pieszo</span>
-      )}
+      {limited && <span className="text-red not-italic"> ● limit dojazdów wyczerpany</span>}
     </p>
   )
 }

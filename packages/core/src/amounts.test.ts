@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAmount, parseAmounts, sumByCurrency, totals } from './amounts'
+import { formatAmount, parseAmounts, sumByCurrency, totals, withoutAmounts } from './amounts'
 
 describe('parseAmounts', () => {
   it.each([
@@ -73,5 +73,13 @@ describe('sumy', () => {
     const plain = (s: string) => s.replace(/\u00a0/g, ' ')
     expect(plain(formatAmount({ value: 300, currency: 'PLN' }))).toBe('300 zł')
     expect(plain(formatAmount({ value: 12.5, currency: 'EUR' }))).toBe('12,50 €')
+  })
+})
+
+describe('withoutAmounts', () => {
+  it('usuwa składnię kwot i zostawia resztę zdania', () => {
+    expect(withoutAmounts('Bilety online. /+30 EUR')).toBe('Bilety online.')
+    expect(withoutAmounts('obiad /+12,50 chf na rynku')).toBe('obiad na rynku')
+    expect(withoutAmounts('/+45 EUR')).toBe('')
   })
 })

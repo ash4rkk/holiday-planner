@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development tsx watch src/index.ts",
+    "dev": "NODE_ENV=development tsx watch --env-file=../web/.env.local src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc"
   },

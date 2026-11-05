@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { cx } from '@/components/ui'
 
 /** Odległość dolnej krawędzi widocznego obszaru od dołu okna — wysokość klawiatury na Androidzie. */
-function useKeyboardInset(): number {
+export function useKeyboardInset(): number {
   const [inset, setInset] = useState(0)
   useEffect(() => {
     const vv = window.visualViewport

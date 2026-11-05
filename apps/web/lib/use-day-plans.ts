@@ -1,6 +1,6 @@
 'use client'
 
-import { dayLegs, type LegPlan, todayLocal } from '@planer/core'
+import { dayLegs, type LegPlan, todayLocal, withoutFarWalks } from '@planer/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlanResponse } from '@/app/api/route/plan/route'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
@@ -56,9 +56,9 @@ export function useDayPlans(date: string | null) {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey)
-      if (saved) setPlans(JSON.parse(saved))
+      if (saved) setPlans(withoutFarWalks(JSON.parse(saved), trip.travelMode))
     } catch {}
-  }, [storageKey])
+  }, [storageKey, trip.travelMode])
 
   useEffect(() => {
     // Minione dni nie potrzebują nowych wyników; zostaje to, co telefon już ma.

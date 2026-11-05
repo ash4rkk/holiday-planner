@@ -1,3 +1,5 @@
+import { decodePolyline } from './maps'
+
 // Wynik zaplanowanego odcinka — typy wspólne dla serwera i przeglądarki.
 
 export type TravelMode = 'transit' | 'walk' | 'drive'
@@ -71,4 +73,95 @@ export function planMaxAgeMs(msToDeparture: number): number {
   if (msToDeparture <= 3 * HOUR) return 45 * 60_000
   if (msToDeparture <= 24 * HOUR) return 6 * HOUR
   return 7 * 24 * HOUR
+}
+
+/** Dłuższa trasa piesza to nie dojazd, tylko brak połączenia. */
+export const MAX_FALLBACK_WALK_MIN = 45
+
+/** Awaryjna trasa piesza za długa, żeby ją pokazać; piechurów i komunikat „nic nie jedzie” zostawia. */
+export function isFarWalk(plan: LegPlan, travelMode: TravelMode): boolean {
+  return (
+    travelMode !== 'walk' &&
+    plan.mode === 'walk' &&
+    !plan.noService &&
+    plan.minutes > MAX_FALLBACK_WALK_MIN
+  )
+}
+
+/** Plany z pamięci telefonu bez takich tras: wiersz pokaże brak połączenia. */
+export function withoutFarWalks(
+  plans: Record<string, LegPlan | null>,
+  travelMode: TravelMode,
+): Record<string, LegPlan | null> {
+  return Object.fromEntries(
+    Object.entries(plans).map(([id, p]) => [id, p && isFarWalk(p, travelMode) ? null : p]),
+  )
+}
+
+export type VehicleKind = 'tram' | 'metro' | 'bus' | 'rail' | 'ferry' | 'transit'
+
+const VEHICLE_KINDS: Record<string, VehicleKind> = {
+  tramwaj: 'tram',
+  kolejka: 'tram',
+  metro: 'metro',
+  autobus: 'bus',
+  trolejbus: 'bus',
+  pociąg: 'rail',
+  prom: 'ferry',
+}
+
+/** Rodzaj linii na mapie; plany zapisują pojazd słownie, więc działa też dla starych wyników. */
+export function vehicleKind(step: Pick<LegStep, 'vehicle'>): VehicleKind {
+  return VEHICLE_KINDS[step.vehicle ?? ''] ?? 'transit'
+}
+
+export type RouteMark =
+  | { type: 'stop'; lng: number; lat: number; title: string; detail: string }
+  | { type: 'line'; lng: number; lat: number; text: string; kind: VehicleKind }
+
+/** Przystanki wejścia i wyjścia oraz nazwy linii: z końców i środka przebiegu każdego przejazdu. */
+export function routeMarks(plan: Pick<LegPlan, 'steps'>): RouteMark[] {
+  return plan.steps.flatMap((step): RouteMark[] => {
+    const points = (step.lines ?? []).flatMap((line) => decodePolyline(line))
+    const first = points[0]
+    const last = points.at(-1)
+    const middle = points[Math.floor(points.length / 2)]
+    if (step.kind !== 'transit' || !first || !last || !middle) return []
+    const ride = [step.vehicle, step.line].filter(Boolean).join(' ')
+    const way = [
+      step.headsign && `kierunek ${step.headsign}`,
+      step.stops !== undefined && `${step.stops} przyst.`,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    return [
+      {
+        type: 'stop',
+        lng: first[0],
+        lat: first[1],
+        title: `wsiadasz: ${step.from ?? 'przystanek'}`,
+        detail: [`${ride}${step.departs ? ` o ${step.departs}` : ''}`, way]
+          .filter(Boolean)
+          .join('\n'),
+      },
+      {
+        type: 'stop',
+        lng: last[0],
+        lat: last[1],
+        title: `wysiadasz: ${step.to ?? 'przystanek'}`,
+        detail: ride,
+      },
+      ...(step.line
+        ? [
+            {
+              type: 'line' as const,
+              lng: middle[0],
+              lat: middle[1],
+              text: step.line,
+              kind: vehicleKind(step),
+            },
+          ]
+        : []),
+    ]
+  })
 }

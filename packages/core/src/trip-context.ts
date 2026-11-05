@@ -1,7 +1,7 @@
 import type * as Y from 'yjs'
 import { formatAmount, sumByCurrency } from './amounts'
 import { readAttachments } from './attachments'
-import { CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot } from './cards'
+import { CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot, variantsByMain } from './cards'
 import { formatDateSpan, formatDayHeader } from './dates'
 import {
   cardsOf,
@@ -72,10 +72,17 @@ export function tripContext(
   const filesOf = new Map<string, { id: string; name: string; mime: string }[]>()
   for (const a of readAttachments(doc)) filesOf.set(a.cardId, [...(filesOf.get(a.cardId) ?? []), a])
   const groups = groupCardsByDay(cards, trip)
+  const variants = variantsByMain(cards)
 
   const render = (maxLines: number) => {
-    const block = (c: CardSnapshot) =>
+    const one = (c: CardSnapshot) =>
       cardBlock(c, linesOf.get(c.id) ?? [], filesOf.get(c.id) ?? [], maxLines)
+    const block = (c: CardSnapshot) => {
+      const options = variants.get(c.id)
+      if (!options) return one(c)
+      const note = c.variantChosen ? 'wybrane; inne opcje:' : 'jeszcze do wyboru; inne opcje:'
+      return [one(c), `(${note})`, ...options.map(one)].join('\n')
+    }
     const parts = [
       `# Wyjazd: ${trip.title} (${formatDateSpan(trip.startDate, trip.endDate)})`,
       [

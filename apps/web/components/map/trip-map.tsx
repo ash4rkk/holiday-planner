@@ -15,10 +15,12 @@ import {
   type MappedCard,
   mapDays,
   navigationUrl,
+  routeMarks,
   todayLocal,
+  vehicleKind,
 } from '@planer/core'
 import { ChevronLeft, ChevronRight, Navigation, SquarePen } from 'lucide-react'
-import type { GeoJSONSource, Map as MapLibreMap, Marker } from 'maplibre-gl'
+import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { fieldsSummary } from '@/components/card/card-fields'
@@ -30,8 +32,9 @@ import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
+import { useWide } from '@/lib/use-wide'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
-import { cssVar, useMapStyle } from './map-style'
+import { cssVar, themeMap, useMapStyle } from './map-style'
 import { loadMapLibre } from './maplibre'
 
 const TYPE_VAR: Record<CardType, string> = {
@@ -44,14 +47,36 @@ const TYPE_VAR: Record<CardType, string> = {
 
 const ROUTE_SOURCE = 'day-route'
 
-// Rodzaje linii trasy dnia: komunikacja ciągła, pieszo w kropki, plan bez wyniku przerywany.
-const ROUTE_KINDS = ['plan', 'walk', 'drive', 'transit'] as const
+const ROUTE_MARKS = `${ROUTE_SOURCE}-marks`
+const STOP_LAYER = `${ROUTE_MARKS}-stops`
+const STOP_TAP_PX = 16
+// Nazwy linii dopiero po przybliżeniu: na mapie całego dnia zasłoniłyby trasę.
+const LINE_LABEL_ZOOM = 13
+
+// Rodzaje linii trasy dnia: przejazdy ciągłe w kolorze pojazdu, pieszo w kropki, brak połączenia
+// przerywany.
+const ROUTE_KINDS = [
+  'plan',
+  'walk',
+  'drive',
+  'transit',
+  'bus',
+  'tram',
+  'metro',
+  'rail',
+  'ferry',
+] as const
 type RouteKind = (typeof ROUTE_KINDS)[number]
 const ROUTE_STYLE: Record<RouteKind, { color: string; label: string; dash?: number[] }> = {
   transit: { color: '--blue', label: 'komunikacja' },
+  tram: { color: '--lavender', label: 'tramwaj' },
+  metro: { color: '--blue', label: 'metro' },
+  bus: { color: '--teal', label: 'autobus' },
+  rail: { color: '--orange', label: 'pociąg' },
+  ferry: { color: '--amber', label: 'prom' },
   walk: { color: '--green', label: 'pieszo', dash: [0.5, 2] },
   drive: { color: '--plum', label: 'autem' },
-  plan: { color: '--subtle', label: 'bez wyniku', dash: [1.5, 2] },
+  plan: { color: '--subtle', label: 'brak połączenia', dash: [1.5, 2] },
 }
 
 const lineFeature = (kind: RouteKind, coordinates: number[][]) => ({
@@ -74,7 +99,7 @@ function routeFeatures(legs: DayGap[], plans: Record<string, LegPlan | null>, st
       ]
     const steps = plan.steps.flatMap((s) =>
       (s.lines ?? []).map((l) =>
-        lineFeature(s.kind === 'transit' ? 'transit' : 'walk', decodePolyline(l)),
+        lineFeature(s.kind === 'transit' ? vehicleKind(s) : 'walk', decodePolyline(l)),
       ),
     )
     if (steps.length) return steps
@@ -111,6 +136,7 @@ export function TripMap() {
   const { trip } = useTrip()
   const cards = useCards()
   const sheet = useCardSheet()
+  const wide = useWide()
   const style = useMapStyle()
   const today = todayLocal()
   const container = useRef<HTMLDivElement>(null)
@@ -154,6 +180,7 @@ export function TripMap() {
       })
       m.touchZoomRotate.disableRotation()
       m.addControl(new AttributionControl({ compact: true }), 'bottom-left')
+      themeMap(m)
       m.on('load', () => setLoaded(true))
       m.on('zoomend', () => setZoom(m.getZoom()))
       m.on('click', () => setSelected(null))
@@ -237,6 +264,10 @@ export function TripMap() {
     const stops: MappedCard[] = route ? [...(route.start ? [route.start] : []), ...route.stops] : []
     const features = routeFeatures(dayPlans.legs, dayPlans.plans, stops)
     const lines = features.filter((f) => f.properties.kind !== 'plan')
+    const marks = dayPlans.legs.flatMap((leg) => {
+      const plan = dayPlans.plans[leg.id]
+      return plan ? routeMarks(plan) : []
+    })
 
     const draw = () => {
       const data = { type: 'FeatureCollection' as const, features }
@@ -255,8 +286,54 @@ export function TripMap() {
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': cssVar(color),
-            'line-width': kind === 'transit' ? 4 : 3,
+            'line-width': kind === 'walk' || kind === 'plan' ? 3 : 4,
             ...(dash && { 'line-dasharray': dash }),
+          },
+        })
+      }
+      const points = {
+        type: 'FeatureCollection' as const,
+        features: marks.map(({ lng, lat, ...properties }) => ({
+          type: 'Feature' as const,
+          properties: {
+            ...properties,
+            color: 'kind' in properties ? cssVar(ROUTE_STYLE[properties.kind].color) : undefined,
+          },
+          geometry: { type: 'Point' as const, coordinates: [lng, lat] },
+        })),
+      }
+      const marksSource = m.getSource(ROUTE_MARKS) as GeoJSONSource | undefined
+      if (marksSource) marksSource.setData(points)
+      else m.addSource(ROUTE_MARKS, { type: 'geojson', data: points })
+      if (!m.getLayer(STOP_LAYER)) {
+        m.addLayer({
+          id: STOP_LAYER,
+          type: 'circle',
+          source: ROUTE_MARKS,
+          filter: ['==', ['get', 'type'], 'stop'],
+          paint: {
+            'circle-radius': 6,
+            'circle-color': cssVar('--text'),
+            'circle-stroke-color': cssVar('--panel'),
+            'circle-stroke-width': 2,
+          },
+        })
+        m.addLayer({
+          id: `${ROUTE_MARKS}-lines`,
+          type: 'symbol',
+          source: ROUTE_MARKS,
+          minzoom: LINE_LABEL_ZOOM,
+          filter: ['==', ['get', 'type'], 'line'],
+          layout: {
+            'text-field': ['get', 'text'],
+            'text-font': ['Noto Sans Regular'],
+            'text-size': 13,
+            'text-offset': [0, -1],
+          },
+          paint: {
+            'text-color': ['get', 'color'],
+            'text-halo-color': cssVar('--panel'),
+            'text-halo-width': 2,
           },
         })
       }
@@ -265,6 +342,37 @@ export function TripMap() {
     if (m.getSource(ROUTE_SOURCE) || m.isStyleLoaded()) draw()
     else m.once('idle', draw)
     m.on('style.load', draw)
+
+    // Tap w przystanek: dymek z linią i godziną. Kropka jest mała, więc łapiemy też jej okolicę.
+    let popup: import('maplibre-gl').Popup | undefined
+    const tapStop = (e: MapMouseEvent) => {
+      if (!m.getLayer(STOP_LAYER)) return
+      const { x, y } = e.point
+      const [stop] = m.queryRenderedFeatures(
+        [
+          [x - STOP_TAP_PX, y - STOP_TAP_PX],
+          [x + STOP_TAP_PX, y + STOP_TAP_PX],
+        ],
+        { layers: [STOP_LAYER] },
+      )
+      if (!stop) return
+      const { title, detail } = stop.properties as { title: string; detail: string }
+      const body = document.createElement('div')
+      body.append(
+        Object.assign(document.createElement('strong'), { textContent: title }),
+        ...String(detail)
+          .split('\n')
+          .map((line) => Object.assign(document.createElement('div'), { textContent: line })),
+      )
+      void loadMapLibre().then(({ Popup }) => {
+        popup?.remove()
+        popup = new Popup({ closeButton: false, offset: 10 })
+          .setLngLat((stop.geometry as unknown as { coordinates: [number, number] }).coordinates)
+          .setDOMContent(body)
+          .addTo(m)
+      })
+    }
+    m.on('click', tapStop)
 
     let cancelled = false
     void loadMapLibre().then(({ Marker }) => {
@@ -291,6 +399,8 @@ export function TripMap() {
       cancelled = true
       m.off('style.load', draw)
       m.off('idle', draw)
+      m.off('click', tapStop)
+      popup?.remove()
     }
   }, [route, loaded, dayPlans.plans, dayPlans.legs])
 
@@ -320,6 +430,10 @@ export function TripMap() {
     return ROUTE_KINDS.filter((k) => found.has(k))
   }, [route, dayPlans.legs, dayPlans.plans])
 
+  const hasStops =
+    Boolean(route) &&
+    dayPlans.legs.some((leg) => dayPlans.plans[leg.id]?.steps.some((s) => s.kind === 'transit'))
+
   // Strzałki jak na Tablicy: pierwsze naciśnięcie dzisiejszy dzień, potem kolejne dni z miejscami.
   const jump = (step: number) => {
     const dates = days.filter((d) => d.hasPlaces).map((d) => d.date)
@@ -348,7 +462,7 @@ export function TripMap() {
 
   return (
     <>
-      <div inert={!!sheet.openId} className="fixed inset-0">
+      <div inert={!!sheet.openId && !wide} className="fixed inset-0">
         <div className="absolute inset-0 bg-bg">
           {/* MapLibre nadaje kontenerowi position: relative — rozmiar daje wrapper. */}
           <div ref={container} className="size-full" />
@@ -415,6 +529,14 @@ export function TripMap() {
                 {ROUTE_STYLE[kind].label}
               </li>
             ))}
+            {hasStops && (
+              <li className="flex items-center gap-1.5">
+                <span aria-hidden="true" className="flex w-5 justify-center">
+                  <span className="size-2.5 rounded-full border border-panel bg-text" />
+                </span>
+                przystanek
+              </li>
+            )}
           </ul>
         )}
         <SessionBanner />

@@ -1,41 +1,52 @@
 'use client'
 
 import {
+  CARD_STATUS_LABELS,
   CARD_TYPE_LABELS,
   CARD_TYPES,
   type CardSnapshot,
   cardsOf,
   contentOf,
   type EditableCardFields,
-  formatShortDate,
   fragmentLines,
-  hasCoords,
-  navigationUrl,
   restoreCard,
   trashCard,
   updateCard,
 } from '@planer/core'
 import type { Editor } from '@tiptap/react'
-import { ChevronDown, Navigation, Pin, Trash2 } from 'lucide-react'
-import { type PointerEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
+import { Calendar, ChevronDown, ChevronRight, Pin, Trash2 } from 'lucide-react'
+import { type PointerEvent, useEffect, useRef, useState } from 'react'
+import { AmountBadge } from '@/components/amounts'
 import { CardAttachments } from '@/components/attachments/card-attachments'
 import { cx } from '@/components/ui'
 import { offerUndo } from '@/lib/undo'
+import { useWide } from '@/lib/use-wide'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { CardEditor } from './card-editor'
-import { CardFields, fieldsSummary } from './card-fields'
-import { FormatToolbar } from './format-toolbar'
+import { CardSections, Section } from './card-fields'
+import { FormatToolbar, useKeyboardInset } from './format-toolbar'
 import { LinkPreviewBlock } from './link-preview'
+import { StatusMark } from './status-mark'
 import { TYPE_STYLE } from './type-style'
+import { AddVariantChip, VariantBar } from './variant-bar'
+
+export const CARD_PANEL_WIDTH = 440
 
 const CLOSE_MS = 190
 const DRAG_CLOSE_PX = 110
-// Gest zamykania łapie górę ekranu; niżej palec przewija treść i zaznacza tekst.
-const DRAG_ZONE_PX = 170
+const DRAG_OPEN_PX = 60
+
+/** Pole, które otwiera klawiaturę: wybór daty i godziny ma własne okno systemowe. */
+function opensKeyboard(target: EventTarget): boolean {
+  return (target as HTMLElement).matches?.(
+    '.ProseMirror, .ProseMirror *, textarea, input:not([type=date], [type=time], [type=checkbox], [type=file])',
+  )
+}
 
 /**
- * Pełnoekranowy arkusz edycji karty: wjeżdża od dołu, przeciągnięcie uchwytu w dół zamyka.
- * Treść na górze, pola zwinięte do podsumowania. Pusta karta znika przy zamknięciu.
+ * Panel karty: na szerokim ekranie stoi z prawej obok planu, na telefonie to arkusz na pół ekranu.
+ * Pełny ekran daje pociągnięcie w górę albo pisanie (po zamknięciu klawiatury arkusz wraca); chipy
+ * i przyciski wysokości nie zmieniają. Sekcje są wysepkami. Pusta karta znika przy zamknięciu.
  */
 export function CardSheet({
   cardId,
@@ -47,22 +58,42 @@ export function CardSheet({
   onClose: () => void
 }) {
   const { doc } = useTrip()
+  const wide = useWide()
   const card = useCards().find((c) => c.id === cardId)
   const cardMap = cardsOf(doc).get(cardId)
   const [editor, setEditor] = useState<Editor | null>(null)
-  const [fieldsOpen, setFieldsOpen] = useState(isNew)
+  const [expanded, setExpanded] = useState(false)
+  const [typing, setTyping] = useState(isNew)
+  const tall = expanded || typing
+  const [typesOpen, setTypesOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const [dragY, setDragY] = useState(0)
   const dragFrom = useRef<number | null>(null)
-  const scroller = useRef<HTMLDivElement>(null)
+  const pulled = useRef(0)
 
-  // Bez przewijania strony pod arkuszem.
+  // Bez przewijania strony pod arkuszem; obok panelu plan dalej się przewija.
   useEffect(() => {
+    if (wide) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = prev
     }
+  }, [wide])
+
+  // Klawiaturę można schować bez wyjścia z pola (wstecz na Androidzie), więc blur nie wystarczy.
+  const keyboard = useKeyboardInset()
+  const hadKeyboard = useRef(false)
+  useEffect(() => {
+    if (hadKeyboard.current && !keyboard) setTyping(false)
+    hadKeyboard.current = keyboard > 0
+  }, [keyboard])
+
+  const dismissRef = useRef(() => {})
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && dismissRef.current()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   if (!card || !cardMap) return null
@@ -72,8 +103,7 @@ export function CardSheet({
   const close = () => {
     const blank =
       fragmentLines(contentOf(cardMap)).length === 0 &&
-      !card.date &&
-      !card.time &&
+      (card.variantOf !== undefined || (!card.date && !card.time)) &&
       !card.location?.name &&
       !card.status
     if (blank) cardsOf(doc).delete(cardId)
@@ -85,6 +115,7 @@ export function CardSheet({
     setClosing(true)
     setTimeout(close, CLOSE_MS)
   }
+  dismissRef.current = dismiss
 
   const remove = () => {
     trashCard(doc, cardId)
@@ -92,186 +123,216 @@ export function CardSheet({
     onClose()
   }
 
-  const release = () => {
-    dragFrom.current = null
-    if (dragY > DRAG_CLOSE_PX) dismiss()
-    else setDragY(0)
-  }
   const grip = {
     onPointerDown: (e: PointerEvent) => {
       dragFrom.current = e.clientY
+      pulled.current = 0
       e.currentTarget.setPointerCapture(e.pointerId)
     },
     onPointerMove: (e: PointerEvent) => {
-      if (dragFrom.current !== null) setDragY(Math.max(0, e.clientY - dragFrom.current))
+      if (dragFrom.current === null) return
+      pulled.current = e.clientY - dragFrom.current
+      setDragY(Math.max(0, pulled.current))
     },
-    onPointerUp: release,
-  }
-  // Na telefonie cała góra arkusza: przeciągnięcie w dół zamyka, gdy treść nie jest przewinięta.
-  const touch = {
-    onTouchStart: (e: TouchEvent) => {
-      const y = e.touches[0]?.clientY
-      if (y !== undefined && y < DRAG_ZONE_PX && !scroller.current?.scrollTop) dragFrom.current = y
-    },
-    onTouchMove: (e: TouchEvent) => {
-      const y = e.touches[0]?.clientY
-      if (dragFrom.current !== null && y !== undefined) setDragY(Math.max(0, y - dragFrom.current))
-    },
-    onTouchEnd: () => {
-      if (dragFrom.current !== null) release()
+    onPointerUp: () => {
+      dragFrom.current = null
+      setDragY(0)
+      if (pulled.current < -DRAG_OPEN_PX) setExpanded(true)
+      else if (pulled.current > DRAG_CLOSE_PX) {
+        if (tall) {
+          setExpanded(false)
+          setTyping(false)
+        } else dismiss()
+      }
     },
   }
-  const summary = [
-    card.date && formatShortDate(card.date),
-    fieldsSummary(card),
-    card.location?.name && `⌖ ${card.location.name}`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+
+  const nextStatus = () => {
+    const order = [undefined, 'missing', 'booked'] as const
+    change({ status: order[(order.indexOf(card.status) + 1) % order.length] })
+  }
+  const style = TYPE_STYLE[card.type]
+  const TypeIcon = style.icon
+  const Close = wide ? ChevronRight : ChevronDown
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="karta"
-      className={cx(
-        'fixed inset-0 z-40 flex flex-col bg-bg',
-        closing ? 'sheet-out' : 'sheet-in',
-        dragFrom.current === null && dragY > 0 && 'transition-transform duration-200',
-      )}
-      style={dragY ? { transform: `translateY(${dragY}px)` } : undefined}
-      {...touch}
-    >
-      <div
-        {...grip}
-        aria-hidden="true"
-        className="flex h-4 shrink-0 touch-none items-center justify-center"
-      >
-        <span className="h-1 w-10 rounded-full bg-line" />
-      </div>
-      <div className="flex shrink-0 gap-1 px-px">
+    <>
+      {!wide && !tall && (
         <button
           type="button"
-          onClick={dismiss}
           aria-label="zamknij kartę"
-          className="island flex size-11 items-center justify-center text-muted hover:text-accent"
-        >
-          <ChevronDown className="size-5" aria-hidden="true" />
-        </button>
-        <div className="island flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1">
-          {CARD_TYPES.map((t) => {
-            const { icon: Icon, chip } = TYPE_STYLE[t]
-            const active = card.type === t
-            return (
-              <button
-                key={t}
-                type="button"
-                aria-pressed={active}
-                aria-label={CARD_TYPE_LABELS[t]}
-                onClick={() => change({ type: t })}
-                className={cx(
-                  'flex h-9 shrink-0 items-center gap-1 rounded-small px-2 text-xs transition-colors',
-                  active ? chip : 'text-dim',
-                )}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {active && CARD_TYPE_LABELS[t]}
-              </button>
-            )
-          })}
-        </div>
-        <button
-          type="button"
-          onClick={() => change({ pinned: !card.pinned })}
-          aria-pressed={card.pinned}
-          aria-label={card.pinned ? 'odepnij' : 'przypnij'}
-          className={cx(
-            'island flex size-11 items-center justify-center transition-colors',
-            card.pinned ? 'text-accent' : 'text-muted',
-          )}
-        >
-          <Pin className="size-5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={remove}
-          aria-label="przenieś do kosza"
-          className="island flex size-11 items-center justify-center text-muted hover:text-red"
-        >
-          <Trash2 className="size-5" aria-hidden="true" />
-        </button>
-      </div>
-
-      <div ref={scroller} className="mt-1 flex-1 overflow-y-auto overscroll-y-contain px-px pb-24">
-        <div
-          className={cx('island overflow-hidden', card.aiDraft && 'border-dashed border-accent')}
-        >
-          <div className={cx('h-0.5', TYPE_STYLE[card.type].bar)} />
-          {card.aiDraft && (
-            <div className="flex flex-wrap items-center gap-2 border-b border-dashed border-accent px-4 py-2 text-xs">
-              <span className="flex-1 text-accent">● szkic z AI — sprawdź dane z dokumentu</span>
-              <button
-                type="button"
-                onClick={() => change({ aiDraft: undefined })}
-                className="min-h-9 rounded-small bg-accent px-3 font-bold text-on-accent"
-              >
-                zatwierdź
-              </button>
-              <button
-                type="button"
-                onClick={remove}
-                className="min-h-9 rounded-small border border-line px-3 text-muted"
-              >
-                odrzuć
-              </button>
-            </div>
-          )}
-          <CardEditor
-            cardId={cardId}
-            fragment={contentOf(cardMap)}
-            autoFocus={isNew}
-            onEditor={setEditor}
-          />
-          <div className="flex items-center border-t border-line">
-            <button
-              type="button"
-              onClick={() => setFieldsOpen((v) => !v)}
-              aria-expanded={fieldsOpen}
-              className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-4 text-left text-xs text-subtle italic"
-            >
-              <ChevronDown
-                className={cx(
-                  'size-4 shrink-0 transition-transform duration-200',
-                  fieldsOpen && 'rotate-180',
-                )}
-                aria-hidden="true"
-              />
-              <span className="truncate">{summary || 'data, godzina, miejsce, status'}</span>
-            </button>
-            {hasCoords(card) && (
-              <a
-                href={navigationUrl(card.location)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex min-h-11 shrink-0 items-center gap-1 px-4 text-xs font-bold text-accent"
-              >
-                <Navigation className="size-3.5" aria-hidden="true" /> nawiguj
-              </a>
-            )}
+          onClick={dismiss}
+          className="fade-in fixed inset-0 z-40 bg-bg/50"
+        />
+      )}
+      <div
+        role="dialog"
+        aria-modal={!wide}
+        aria-label="karta"
+        className={cx(
+          'fixed z-40 flex flex-col bg-bg',
+          wide
+            ? cx('inset-y-0 right-0 border-l border-line', closing ? 'panel-out' : 'panel-in')
+            : cx(
+                'inset-x-0 bottom-0 rounded-t-island border-t border-line transition-[height] duration-200 motion-reduce:transition-none',
+                tall ? 'h-dvh' : 'h-[60dvh]',
+                closing ? 'sheet-out' : 'sheet-in',
+              ),
+          dragFrom.current === null && dragY > 0 && 'transition-transform duration-200',
+        )}
+        style={{
+          ...(wide && { width: CARD_PANEL_WIDTH }),
+          ...(dragY > 0 && { transform: `translateY(${dragY}px)` }),
+        }}
+      >
+        {!wide && (
+          <div
+            {...grip}
+            aria-hidden="true"
+            className="flex h-6 shrink-0 touch-none items-center justify-center"
+          >
+            <span className="h-1 w-10 rounded-full bg-line" />
           </div>
-          {fieldsOpen && (
-            <div className="fade-in">
-              <CardFields card={card} onChange={change} />
-            </div>
-          )}
-          {card.linkPreview && <LinkPreviewBlock preview={card.linkPreview} />}
-          <CardAttachments cardId={cardId} />
+        )}
+        <div className="flex shrink-0 items-center gap-1 p-1">
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="zamknij kartę"
+            className="island flex size-11 items-center justify-center text-muted hover:text-accent"
+          >
+            <Close className="size-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setTypesOpen((v) => !v)}
+            aria-expanded={typesOpen}
+            className={cx(
+              'flex h-11 items-center gap-2 rounded-island px-3 text-sm transition-colors',
+              style.chip,
+            )}
+          >
+            <TypeIcon className="size-5" aria-hidden="true" />
+            {CARD_TYPE_LABELS[card.type]}
+          </button>
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={nextStatus}
+            aria-label={`status: ${card.status ? CARD_STATUS_LABELS[card.status] : 'brak'}, zmień`}
+            title={card.status ? CARD_STATUS_LABELS[card.status] : 'bez statusu'}
+            className="flex size-11 items-center justify-center"
+          >
+            {card.status ? (
+              <StatusMark status={card.status} />
+            ) : (
+              <span className="flex size-8 items-center justify-center rounded-small border border-dashed border-line text-dim">
+                <Calendar className="size-5" aria-hidden="true" />
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => change({ pinned: !card.pinned })}
+            aria-pressed={card.pinned}
+            aria-label={card.pinned ? 'odepnij' : 'przypnij'}
+            className={cx(
+              'flex size-11 items-center justify-center transition-colors',
+              card.pinned ? 'text-accent' : 'text-muted',
+            )}
+          >
+            <Pin className="size-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={remove}
+            aria-label="przenieś do kosza"
+            className="flex size-11 items-center justify-center text-muted hover:text-red"
+          >
+            <Trash2 className="size-5" aria-hidden="true" />
+          </button>
         </div>
-        <SaveAsTemplate card={card} editor={editor} />
-      </div>
+        {typesOpen && (
+          <div className="fade-in flex shrink-0 gap-1 overflow-x-auto px-1 pb-1">
+            {CARD_TYPES.map((t) => {
+              const { icon: Icon, chip } = TYPE_STYLE[t]
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={card.type === t}
+                  onClick={() => {
+                    change({ type: t })
+                    setTypesOpen(false)
+                  }}
+                  className={cx(
+                    'flex h-9 shrink-0 items-center gap-1 rounded-small px-2 text-xs',
+                    card.type === t ? chip : 'text-muted',
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  {CARD_TYPE_LABELS[t]}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
-      {editor && <FormatToolbar editor={editor} />}
-    </div>
+        <div
+          onFocusCapture={(e) => opensKeyboard(e.target) && setTyping(true)}
+          onClickCapture={(e) => opensKeyboard(e.target) && setTyping(true)}
+          onBlurCapture={(e) => {
+            if (!e.relatedTarget || !opensKeyboard(e.relatedTarget)) setTyping(false)
+          }}
+          className="flex flex-1 flex-col gap-1 overflow-y-auto overscroll-y-contain px-1 pb-24 [&>*]:shrink-0"
+        >
+          <VariantBar card={card} />
+          <div
+            className={cx('island overflow-hidden', card.aiDraft && 'border-dashed border-accent')}
+          >
+            {card.aiDraft && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-dashed border-accent px-4 py-2 text-xs">
+                <span className="flex-1 text-accent">● szkic z AI — sprawdź dane z dokumentu</span>
+                <button
+                  type="button"
+                  onClick={() => change({ aiDraft: undefined })}
+                  className="min-h-9 rounded-small bg-accent px-3 font-bold text-on-accent"
+                >
+                  zatwierdź
+                </button>
+                <button
+                  type="button"
+                  onClick={remove}
+                  className="min-h-9 rounded-small border border-line px-3 text-muted"
+                >
+                  odrzuć
+                </button>
+              </div>
+            )}
+            <CardEditor
+              cardId={cardId}
+              fragment={contentOf(cardMap)}
+              autoFocus={isNew}
+              onEditor={setEditor}
+            />
+            {card.linkPreview && <LinkPreviewBlock preview={card.linkPreview} />}
+          </div>
+          <CardSections card={card} onChange={change} addons={<AddVariantChip card={card} />}>
+            {card.amounts.length > 0 && (
+              <Section label="koszt">
+                <AmountBadge amounts={card.amounts} className="self-start" />
+              </Section>
+            )}
+            <section className="island overflow-hidden">
+              <CardAttachments cardId={cardId} />
+            </section>
+          </CardSections>
+          <SaveAsTemplate card={card} editor={editor} />
+        </div>
+
+        {editor && <FormatToolbar editor={editor} />}
+      </div>
+    </>
   )
 }
 
@@ -309,7 +370,7 @@ function SaveAsTemplate({ card, editor }: { card: CardSnapshot; editor: Editor |
       type="button"
       onClick={save}
       disabled={state === 'saving'}
-      className="mt-2 min-h-11 px-3 text-xs text-subtle italic hover:text-accent"
+      className="mt-2 min-h-11 self-start px-3 text-xs text-subtle italic hover:text-accent"
     >
       {state === 'saved'
         ? '• zapisano jako szablon'

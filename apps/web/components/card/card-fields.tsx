@@ -1,8 +1,6 @@
 'use client'
 
 import {
-  CARD_STATUS_LABELS,
-  CARD_STATUSES,
   type CardLocation,
   type CardSnapshot,
   type EditableCardFields,
@@ -15,43 +13,71 @@ import { type ReactNode, useState } from 'react'
 import { MiniMap } from '@/components/map/mini-map'
 import { cx, inputClass } from '@/components/ui'
 import { resolvePastedPlace } from '@/lib/place-card'
-import { StatusMark } from './status-mark'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
-type Key =
-  | 'date'
-  | 'endDate'
-  | 'time'
-  | 'durationMin'
-  | 'status'
-  | 'location'
-  | 'destination'
-  | 'remindMin'
+type Key = 'date' | 'endDate' | 'time' | 'durationMin' | 'location' | 'destination' | 'remindMin'
+type TimeKey = Exclude<Key, 'location' | 'destination'>
 
-const FIELDS: { key: Key; label: string }[] = [
-  { key: 'date', label: 'data' },
-  { key: 'endDate', label: 'data końcowa' },
-  { key: 'time', label: 'godzina' },
-  { key: 'durationMin', label: 'czas trwania' },
-  { key: 'status', label: 'status' },
-  { key: 'location', label: 'miejsce' },
-  { key: 'destination', label: 'dokąd' },
-  { key: 'remindMin', label: 'przypomnienie' },
+const WHEN: { key: TimeKey; label: string; value: (card: CardSnapshot) => string }[] = [
+  { key: 'date', label: 'data', value: (c) => formatShortDate(c.date as string) },
+  {
+    key: 'endDate',
+    label: 'data końcowa',
+    value: (c) => `do ${formatShortDate(c.endDate as string)}`,
+  },
+  { key: 'time', label: 'godzina', value: (c) => c.time as string },
+  {
+    key: 'durationMin',
+    label: 'czas trwania',
+    value: (c) => formatDuration(c.durationMin as number),
+  },
+  { key: 'remindMin', label: 'przypomnienie', value: (c) => formatRemind(c.remindMin as number) },
 ]
 
-/** Pola opcjonalne: puste są zwinięte do „+ pole”, wypełnione pokazują się jako wiersze. */
-export function CardFields({
+/** Wysepka karty z małą etykietą. */
+export function Section({
+  label,
+  action,
+  children,
+}: {
+  label: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="island flex flex-col gap-1 p-2">
+      <div className="flex min-h-6 items-center gap-2">
+        <h3 className="flex-1 text-xs text-subtle italic">{label}</h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+const chip = 'min-h-9 rounded-small border px-3 text-xs transition-colors'
+
+/**
+ * Pola karty jako wysepki: „kiedy” z chipami (tap otwiera pole pod spodem) i „miejsce”. Dalsze
+ * wysepki podaje `children`, a `addons` dokłada chipy na dole.
+ */
+export function CardSections({
   card,
   onChange,
+  children,
+  addons,
 }: {
   card: CardSnapshot
   onChange: (patch: Partial<EditableCardFields>) => void
+  children?: ReactNode
+  addons?: ReactNode
 }) {
+  const [editing, setEditing] = useState<TimeKey | null>(null)
   const [opened, setOpened] = useState<Set<Key>>(new Set())
-  // Status widać zawsze: wybór „brak” jest równorzędny z pozostałymi.
-  const isShown = (key: Key) => key === 'status' || card[key] !== undefined || opened.has(key)
   const open = (key: Key) => setOpened((s) => new Set(s).add(key))
+  const shown = (key: Key) => card[key] !== undefined || opened.has(key)
   const clear = (key: Key) => {
+    setEditing(null)
     setOpened((s) => {
       const next = new Set(s)
       next.delete(key)
@@ -59,33 +85,82 @@ export function CardFields({
     })
     onChange({ [key]: undefined })
   }
-
+  const active = WHEN.find((f) => f.key === editing)
   // „Dokąd” ma sens tylko przy transporcie: bez tego nie wiadomo, skąd liczyć następny dojazd.
-  const fields = FIELDS.filter((f) => f.key !== 'destination' || card.type === 'transport')
-  const shown = fields.filter((f) => isShown(f.key))
-  const hidden = fields.filter((f) => !isShown(f.key))
+  const places = [
+    { key: 'location' as const, label: 'miejsce' },
+    ...(card.type === 'transport' ? [{ key: 'destination' as const, label: 'dokąd' }] : []),
+  ]
 
   return (
-    <div className="flex flex-col gap-2 px-4 py-3">
-      {shown.map(({ key, label }) => (
-        <Row key={key} label={label} onClear={key === 'status' ? undefined : () => clear(key)}>
-          <FieldInput field={key} card={card} onChange={onChange} />
-        </Row>
-      ))}
-      {hidden.length > 0 && (
+    <div className="flex flex-col gap-1">
+      <Section label="kiedy">
         <div className="flex flex-wrap gap-1">
-          {hidden.map(({ key, label }) => (
+          {WHEN.map(({ key, label, value }) => {
+            const set = card[key] !== undefined
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={editing === key}
+                onClick={() => setEditing(editing === key ? null : key)}
+                className={cx(
+                  chip,
+                  set
+                    ? 'border-accent bg-accent/15 text-accent'
+                    : 'border-dashed border-line text-muted hover:text-accent',
+                )}
+              >
+                {set ? value(card) : `+ ${label}`}
+              </button>
+            )
+          })}
+        </div>
+        {active && (
+          <Row label={active.label} onClear={() => clear(active.key)}>
+            <FieldInput field={active.key} card={card} onChange={onChange} />
+          </Row>
+        )}
+      </Section>
+
+      {places
+        .filter((p) => shown(p.key))
+        .map(({ key, label }) => (
+          <Section
+            key={key}
+            label={label}
+            action={
+              <button
+                type="button"
+                onClick={() => clear(key)}
+                aria-label={`usuń pole ${label}`}
+                className="flex size-6 items-center justify-center text-dim hover:text-red"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            }
+          >
+            <LocationField field={key} card={card} onChange={onChange} />
+          </Section>
+        ))}
+
+      {children}
+
+      <div className="flex flex-wrap gap-1 pt-1">
+        {places
+          .filter((p) => !shown(p.key))
+          .map(({ key, label }) => (
             <button
               key={key}
               type="button"
               onClick={() => open(key)}
-              className="min-h-9 rounded-small border border-line px-3 text-xs text-muted transition-colors hover:text-accent"
+              className={cx(chip, 'border-dashed border-line text-muted hover:text-accent')}
             >
               + {label}
             </button>
           ))}
-        </div>
-      )}
+        {addons}
+      </div>
     </div>
   )
 }
@@ -188,28 +263,6 @@ function FieldInput({
             </option>
           ))}
         </select>
-      )
-    case 'status':
-      return (
-        <div className="flex gap-1">
-          {[undefined, ...CARD_STATUSES].map((s) => (
-            <button
-              key={s ?? 'none'}
-              type="button"
-              aria-pressed={card.status === s}
-              aria-label={s ? CARD_STATUS_LABELS[s] : 'bez statusu'}
-              onClick={() => onChange({ status: s })}
-              className={cx(
-                'flex min-h-11 flex-1 items-center justify-center rounded-small border px-1 text-xs transition-colors',
-                card.status === s
-                  ? 'border-accent bg-accent/20 text-accent'
-                  : 'border-line text-muted',
-              )}
-            >
-              {!s ? 'brak' : s === 'idea' ? CARD_STATUS_LABELS[s] : <StatusMark status={s} />}
-            </button>
-          ))}
-        </div>
       )
     case 'location':
     case 'destination':

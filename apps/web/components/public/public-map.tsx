@@ -2,7 +2,7 @@
 
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef } from 'react'
-import { useMapStyle } from '@/components/map/map-style'
+import { themeMap, useMapStyle } from '@/components/map/map-style'
 import { loadMapLibre } from '@/components/map/maplibre'
 
 export type PublicPin = { lat: number; lng: number; title: string; colorVar: string; label: string }
@@ -25,6 +25,7 @@ export function PublicMap({ pins }: { pins: PublicPin[] }) {
         attributionControl: { compact: true },
         dragRotate: false,
       })
+      themeMap(map)
       const bounds = new LngLatBounds()
       for (const pin of pins) {
         const el = document.createElement('div')

@@ -103,21 +103,65 @@ export function dayLegs(cards: CardSnapshot[], date: string): DayGap[] {
   return legs
 }
 
-/** Czy karta jest już za nami: minął jej dzień albo dziś skończyła się jej pora. */
+/** Start następnej karty dnia; karta bez czasu trwania trwa właśnie do niego. */
+export function nextStart(
+  card: Pick<CardSnapshot, 'date' | 'time'>,
+  cards: CardSnapshot[],
+): string | undefined {
+  if (!card.date || !card.time) return undefined
+  const time = card.time
+  return timedCards(cards.filter((c) => c.date === card.date)).find(
+    (c) => (c.time as string) > time,
+  )?.time
+}
+
+/**
+ * Czy karta jest już za nami: minął jej dzień albo dziś skończyła się jej pora. Karta bez czasu
+ * trwania jest otwarta: trwa do startu następnej (`next`), a bez następnej do końca dnia.
+ */
 export function cardIsPast(
   card: Pick<CardSnapshot, 'date' | 'endDate' | 'time' | 'durationMin'>,
   now: { date: string; time: string },
+  next?: string,
 ): boolean {
   const last = card.endDate ?? card.date
   if (!last) return false
   if (last !== now.date) return last < now.date
   if (card.endDate || !card.time) return false
-  return minutes(card.time) + (card.durationMin ?? 0) <= minutes(now.time)
+  if (card.durationMin === undefined) return next !== undefined && next <= now.time
+  return minutes(card.time) + card.durationMin <= minutes(now.time)
+}
+
+/** Typowy postój na karcie, gdy nie wiadomo, ile potrwa. */
+export const TYPICAL_STAY_MIN = 60
+/** Margines po końcu karty: spóźnienia i zmiany po drodze, kiedy dojazd jeszcze się przydaje. */
+const LEG_GRACE_MIN = 30
+
+/**
+ * Czy dojazd można schować: minął jego dzień albo karta docelowa skończyła się z marginesem.
+ * Sam start karty to za mało: możecie się spóźniać i dopiero tam jechać.
+ */
+export function legIsPast(
+  leg: Pick<DayGap, 'to'>,
+  date: string,
+  now: { date: string; time: string },
+  cards: CardSnapshot[],
+): boolean {
+  if (date !== now.date) return date < now.date
+  const to = cards.find((c) => c.id === leg.to)
+  if (!to?.time) return false
+  const end = minutes(to.time) + (to.durationMin ?? TYPICAL_STAY_MIN)
+  return minutes(now.time) >= end + LEG_GRACE_MIN
 }
 
 /** Godzina przesunięta o minuty (HH:MM). */
 export function shiftClock(time: string, delta: number): string {
   return clock((minutes(time) + delta + 1440) % 1440)
+}
+
+/** Godzina zaokrąglona w górę do 5 minut — podpowiedź przy upuszczeniu karty na dzień. */
+export function roundClock(time: string): string {
+  return clock(Math.min(Math.ceil(minutes(time) / 5) * 5, 1435))
 }
 
 /** Kiedy będziecie na miejscu, ruszając teraz: z odjazdu z rozkładu albo od razu. */
@@ -140,8 +184,34 @@ export function legShortfall(
   bufferMin: number,
 ): number | undefined {
   if (leg.leaveAt === undefined || leg.arriveBy === undefined) return undefined
-  const latest = plan.departAt
-    ? minutes(plan.departAt) - bufferMin
-    : minutes(leg.arriveBy) - plan.minutes - bufferMin
-  return minutes(leg.leaveAt) - latest
+  return minutes(leg.leaveAt) - latestLeave(leg.arriveBy, plan, bufferMin)
+}
+
+/** Ostatnia chwila na wyjście, żeby zdążyć: z rozkładu, z czasu dojazdu albo sam zapas. */
+function latestLeave(
+  arriveBy: string,
+  plan: { minutes: number; departAt?: string } | null | undefined,
+  bufferMin: number,
+): number {
+  if (plan?.departAt) return minutes(plan.departAt) - bufferMin
+  return minutes(arriveBy) - (plan?.minutes ?? 0) - bufferMin
+}
+
+/** Do kiedy można zostać na kartach bez czasu trwania (id karty → HH:MM). */
+export function stayTimes(
+  cards: CardSnapshot[],
+  legs: DayGap[],
+  plans: Record<string, { minutes: number; departAt?: string } | null>,
+  bufferMin: number,
+): Map<string, string> {
+  const times = new Map<string, string>()
+  for (const leg of legs) {
+    const card = cards.find((c) => c.id === leg.from)
+    if (!card?.time || card.durationMin !== undefined || !leg.arriveBy) continue
+    const latest = latestLeave(leg.arriveBy, plans[leg.id], bufferMin)
+    if (latest <= minutes(card.time)) continue
+    // Bez znanego dojazdu to tylko górna granica: sam zapas przed następną kartą.
+    times.set(card.id, `${clock(latest)}${plans[leg.id] ? '' : ' · bez dojazdu'}`)
+  }
+  return times
 }

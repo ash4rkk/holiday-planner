@@ -1,7 +1,8 @@
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
-import { CARD_SIZE, type CardSnapshot } from './cards'
+import { byTime, CARD_SIZE, type CardSnapshot, GRID, snapToGrid } from './cards'
 import { dateRange } from './dates'
+import { roundClock, shiftClock, TYPICAL_STAY_MIN } from './gaps'
 import { cardsOf } from './trip-doc'
 
 // Tablica w dokumencie wyjazdu:
@@ -23,7 +24,7 @@ export type Positions = Record<string, { x: number; y: number; frameId?: string 
 
 export const FRAME_SIZE = { w: 600, h: 400 } as const
 // „Ułóż wg dni”: odstęp kolumn mieści obrysy dni (web: DAY_PAD), a pionowy — strzałki kolejności.
-const DAY_GAP = { x: 90, y: 56 }
+const DAY_GAP = { x: GRID * 5, y: GRID * 3 }
 
 export function framesOf(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
   return doc.getMap<Y.Map<unknown>>('frames')
@@ -172,11 +173,6 @@ export function visibleEdges(edges: EdgeSnapshot[], cards: CardSnapshot[]): Edge
 
 // ---------- ułóż wg dni ----------
 
-/** Kolejność w dniu: po godzinie, bez godziny na początku, przy remisie wg utworzenia. */
-function byTime(a: CardSnapshot, b: CardSnapshot): number {
-  return (a.time ?? '').localeCompare(b.time ?? '') || a.createdAt.localeCompare(b.createdAt)
-}
-
 /** Dni z kartami (bez kosza) i id kart w kolejności dnia — do obrysów dni i strzałek kolejności. */
 export function dayOrder(cards: CardSnapshot[]): { date: string; ids: string[] }[] {
   const byDate = new Map<string, CardSnapshot[]>()
@@ -187,6 +183,144 @@ export function dayOrder(cards: CardSnapshot[]): { date: string; ids: string[] }
   return [...byDate.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, day]) => ({ date, ids: day.sort(byTime).map((c) => c.id) }))
+}
+
+/** Czy odcinek przecina prostokąt (Liang–Barsky) — strzałka kolejności omija wtedy kartę łukiem. */
+export function segmentHitsRect(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  r: Rect,
+): boolean {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  let enter = 0
+  let leave = 1
+  for (const [p, q] of [
+    [-dx, a.x - r.x],
+    [dx, r.x + r.w - a.x],
+    [-dy, a.y - r.y],
+    [dy, r.y + r.h - a.y],
+  ] as const) {
+    if (p === 0) {
+      if (q < 0) return false
+      continue
+    }
+    if (p < 0) enter = Math.max(enter, q / p)
+    else leave = Math.min(leave, q / p)
+    if (enter > leave) return false
+  }
+  return true
+}
+
+/**
+ * Wysokość linii „teraz”: tuż pod ostatnią rozpoczętą kartą, a gdy następna leży blisko — w połowie
+ * przerwy. Karty mogą stać poza kolejnością, więc środek między nimi mógłby wypaść na cudzej karcie.
+ */
+export function nowLineY(
+  before: { bottom: number } | undefined,
+  after: { top: number } | undefined,
+): number {
+  if (!before) return (after?.top ?? 0) - 16
+  if (!after) return before.bottom + 16
+  const room = after.top - before.bottom
+  return before.bottom + (room > 0 ? Math.min(room / 2, DAY_GAP.y / 2) : DAY_GAP.y / 2)
+}
+
+export type DropCard = {
+  id: string
+  top: number
+  bottom: number
+  left: number
+  right: number
+  time?: string
+  durationMin?: number
+}
+export type DropColumn = { date: string; x: number; w: number; cards: DropCard[] }
+export type DropTarget =
+  | { kind: 'variant'; id: string }
+  | { kind: 'day'; date: string; x: number; y: number; w: number; empty: boolean; time?: string }
+
+/** Kolumny dni do upuszczania: dni z kartami, a puste dni wyjazdu w siatce obok nich. */
+export function dropColumns(
+  cards: (DropCard & { date: string })[],
+  trip: { startDate?: string | null; endDate?: string | null },
+): DropColumn[] {
+  const byDate = new Map<string, DropCard[]>()
+  for (const c of cards) byDate.set(c.date, [...(byDate.get(c.date) ?? []), c])
+  const known = [...byDate.entries()].map(([date, day]): DropColumn => {
+    const x = Math.min(...day.map((c) => c.left))
+    return {
+      date,
+      x,
+      w: Math.max(...day.map((c) => c.right)) - x,
+      cards: [...day].sort((a, b) => a.top - b.top),
+    }
+  })
+  if (!trip.startDate) return known
+  const dates = dateRange(trip.startDate, trip.endDate ?? trip.startDate)
+  const anchor = known.find((c) => dates.includes(c.date))
+  const stride = CARD_SIZE.w + DAY_GAP.x
+  const empty = dates
+    .filter((date) => !byDate.has(date))
+    .map(
+      (date): DropColumn => ({
+        date,
+        x:
+          (anchor?.x ?? 0) +
+          (dates.indexOf(date) - (anchor ? dates.indexOf(anchor.date) : 0)) * stride,
+        w: CARD_SIZE.w,
+        cards: [],
+      }),
+    )
+  return [...known, ...empty]
+}
+
+/** Godzina dla miejsca między kartami: po poprzedniej z zapasem albo przed następną. */
+function suggestTime(
+  prev: DropCard | undefined,
+  next: DropCard | undefined,
+  durationMin: number,
+  bufferMin: number,
+): string | undefined {
+  // Karta bez czasu trwania: nie wiadomo, ile potrwa, więc liczymy typowy postój.
+  const stay = prev?.durationMin ?? TYPICAL_STAY_MIN
+  if (prev?.time) return roundClock(shiftClock(prev.time, stay + bufferMin))
+  if (next?.time) return shiftClock(next.time, -(durationMin + bufferMin))
+  return undefined
+}
+
+/**
+ * Co jest pod upuszczaną kartą: inna karta (wariant) albo miejsce w dniu, z godziną pasującą do
+ * sąsiadów. Własna godzina karty zostaje, jeśli mieści się między nimi.
+ */
+export function dropTarget(
+  at: { x: number; y: number },
+  columns: DropColumn[],
+  card: { id: string; time?: string; durationMin?: number },
+  bufferMin: number,
+): DropTarget | null {
+  const reach = DAY_GAP.x / 2
+  const column = columns.find((c) => at.x >= c.x - reach && at.x <= c.x + c.w + reach)
+  if (!column) return null
+  const others = column.cards.filter((c) => c.id !== card.id)
+  const hit = others.find(
+    (c) => at.y >= c.top && at.y <= c.bottom && at.x >= c.left && at.x <= c.right,
+  )
+  if (hit) return { kind: 'variant', id: hit.id }
+
+  const prev = others.filter((c) => c.bottom <= at.y).at(-1)
+  const next = others.find((c) => c.top >= at.y)
+  const fits =
+    card.time && (!prev?.time || prev.time <= card.time) && (!next?.time || card.time <= next.time)
+  return {
+    kind: 'day',
+    date: column.date,
+    x: column.x,
+    y: prev && next ? (prev.bottom + next.top) / 2 : prev ? prev.bottom + 16 : at.y,
+    w: column.w,
+    empty: !others.length,
+    time: fits ? card.time : suggestTime(prev, next, card.durationMin ?? 60, bufferMin),
+  }
 }
 
 /**
@@ -207,8 +341,8 @@ export function arrangeByDays(
     trip.startDate && trip.startDate < (dates[0] as string) ? trip.startDate : (dates[0] as string)
   const last = dates[dates.length - 1] as string
   const columns = dateRange(first, trip.endDate && trip.endDate > last ? trip.endDate : last)
-  const originX = Math.min(...dated.map((c) => c.x))
-  const originY = Math.min(...dated.map((c) => c.y))
+  const originX = snapToGrid(Math.min(...dated.map((c) => c.x)))
+  const originY = snapToGrid(Math.min(...dated.map((c) => c.y)))
 
   doc.transact(() => {
     for (const [col, date] of columns.entries()) {

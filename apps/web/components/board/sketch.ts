@@ -16,6 +16,14 @@ export function sketchLine(x1: number, y1: number, x2: number, y2: number, seed:
   return generator.toPaths(generator.line(x1, y1, x2, y2, { ...base, seed })).map((p) => p.d)
 }
 
+type Point = { x: number; y: number }
+
+/** Szkicowa krzywa Béziera — strzałka omijająca karty. */
+export function sketchCurve(a: Point, c1: Point, c2: Point, b: Point, seed: number): string[] {
+  const d = `M${a.x},${a.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${b.x},${b.y}`
+  return generator.toPaths(generator.path(d, { ...base, seed })).map((p) => p.d)
+}
+
 export function sketchArrowHead(x: number, y: number, angle: number, seed: number): string[] {
   const len = 12
   const spread = Math.PI / 7

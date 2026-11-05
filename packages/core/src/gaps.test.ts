@@ -6,8 +6,11 @@ import {
   dayGaps,
   dayLegs,
   lateBy,
+  legIsPast,
   legShortfall,
+  nextStart,
   shiftClock,
+  stayTimes,
 } from './gaps'
 
 const place = { name: 'x', lat: 1, lng: 2 }
@@ -165,8 +168,68 @@ describe('cardIsPast', () => {
     expect(cardIsPast({}, now)).toBe(false)
   })
 
+  it('karta bez czasu trwania trwa do następnej, a bez następnej do końca dnia', () => {
+    const open = { date: '2027-07-14', time: '09:00' }
+    expect(cardIsPast(open, now, '14:00')).toBe(false)
+    expect(cardIsPast(open, now, '11:00')).toBe(true)
+    expect(cardIsPast(open, now)).toBe(false)
+  })
+
   it('nocleg trwa do ostatniego dnia', () => {
     expect(cardIsPast({ date: '2027-07-10', endDate: '2027-07-14' }, now)).toBe(false)
     expect(cardIsPast({ date: '2027-07-10', endDate: '2027-07-13' }, now)).toBe(true)
+  })
+})
+
+describe('karty bez czasu trwania', () => {
+  const open = card('a', { time: '10:00', createdAt: '1' })
+  const next = card('b', { time: '14:00', createdAt: '2' })
+
+  it('następna karta dnia', () => {
+    expect(nextStart(open, [open, next])).toBe('14:00')
+    expect(nextStart(next, [open, next])).toBeUndefined()
+  })
+
+  it('można zostać do wyjścia z dojazdem i zapasem', () => {
+    const cards = [open, next]
+    const legs = dayGaps(cards)
+    const plans = { 'a>b': { minutes: 30 } }
+    expect(stayTimes(cards, legs, plans, 10).get('a')).toBe('13:20')
+    expect(stayTimes(cards, legs, {}, 10).get('a')).toBe('13:50 · bez dojazdu')
+  })
+
+  it('pomija karty z czasem i brak zapasu', () => {
+    const timed = card('a', { time: '10:00', durationMin: 60, createdAt: '1' })
+    expect(stayTimes([timed, next], dayGaps([timed, next]), {}, 10).size).toBe(0)
+    const tight = { 'a>b': { minutes: 300 } }
+    expect(stayTimes([open, next], dayGaps([open, next]), tight, 10).size).toBe(0)
+  })
+})
+
+describe('legIsPast', () => {
+  const date = '2027-07-14'
+  const at = (time: string) => ({ date, time })
+  const cards = [card('b', { time: '11:00', durationMin: 60 }), card('c', { time: '11:00' })]
+
+  it('zostaje po starcie i końcu karty, znika dopiero po marginesie', () => {
+    expect(legIsPast({ to: 'b' }, date, at('11:10'), cards)).toBe(false)
+    expect(legIsPast({ to: 'b' }, date, at('12:29'), cards)).toBe(false)
+    expect(legIsPast({ to: 'b' }, date, at('12:30'), cards)).toBe(true)
+  })
+
+  it('karta bez czasu trwania liczy typowy postój', () => {
+    expect(legIsPast({ to: 'c' }, date, at('12:29'), cards)).toBe(false)
+    expect(legIsPast({ to: 'c' }, date, at('12:30'), cards)).toBe(true)
+  })
+
+  it('zmiana godziny karty przywraca dojazd', () => {
+    const moved = [card('b', { time: '15:00', durationMin: 60 })]
+    expect(legIsPast({ to: 'b' }, date, at('12:30'), moved)).toBe(false)
+  })
+
+  it('miniony dzień znika, jutro i powrót do noclegu zostają', () => {
+    expect(legIsPast({}, '2027-07-13', at('12:00'), cards)).toBe(true)
+    expect(legIsPast({ to: 'b' }, '2027-07-15', at('12:00'), cards)).toBe(false)
+    expect(legIsPast({}, date, at('23:00'), cards)).toBe(false)
   })
 })

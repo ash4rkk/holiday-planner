@@ -13,7 +13,7 @@ import { memo, useMemo } from 'react'
 import { cx } from '@/components/ui'
 import { useBoard } from './board-context'
 import { ToolButton } from './card-node'
-import { seedOf, sketchArrowHead, sketchLine } from './sketch'
+import { seedOf, sketchArrowHead, sketchCurve, sketchLine } from './sketch'
 
 export type SketchEdgeType = Edge<{ label?: string }, 'sketch'>
 
@@ -43,8 +43,14 @@ function borderPoint(b: Box, to: { x: number; y: number }, pad = 6) {
   return { x: cx + dx * scale, y: cy + dy * scale }
 }
 
-/** Szkicowa strzałka od brzegu karty `source` do brzegu `target`. */
-function useArrow(id: string, source: string, target: string) {
+/** Jak daleko łuk wychodzi poza kolumnę; mieści się w obrysie dnia. */
+const AROUND_BEND = 12
+
+/**
+ * Szkicowa strzałka od brzegu karty `source` do brzegu `target`. Z `around` idzie łukiem obok kolumny:
+ * w dół po prawej, w górę po lewej, żeby para strzałek tam i z powrotem się nie nakładała.
+ */
+function useArrow(id: string, source: string, target: string, around = false) {
   const s = useInternalNode(source)
   const t = useInternalNode(target)
   return useMemo(() => {
@@ -53,9 +59,26 @@ function useArrow(id: string, source: string, target: string) {
     const tb = boxOf(t)
     const sc = { x: sb.x + sb.w / 2, y: sb.y + sb.h / 2 }
     const tc = { x: tb.x + tb.w / 2, y: tb.y + tb.h / 2 }
+    const seed = seedOf(id)
+    if (around && Math.abs(tc.y - sc.y) > Math.abs(tc.x - sc.x)) {
+      const side = tc.y > sc.y ? 1 : -1
+      const a = { x: sc.x + side * (sb.w / 2 + 6), y: sc.y }
+      const b = { x: tc.x + side * (tb.w / 2 + 6), y: tc.y }
+      const bend = side * AROUND_BEND
+      const c1 = { x: a.x + bend, y: a.y }
+      const c2 = { x: b.x + bend, y: b.y }
+      return {
+        a,
+        b,
+        mid: { x: (a.x + b.x) / 2 + bend * 0.75, y: (a.y + b.y) / 2 },
+        paths: [
+          ...sketchCurve(a, c1, c2, b, seed),
+          ...sketchArrowHead(b.x, b.y, side > 0 ? Math.PI : 0, seed),
+        ],
+      }
+    }
     const a = borderPoint(sb, tc)
     const b = borderPoint(tb, sc)
-    const seed = seedOf(id)
     const angle = Math.atan2(b.y - a.y, b.x - a.x)
     return {
       a,
@@ -63,7 +86,7 @@ function useArrow(id: string, source: string, target: string) {
       mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
       paths: [...sketchLine(a.x, a.y, b.x, b.y, seed), ...sketchArrowHead(b.x, b.y, angle, seed)],
     }
-  }, [s, t, id])
+  }, [s, t, id, around])
 }
 
 /** Swobodna szkicowa strzałka między brzegami kart, z opcjonalną etykietą. */
@@ -134,7 +157,7 @@ export const SketchEdge = memo(function SketchEdge({
   )
 })
 
-export type OrderEdgeType = Edge<{ warn?: boolean; label?: string }, 'order'>
+export type OrderEdgeType = Edge<{ warn?: boolean; label?: string; around?: boolean }, 'order'>
 
 /** Strzałka kolejności w dniu (z godzin kart, niezapisana): cieńsza, w kolorze obrysu dnia, bez gestów. */
 export const OrderEdge = memo(function OrderEdge({
@@ -143,7 +166,7 @@ export const OrderEdge = memo(function OrderEdge({
   target,
   data,
 }: EdgeProps<OrderEdgeType>) {
-  const geo = useArrow(id, source, target)
+  const geo = useArrow(id, source, target, data?.around)
   if (!geo) return null
   return (
     <>

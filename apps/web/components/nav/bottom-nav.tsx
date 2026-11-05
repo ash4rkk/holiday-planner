@@ -13,7 +13,7 @@ const SWIPE_MAX_MS = 600
 export const NAV_SLOT = 'nav-slot'
 
 /**
- * Pływająca kapsuła wyjazdu: dziś, tablica, lista, mapa. Poza wyjazdem prowadzi do ostatnio
+ * Pływająca kapsuła wyjazdu: dziś, lista, tablica, mapa. Poza wyjazdem prowadzi do ostatnio
  * otwartego, a bez żadnego wyjazdu do listy wyjazdów. Na wyborze profilu jej nie ma.
  */
 export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
@@ -32,13 +32,13 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
 
   const items = [
     { href: tripHref('today'), label: 'dziś', icon: Sun, active: pathname.endsWith('/today') },
+    { href: tripHref('list'), label: 'lista', icon: List, active: pathname.endsWith('/list') },
     {
       href: tripHref('board'),
       label: 'tablica',
       icon: LayoutDashboard,
       active: pathname.endsWith('/board'),
     },
-    { href: tripHref('list'), label: 'lista', icon: List, active: pathname.endsWith('/list') },
     { href: tripHref('map'), label: 'mapa', icon: MapIcon, active: pathname.endsWith('/map') },
   ]
 

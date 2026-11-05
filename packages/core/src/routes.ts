@@ -4,8 +4,10 @@ import type { DayGap } from './gaps'
 import { dayLegs, shiftClock } from './gaps'
 import type { LatLng } from './maps'
 import {
+  isFarWalk,
   type LegPlan,
   type LegStep,
+  MAX_FALLBACK_WALK_MIN,
   mergeWalks,
   NO_SERVICE_WAIT_MIN,
   planMaxAgeMs,
@@ -244,11 +246,17 @@ export async function planLeg(
     ? []
     : await db.select().from(routeCache).where(eq(routeCache.key, key))
   const age = row ? Date.now() - row.checkedAt.getTime() : Number.POSITIVE_INFINITY
-  if (row && !options.refresh && age < planMaxAgeMs(departure - Date.now()))
-    return { plan: row.plan as LegPlan }
+  // Stare wpisy mogą mieć awaryjną trasę pieszą przez pół kraju; takiej nie pokazujemy.
+  const cached =
+    row && !isFarWalk(row.plan as LegPlan, trip.travelMode) ? (row.plan as LegPlan) : null
+  if (cached && !options.refresh && age < planMaxAgeMs(departure - Date.now()))
+    return { plan: cached }
 
   let plan: Omit<LegPlan, 'checkedAt'> | null = null
   let limited = false
+  // Wynik awaryjny (brak klucza, limitu albo połączenia) nie trafia do bazy: gdy Google wróci,
+  // poprawny pojawi się sam.
+  let keep = true
   if (trip.travelMode === 'drive') {
     const car = await osrm('car', leg.from, leg.to)
     plan = car && fromRoute(car, 'drive', leg.arriveBy)
@@ -258,8 +266,12 @@ export async function planLeg(
     const apiKey = process.env.GOOGLE_ROUTES_API_KEY
     // Krótkie odcinki idzie się pieszo; nie ma po co pytać o rozkład.
     const short = !options.ride && walk && walk.minutes <= 10
-    if (trip.travelMode === 'walk' || !apiKey || short) plan = walking
-    else if (await takeRouteRequest()) {
+    const fallback = walking && walking.minutes <= MAX_FALLBACK_WALK_MIN ? walking : null
+    if (trip.travelMode === 'walk' || short) plan = walking
+    else if (!apiKey) {
+      plan = fallback
+      keep = false
+    } else if (await takeRouteRequest()) {
       const ride = await transit(
         apiKey,
         leg.from,
@@ -276,20 +288,23 @@ export async function planLeg(
         (!ride || (departs && waitMinutes(leg.leaveAt, departs) > NO_SERVICE_WAIT_MIN))
       if (options.ride) plan = ride
       else if (stranded) plan = walking && { ...walking, noService: true }
-      else
-        plan =
-          ride && walking ? (walking.minutes <= ride.minutes ? walking : ride) : (ride ?? walking)
+      else if (ride) plan = walking && walking.minutes <= ride.minutes ? walking : ride
+      else {
+        plan = fallback
+        keep = false
+      }
     } else {
       limited = true
-      plan = walking
+      plan = fallback
+      keep = false
     }
   }
   // Nie udało się policzyć: lepszy starszy wynik niż żaden.
-  if (!plan) return { plan: (row?.plan as LegPlan | undefined) ?? null, limited }
+  if (!plan) return { plan: cached, limited }
 
   const checkedAt = new Date()
   const saved: LegPlan = { ...plan, checkedAt: checkedAt.toISOString() }
-  if (options.live) return { plan: saved, limited }
+  if (options.live || !keep) return { plan: saved, limited }
   await db
     .insert(routeCache)
     .values({ key, plan: saved, checkedAt })

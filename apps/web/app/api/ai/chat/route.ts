@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import { normalizeProposals } from '@planer/core'
+import { type CardProposal, normalizeProposals } from '@planer/core'
 import { aiMessages, and, asc, eq, getDb, users } from '@planer/core/db'
 import { z } from 'zod'
 import { budgetLeftPln, MONTHLY_BUDGET_PLN, recordUsage, spentThisMonthPln } from '@/lib/ai/budget'
@@ -34,7 +34,7 @@ const nullable = (type: 'string' | 'number', description: string) => ({
 const PROPOSE_CARDS: Anthropic.Beta.BetaTool = {
   name: 'propose_cards',
   description:
-    'Proponuje nowe karty planu. Pokazują się w czacie z przyciskiem „dodaj”; do planu trafiają dopiero po zatwierdzeniu przez osobę. Najwyżej 8 kart.',
+    'Proponuje nowe karty: każde polecane miejsce lub pomysł. Pokazują się przy odpowiedzi w czacie, a osoba wybiera, czy dodać je do pomysłów albo do planu. Najwyżej 8 kart.',
   input_schema: {
     type: 'object',
     properties: {
@@ -94,6 +94,7 @@ export async function GET(request: Request) {
       role: aiMessages.role,
       text: aiMessages.text,
       sources: aiMessages.sources,
+      proposals: aiMessages.proposals,
       createdAt: aiMessages.createdAt,
       author: users.name,
     })
@@ -156,6 +157,7 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
       let answer = ''
       const sources = new Map<string, string>()
+      const proposed: CardProposal[] = []
       try {
         for (let round = 0; round < MAX_ROUNDS; round++) {
           const s = anthropic().beta.messages.stream(
@@ -209,7 +211,7 @@ export async function POST(request: Request) {
           const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
           for (const call of calls) {
             if (call.name === 'propose_cards') {
-              const cards = normalizeProposals(call.input)
+              const cards = normalizeProposals(call.input, trip)
               send('status', { text: 'szukam miejsc na mapie…' })
               // Kolejno, nie równolegle: Nominatim przyjmuje jedno zapytanie na sekundę.
               for (const card of cards) {
@@ -220,6 +222,7 @@ export async function POST(request: Request) {
                   ...(place?.lat !== undefined && { lat: place.lat, lng: place.lng }),
                 }
               }
+              proposed.push(...cards)
               send('proposal', { cards })
               results.push({
                 type: 'tool_result',
@@ -279,6 +282,7 @@ export async function POST(request: Request) {
             content: [{ type: 'text', text }],
             text,
             sources: list,
+            proposals: proposed,
           },
         ])
         send('done', {

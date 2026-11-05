@@ -48,7 +48,7 @@ export function CardEditor({
       ],
       editorProps: {
         attributes: {
-          class: 'card-prose min-h-[40vh] px-4 py-3 focus:outline-none',
+          class: 'card-prose min-h-20 px-4 py-3 focus:outline-none',
           'aria-label': 'treść karty',
         },
       },

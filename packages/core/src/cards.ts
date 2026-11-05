@@ -12,13 +12,12 @@ export const CARD_TYPE_LABELS: Record<CardType, string> = {
 }
 
 // Brak statusu też jest poprawny: karta nie wymaga niczego załatwiać.
-export const CARD_STATUSES = ['idea', 'booked', 'missing'] as const
+export const CARD_STATUSES = ['missing', 'booked'] as const
 export type CardStatus = (typeof CARD_STATUSES)[number]
 
 export const CARD_STATUS_LABELS: Record<CardStatus, string> = {
-  idea: 'pomysł',
-  booked: 'ogarnięte',
-  missing: 'do ogarnięcia',
+  missing: 'do rezerwacji',
+  booked: 'zarezerwowane',
 }
 
 export type CardLocation = {
@@ -63,6 +62,10 @@ export type CardFields = {
   createdAt: string
   updatedAt: string
   deletedAt?: string // kosz: przywracanie przez 30 dni
+  /** Wariant: id karty głównej. Wariant nie ma daty, więc plan dnia liczy tylko kartę główną. */
+  variantOf?: string
+  /** Karta główna: wybrana świadomie spośród wariantów, a nie tylko pierwsza z nich. */
+  variantChosen?: boolean
 }
 
 /** Pola, które użytkownik zmienia w edytorze karty. */
@@ -94,4 +97,35 @@ export type CardSnapshot = CardFields & {
 }
 
 export const CARD_SIZE = { w: 260, h: 160 } as const
+/** Oczko siatki Tablicy; karta i odstępy dni są jego wielokrotnością. */
+export const GRID = 20
+
+export function snapToGrid(value: number): number {
+  return Math.round(value / GRID) * GRID
+}
+
+/** Pomysł: karta bez dnia, która czeka w drawerze. Przypięte, ramki i szkice AI zostają na Tablicy. */
+export function isIdea(c: CardSnapshot): boolean {
+  return !c.deletedAt && !c.date && !c.variantOf && !c.pinned && !c.frameId && !c.aiDraft
+}
+
+/** Warianty wg karty głównej, od najstarszego. */
+export function variantsByMain(cards: CardSnapshot[]): Map<string, CardSnapshot[]> {
+  const byMain = new Map<string, CardSnapshot[]>()
+  for (const c of cards) {
+    if (!c.variantOf || c.deletedAt) continue
+    byMain.set(c.variantOf, [...(byMain.get(c.variantOf) ?? []), c])
+  }
+  for (const list of byMain.values()) list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  return byMain
+}
+
+/** Kolejność w dniu: po godzinie, bez godziny na początku, przy remisie wg utworzenia. */
+export function byTime(
+  a: Pick<CardFields, 'time' | 'createdAt'>,
+  b: Pick<CardFields, 'time' | 'createdAt'>,
+): number {
+  return (a.time ?? '').localeCompare(b.time ?? '') || a.createdAt.localeCompare(b.createdAt)
+}
+
 export const TRASH_DAYS = 30

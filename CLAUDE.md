@@ -16,7 +16,8 @@ Prywatna PWA dla 2 osób: każdy wyjazd to tablica kart Markdown z miejscami z G
 - Audyt po etapie 8: `docs/audyt-2026-11.md`; poprawione punkty 1, 2, 4, 5, 6, 7 i ponowienie `tar`.
 - Po wdrożeniu: wybór profilu na `/` (raz na sesję, `components/profile/`), „dziś” wyjazdu `/trips/<id>/today` (Pulpit zastąpiony), wyjście „‹” do `/trips`, pogoda w nagłówku dnia i w obrysie dnia na Tablicy.
 - Animacje i wygląd: przejścia React `ViewTransition`, arkusze `.sheet-in`, „+” w menu dolnym (portal do `NAV_SLOT`), oś dnia na Liście, grupowanie pinezek. Przytrzymanie karty na Liście = przeniesienie na inny dzień. Czat proponuje karty narzędziem `propose_cards` (dodaje je dopiero osoba). Przerwy dnia: `packages/core/src/gaps.ts`, odcinki dnia `dayLegs`, plany `@planer/core/routes` (Google dla komunikacji, OSRM pieszo i autem, wyniki w `route_cache`), `/api/route/plan`, `useDayPlans`, „czas wyjść” w workerze.
-- Wszystkie etapy z planu są zrobione; dalej: wdrożenie, testy na telefonach, poprawki.
+- Etap 9 (pomysły i warianty) — gałąź `etap-9`: karty bez dnia w drawerze/panelu pomysłów (`components/board/ideas-drawer.tsx`, `isIdea`), przeciąganie na dzień z podpowiedzią godziny (`dropTarget`), warianty (`variantOf`, `chooseVariant`; wariant nie ma daty, więc plan liczy tylko kartę główną), rozgałęzienie na desktopie, stos na Tablicy telefonu, karuzela na Liście (`variant-carousel.tsx`), siatka co 20 (`GRID`), zaznaczanie Ctrl/Shift, panel karty z wysepkami (`card-sheet.tsx`, `CardSections`), statusy „do rezerwacji” i „zarezerwowane”, kolumna godzin na Liście, „możesz zostać do” (`stayTimes`), chowanie minionych dojazdów z marginesem (`legIsPast`), brak połączenia zamiast długich tras pieszych (`isFarWalk`), propozycje AI od razu z „do pomysłów” (zapisane w `ai_messages.proposals`), mapa w kolorach motywu (`themeMap`) i trasa rozbita na pojazdy z przystankami (`routeMarks`).
+- Wszystkie etapy z planu są zrobione; dalej: testy na telefonach, poprawki.
 
 ## Stos
 
@@ -70,6 +71,10 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - Biblioteki z plikami innymi niż JS (np. `playwright-core` → `browsers.json`) wymagają `outputFileTracingIncludes` w `next.config.ts`, inaczej w obrazie `standalone` ich brakuje. Sprawdzaj nowe zależności serwerowe w zbudowanym obrazie, nie tylko w `next dev`.
 - Dynamiczne ścieżki plików na serwerze oznaczaj `/* turbopackIgnore: true */`, inaczej build śledzi cały projekt do `standalone`.
 - pnpm nie uruchamia skryptów `pre*`/`post*` — kroki przygotowawcze wpisuj wprost w skrypt.
+- Pozycje kart w dokumencie Yjs są wspólne dla telefonu i desktopu. Rozsuwanie dni i wyśrodkowanie przy rozgałęzieniu (`shiftAt`, `insets` w `board.tsx`) liczymy tylko przy rysowaniu; nie zapisuj ich. Upuszczanie działa na współrzędnych z ekranu, więc zapis potrzebuje `baseX`.
+- Węzły rysowane w locie (warianty na Tablicy) podają `measured` i `handles` wprost, inaczej React Flow pomija ich strzałki.
+- Czat i inne okna nad Tablicą przez portal do `body`: `fixed` wrapper Tablicy tworzy kontekst warstw i `z-index` przegrywa z dolnym menu.
+- `pnpm dev:sync` czyta env z `apps/web/.env.local` (`--env-file`); bez tego sync nie widzi `AUTH_DEV_EMAIL`.
 - Rozwijanie linków chodzi tylko po hostach Google (`isAllowedMapsHost`) — to ochrona przed SSRF, nie poluzowuj jej.
 - AI: historia czatu wraca do modelu bez bloków rozumowania (zapisujemy tylko tekst tur), więc opis wyjazdu w prompcie systemowym może się zmieniać między pytaniami — nie dodawaj zapisu pełnych bloków odpowiedzi bez przemyślenia „preserved thinking” (edycja historii = 400).
 - AI: zmienne dane (data, godzina, kto pyta) idą w treść pytania, nie do promptu systemowego — inaczej cache promptu nie działa.

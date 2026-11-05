@@ -23,6 +23,14 @@ export function parseAmounts(text: string): Amount[] {
   return out
 }
 
+/** Tekst bez składni kwot: kwotę pokazuje plakietka karty, więc podgląd jej nie powtarza. */
+export function withoutAmounts(text: string): string {
+  return text
+    .replace(AMOUNT, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 /** Suma per waluta, w kolejności pierwszego wystąpienia. */
 export function sumByCurrency(amounts: Amount[]): Amount[] {
   const sums = new Map<string, number>()

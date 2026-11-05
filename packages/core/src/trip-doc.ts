@@ -1,12 +1,16 @@
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
-import { parseAmounts } from './amounts'
+import { parseAmounts, withoutAmounts } from './amounts'
 import {
+  byTime,
   CARD_SIZE,
+  CARD_STATUSES,
   type CardFields,
   type CardSnapshot,
+  type CardStatus,
   type CardType,
   type EditableCardFields,
+  GRID,
   TRASH_DAYS,
 } from './cards'
 import { addDays, dateRange, daysBetween } from './dates'
@@ -17,7 +21,7 @@ import { addDays, dateRange, daysBetween } from './dates'
 
 export type CardMap = Y.Map<unknown>
 
-const DAY_STACK_GAP = 56
+const DAY_STACK_GAP = GRID * 3
 
 /** Miejsce pod kartami danego dnia na Tablicy — inaczej obrys dnia rozjechałby się po całej planszy. */
 function daySlot(doc: Y.Doc, date: string, except?: string): { x: number; y: number } | undefined {
@@ -28,6 +32,34 @@ function daySlot(doc: Y.Doc, date: string, except?: string): { x: number; y: num
     if (!slot || y > slot.y) slot = { x: card.get('x') as number, y }
   }
   return slot
+}
+
+/**
+ * Przywraca kolejność godzin w kolumnie dnia. Zmienia tylko `y` i tylko wtedy, gdy kolejność się
+ * rozjechała. Dzień ułożony ręcznie (karty w różnych miejscach albo w ramkach) zostaje bez zmian.
+ */
+function tidyDay(doc: Y.Doc, date: string) {
+  const day = [...cardsOf(doc).values()]
+    .filter((c) => c.get('date') === date && !c.get('deletedAt'))
+    .map((card) => ({
+      card,
+      time: card.get('time') as string | undefined,
+      createdAt: card.get('createdAt') as string,
+      x: card.get('x') as number,
+      y: card.get('y') as number,
+      h: (card.get('h') as number) ?? CARD_SIZE.h,
+    }))
+    .sort(byTime)
+  const xs = day.map((c) => c.x)
+  if (Math.max(...xs) - Math.min(...xs) >= CARD_SIZE.w / 2) return
+  if (day.some((c) => c.card.get('frameId'))) return
+  if (day.every((c, i) => !i || c.y > (day[i - 1] as (typeof day)[number]).y)) return
+
+  let y = Math.min(...day.map((c) => c.y))
+  for (const c of day) {
+    c.card.set('y', y)
+    y += c.h + DAY_STACK_GAP
+  }
 }
 
 export function cardsOf(doc: Y.Doc): Y.Map<CardMap> {
@@ -75,6 +107,7 @@ export function createCard(
       paragraph.insert(0, [t])
       content.push([paragraph])
     }
+    if (init.date) tidyDay(doc, init.date)
   })
   return id
 }
@@ -100,6 +133,7 @@ export function updateCard(
   if (!card) return
   doc.transact(() => {
     const slot = patch.date && patch.date !== card.get('date') && daySlot(doc, patch.date, id)
+    const timeBefore = card.get('time')
     for (const [key, value] of Object.entries(patch)) {
       if (value === undefined || value === '') card.delete(key)
       else card.set(key, value)
@@ -108,13 +142,22 @@ export function updateCard(
       card.set('x', slot.x)
       card.set('y', slot.y)
     }
+    const date = card.get('date') as string | undefined
+    if (date && (slot || card.get('time') !== timeBefore)) tidyDay(doc, date)
     card.set('updatedAt', now.toISOString())
   })
 }
 
 export function trashCard(doc: Y.Doc, id: string, now = new Date()) {
   const card = cardsOf(doc).get(id)
-  if (card) doc.transact(() => card.set('deletedAt', now.toISOString()))
+  if (!card) return
+  doc.transact(() => {
+    // Karta główna w koszu: miejsce w planie przejmuje najstarszy wariant, a po przywróceniu
+    // wyrzucona karta wraca do stosu jako wariant.
+    const heir = variantIds(doc, id)[0]
+    if (heir) promote(doc, heir, id)
+    card.set('deletedAt', now.toISOString())
+  })
 }
 
 export function restoreCard(doc: Y.Doc, id: string) {
@@ -174,17 +217,22 @@ export function fragmentLines(fragment: Y.XmlFragment | Y.XmlElement): string[] 
   return lines.filter(Boolean)
 }
 
+/** Stare karty: „zaliczone” to rzecz załatwiona, a status „pomysł” już nie istnieje. */
+function currentStatus(status: string | undefined): CardStatus | undefined {
+  if (status === 'done') return 'booked'
+  return CARD_STATUSES.find((s) => s === status)
+}
+
 export function readCard(id: string, card: CardMap): CardSnapshot {
   const fields = Object.fromEntries(
     [...card.entries()].filter(([key]) => key !== 'content'),
   ) as CardFields
   const lines = fragmentLines(contentOf(card))
   const [title = '', ...rest] = lines
-  const preview = rest.join(' · ')
+  const preview = rest.map(withoutAmounts).filter(Boolean).join(' · ')
   return {
     ...fields,
-    // Stare karty mają jeszcze status „zaliczone”: bilet był, więc to rzecz ogarnięta.
-    status: (fields.status as string) === 'done' ? 'booked' : fields.status,
+    status: currentStatus(fields.status as string | undefined),
     attachmentIds: fields.attachmentIds ?? [],
     pinned: fields.pinned ?? false,
     id,
@@ -195,7 +243,87 @@ export function readCard(id: string, card: CardMap): CardSnapshot {
 }
 
 export function readCards(doc: Y.Doc): CardSnapshot[] {
-  return [...cardsOf(doc).entries()].map(([id, card]) => readCard(id, card))
+  const cards = [...cardsOf(doc).entries()].map(([id, card]) => readCard(id, card))
+  // Wariant bez żywej karty głównej (np. po równoczesnych zmianach) wraca do pomysłów, nie znika.
+  const mains = new Set(cards.filter((c) => !c.deletedAt && !c.variantOf).map((c) => c.id))
+  return cards.map((c) =>
+    c.variantOf && !mains.has(c.variantOf) ? { ...c, variantOf: undefined } : c,
+  )
+}
+
+// ---------- warianty ----------
+
+/** Żywe warianty karty, od najstarszego. */
+function variantIds(doc: Y.Doc, mainId: string): string[] {
+  return [...cardsOf(doc).entries()]
+    .filter(([, c]) => c.get('variantOf') === mainId && !c.get('deletedAt'))
+    .sort(([, a], [, b]) =>
+      (a.get('createdAt') as string).localeCompare(b.get('createdAt') as string),
+    )
+    .map(([id]) => id)
+}
+
+/** Wariant zajmuje miejsce karty głównej w planie, a ona i reszta stają się jego wariantami. */
+function promote(doc: Y.Doc, id: string, mainId: string) {
+  const card = cardsOf(doc).get(id)
+  const main = cardsOf(doc).get(mainId)
+  if (!card || !main) return
+  for (const key of ['date', 'endDate', 'frameId', 'x', 'y']) {
+    if (main.has(key)) card.set(key, main.get(key))
+    else card.delete(key)
+  }
+  for (const key of ['date', 'endDate', 'frameId', 'variantChosen']) main.delete(key)
+  for (const other of cardsOf(doc).values()) {
+    if (other.get('variantOf') === mainId) other.set('variantOf', id)
+  }
+  main.set('variantOf', id)
+  card.delete('variantOf')
+}
+
+/** Karta staje się wariantem innej: traci dzień, a jej własne warianty idą razem z nią. */
+export function addVariant(doc: Y.Doc, id: string, target: string, now = new Date()) {
+  const cards = cardsOf(doc)
+  const mainId = (cards.get(target)?.get('variantOf') as string | undefined) ?? target
+  const card = cards.get(id)
+  const main = cards.get(mainId)
+  if (!card || !main || id === mainId) return
+  doc.transact(() => {
+    for (const other of cards.values()) {
+      if (other.get('variantOf') === id) other.set('variantOf', mainId)
+    }
+    for (const key of ['date', 'endDate', 'frameId', 'variantChosen']) card.delete(key)
+    if (!card.get('time') && main.get('time')) card.set('time', main.get('time'))
+    card.set('variantOf', mainId)
+    card.set('updatedAt', now.toISOString())
+    // Nowa opcja znów otwiera wybór.
+    main.delete('variantChosen')
+  })
+}
+
+/** Wybór: karta przejmuje miejsce w planie, a kolumna dnia układa się wg jej godziny. */
+export function chooseVariant(doc: Y.Doc, id: string, now = new Date()) {
+  const card = cardsOf(doc).get(id)
+  if (!card) return
+  doc.transact(() => {
+    const mainId = card.get('variantOf') as string | undefined
+    if (mainId) promote(doc, id, mainId)
+    card.set('variantChosen', true)
+    card.set('updatedAt', now.toISOString())
+    const date = card.get('date') as string | undefined
+    if (date) tidyDay(doc, date)
+  })
+}
+
+/** Wyjmuje wariant ze stosu: wraca do pomysłów. */
+export function detachVariant(doc: Y.Doc, id: string, now = new Date()) {
+  const card = cardsOf(doc).get(id)
+  const mainId = card?.get('variantOf') as string | undefined
+  if (!card || !mainId) return
+  doc.transact(() => {
+    card.delete('variantOf')
+    card.set('updatedAt', now.toISOString())
+    if (!variantIds(doc, mainId).length) cardsOf(doc).get(mainId)?.delete('variantChosen')
+  })
 }
 
 // ---------- Lista ----------
@@ -224,7 +352,8 @@ export function groupCardsByDay(
   cards: CardSnapshot[],
   trip: { startDate?: string | null; endDate?: string | null } = {},
 ): ListGroups {
-  const live = cards.filter((c) => !c.deletedAt)
+  // Warianty nie są punktami planu; widać je przy karcie głównej.
+  const live = cards.filter((c) => !c.deletedAt && !c.variantOf)
   const trash = cards
     .filter((c) => c.deletedAt)
     .sort((a, b) => ((a.deletedAt ?? '') < (b.deletedAt ?? '') ? 1 : -1))

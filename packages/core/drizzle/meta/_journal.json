@@ -64,6 +64,13 @@
       "when": 1793822844590,
       "tag": "0008_medical_hitman",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793908543102,
+      "tag": "0009_pretty_prowler",
+      "breakpoints": true
     }
   ]
 }

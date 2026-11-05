@@ -6,13 +6,15 @@ import {
   createCard,
   formatAmount,
   formatShortDate,
+  matchingCard,
   proposalText,
 } from '@planer/core'
 import { Check, RotateCcw, Send, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { cx } from '@/components/ui'
-import { useTrip } from '@/lib/yjs/trip-doc'
+import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { AiMarkdown } from './markdown'
 
 type Msg = {
@@ -24,6 +26,13 @@ type Msg = {
   proposals?: CardProposal[]
 }
 type Budget = { spent: number; limit: number }
+type Decision = 'idea' | 'plan' | 'skipped'
+
+const DECISION_LABELS: Record<Decision, string> = {
+  idea: 'dodano do pomysłów',
+  plan: 'dodano do planu',
+  skipped: 'pominięto',
+}
 
 const SUGGESTIONS = [
   'Co mamy jutro?',
@@ -46,40 +55,44 @@ export function ChatButton({ onOpenCard }: { onOpenCard: (id: string) => void })
       >
         <Sparkles className="size-5" aria-hidden="true" />
       </button>
-      {open && (
-        <ChatPanel
-          onClose={() => setOpen(false)}
-          onOpenCard={(id) => {
-            setOpen(false)
-            onOpenCard(id)
-          }}
-        />
-      )}
+      {/* Portal: Tablica tworzy własny kontekst warstw, więc menu dolne przykrywałoby czat. */}
+      {open &&
+        createPortal(
+          <ChatPanel
+            onClose={() => setOpen(false)}
+            onOpenCard={(id) => {
+              setOpen(false)
+              onOpenCard(id)
+            }}
+          />,
+          document.body,
+        )}
     </>
   )
 }
 
-/** Propozycje kart z czatu: do planu trafia tylko to, co zatwierdzi osoba. */
+/** Propozycje kart z czatu: osoba decyduje, czy trafią do pomysłów (bez dnia) albo do planu. */
 function Proposals({ cards }: { cards: CardProposal[] }) {
   const { doc } = useTrip()
-  const [decided, setDecided] = useState<Map<number, 'added' | 'skipped'>>(new Map())
-  const mark = (i: number, value: 'added' | 'skipped') =>
-    setDecided((d) => new Map(d).set(i, value))
-  const add = (i: number) => {
+  const existing = useCards()
+  const [decided, setDecided] = useState<Map<number, Decision>>(new Map())
+  const mark = (i: number, value: Decision) => setDecided((d) => new Map(d).set(i, value))
+  const add = (i: number, target: 'idea' | 'plan') => {
     const { type, date, time, durationMin, location } = cards[i] as CardProposal
+    const planned = target === 'plan'
     createCard(
       doc,
       {
         type,
-        ...(date && { date }),
-        ...(time && { time }),
+        ...(planned && date && { date }),
+        ...(planned && time && { time }),
         ...(durationMin && { durationMin }),
         ...(location && { location }),
       },
       new Date(),
       proposalText(cards[i] as CardProposal),
     )
-    mark(i, 'added')
+    mark(i, target)
   }
   const open = cards.map((_, i) => i).filter((i) => !decided.has(i))
 
@@ -88,6 +101,7 @@ function Proposals({ cards }: { cards: CardProposal[] }) {
       {cards.map((card, i) => {
         const Icon = TYPE_STYLE[card.type].icon
         const state = decided.get(i)
+        const twin = state ? undefined : matchingCard(card, existing)
         const meta = [
           card.date && formatShortDate(card.date),
           card.time,
@@ -114,20 +128,34 @@ function Proposals({ cards }: { cards: CardProposal[] }) {
               <p className="truncate text-xs text-subtle italic">{meta.join(' · ')}</p>
             )}
             {card.notes && <p className="text-xs text-muted">{card.notes}</p>}
+            {twin && (
+              <p className="mt-1 truncate text-xs text-orange">
+                ● już to masz: {twin.title || 'karta bez tytułu'}
+              </p>
+            )}
             {state ? (
               <p className="mt-1 flex items-center gap-1 text-xs text-subtle">
-                {state === 'added' && <Check className="size-3.5" aria-hidden="true" />}
-                {state === 'added' ? 'dodano do planu' : 'pominięto'}
+                {state !== 'skipped' && <Check className="size-3.5" aria-hidden="true" />}
+                {DECISION_LABELS[state]}
               </p>
             ) : (
-              <div className="mt-1 grid grid-cols-2 gap-1">
+              <div className={cx('mt-1 grid gap-1', card.date ? 'grid-cols-3' : 'grid-cols-2')}>
                 <button
                   type="button"
-                  onClick={() => add(i)}
+                  onClick={() => add(i, 'idea')}
                   className="min-h-11 rounded-small bg-accent text-xs font-bold text-on-accent"
                 >
-                  dodaj
+                  do pomysłów
                 </button>
+                {card.date && (
+                  <button
+                    type="button"
+                    onClick={() => add(i, 'plan')}
+                    className="min-h-11 rounded-small border border-accent text-xs font-bold text-accent"
+                  >
+                    do planu
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => mark(i, 'skipped')}
@@ -144,11 +172,11 @@ function Proposals({ cards }: { cards: CardProposal[] }) {
         <button
           type="button"
           onClick={() => {
-            for (const i of open) add(i)
+            for (const i of open) add(i, 'idea')
           }}
           className="min-h-11 text-xs font-bold text-accent"
         >
-          dodaj wszystkie ({open.length})
+          wszystkie do pomysłów ({open.length})
         </button>
       )}
     </div>
@@ -279,7 +307,7 @@ function ChatPanel({
         onClick={onClose}
         className="min-h-12 flex-1"
       />
-      <section className="island sheet-in mx-px mb-px flex h-[85dvh] flex-col overflow-hidden">
+      <section className="island sheet-in mx-px mb-px flex h-[85dvh] flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
         <header className="flex items-center gap-1 border-b border-line p-1">
           <Sparkles className="ml-2 size-4 text-accent" aria-hidden="true" />
           <h2 className="flex-1 truncate px-1 text-sm font-bold">czat · {trip.title}</h2>
@@ -311,8 +339,8 @@ function ChatPanel({
           {loaded && messages.length === 0 && (
             <div className="flex flex-col gap-2">
               <p className="text-xs text-subtle italic">
-                AI czyta cały plan wyjazdu i pliki, szuka w sieci i proponuje karty — do planu
-                trafiają dopiero po Twoim zatwierdzeniu.
+                AI czyta cały plan wyjazdu i pliki, szuka w sieci i proponuje karty — do pomysłów
+                albo planu trafiają dopiero po Twoim wyborze.
               </p>
               <div className="flex flex-wrap gap-1">
                 {SUGGESTIONS.map((s) => (

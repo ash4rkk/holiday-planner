@@ -11,11 +11,13 @@ import {
   type LatLng,
   type LegPlan,
   lateBy,
+  legIsPast,
   type MappedCard,
   navigationUrl,
   nextPlace,
   shiftClock,
   staysOver,
+  stayTimes,
   TRAVEL_MODE_LABELS,
   todayLocal,
 } from '@planer/core'
@@ -86,8 +88,15 @@ export function TodayDashboard({ userName }: { userName: string }) {
   const place = weatherPlace(cards, planDate)
   const weather = useWeather(place)
   const { legs, plans, limited, refresh } = useDayPlans(after ? null : planDate)
+  const stays = stayTimes(todays, legs, plans, trip.travelBufferMin)
+  // Minione dojazdy są schowane, ale po zmianie planu w trasie można je odsłonić.
+  const [showPast, setShowPast] = useState(false)
+  const isPast = (leg: (typeof legs)[number]) =>
+    legIsPast(leg, planDate, { date: today, time: now }, live)
+  const hiddenLegs = legs.filter(isPast).length
   const legRow = (leg: (typeof legs)[number] | undefined) =>
-    leg && (
+    leg &&
+    (showPast || !isPast(leg)) && (
       <LegRow
         leg={leg}
         date={planDate}
@@ -244,6 +253,11 @@ export function TodayDashboard({ userName }: { userName: string }) {
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
+                    {stays.has(card.id) && (
+                      <span className="block text-xs text-teal">
+                        możesz zostać do {stays.get(card.id)}
+                      </span>
+                    )}
                   </span>
                 </button>
                 {legRow(legs.find((l) => l.from === card.id))}
@@ -253,6 +267,16 @@ export function TodayDashboard({ userName }: { userName: string }) {
         </ol>
       )}
 
+      {hiddenLegs > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowPast((v) => !v)}
+          aria-expanded={showPast}
+          className="min-h-11 px-3 text-left text-xs text-subtle italic"
+        >
+          {showPast ? 'ukryj minione dojazdy' : `pokaż minione dojazdy (${hiddenLegs})`}
+        </button>
+      )}
       {!after && <DayTravelSummary plans={plans} limited={limited} />}
 
       {sheet.openId && (

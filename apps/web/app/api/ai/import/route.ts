@@ -1,5 +1,5 @@
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
-import { CARD_TYPES, formatDateSpan, isIsoDate, isIsoTime } from '@planer/core'
+import { CARD_TYPES, formatDateSpan, isIsoDate, isIsoTime, withoutAmounts } from '@planer/core'
 import { z } from 'zod'
 import { budgetLeftPln, MONTHLY_BUDGET_PLN, recordUsage } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured, anthropic, fallback } from '@/lib/ai/client'
@@ -95,6 +95,7 @@ export async function POST(request: Request) {
     return Response.json({ error: 'AI nie rozpoznało tego dokumentu' }, { status: 422 })
   }
 
+  const notes = withoutAmounts(out.notes ?? '')
   // Model trzyma się schematu, ale formaty pól sprawdzamy sami — zły format = puste pole.
   const currency = out.amount?.currency.trim().toUpperCase()
   const draft: ImportDraft = {
@@ -109,8 +110,12 @@ export async function POST(request: Request) {
       /^[A-Z]{3}$/.test(currency) && {
         amount: { value: Math.round(out.amount.value * 100) / 100, currency },
       }),
-    details: out.details.filter((d) => d.label.trim() && d.value.trim()).slice(0, 12),
-    ...(out.notes?.trim() && { notes: out.notes.trim() }),
+    // Kwota jest tylko w polu `amount`: składnia /+ w tekście weszłaby do sum drugi raz.
+    details: out.details
+      .map((d) => ({ label: d.label, value: withoutAmounts(d.value) }))
+      .filter((d) => d.label.trim() && d.value)
+      .slice(0, 12),
+    ...(notes && { notes }),
   }
   if (out.location_name?.trim()) {
     const name = out.location_name.trim()

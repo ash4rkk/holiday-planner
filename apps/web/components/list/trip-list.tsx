@@ -14,22 +14,26 @@ import {
   formatDayHeader,
   formatShortDate,
   groupCardsByDay,
+  legIsPast,
   moveCardToDay,
+  nextStart,
   restoreCard,
+  stayTimes,
   todayLocal,
+  variantsByMain,
 } from '@planer/core'
-import { Lightbulb, Luggage, Plus, Settings2 } from 'lucide-react'
+import { Luggage, Plus, Settings2 } from 'lucide-react'
 import Link from 'next/link'
 import { Fragment, type ReactNode, useMemo, useState } from 'react'
 import { AddButton } from '@/components/add-button'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { TotalsText } from '@/components/amounts'
-import { CardSheet } from '@/components/card/card-sheet'
+import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
 import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { StatusMark } from '@/components/card/status-mark'
-import { TYPE_STYLE } from '@/components/card/type-style'
+import { formatDuration, TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -42,7 +46,9 @@ import { pasteAsCard } from '@/lib/place-card'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
 import { useTripNow } from '@/lib/use-trip-now'
+import { useWide } from '@/lib/use-wide'
 import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
+import { VariantCarousel } from './variant-carousel'
 
 export function TripList() {
   const { trip, doc, ready, templates } = useTrip()
@@ -52,6 +58,7 @@ export function TripList() {
   const attachments = useAttachments()
   const fileCounts = useMemo(() => countByCard(attachments), [attachments])
   const { openId, isNew, open, close } = useCardSheet()
+  const wide = useWide()
   const [types, setTypes] = useState<Set<CardType>>(new Set())
   const [statuses, setStatuses] = useState<Set<CardStatus>>(new Set())
   const [showTrash, setShowTrash] = useState(false)
@@ -68,6 +75,7 @@ export function TripList() {
     [cards, types, statuses],
   )
   const groups = useMemo(() => groupCardsByDay(filtered, trip), [filtered, trip])
+  const variants = useMemo(() => variantsByMain(cards), [cards])
 
   const add = (date?: string) => {
     const id = createCard(doc, { type: 'note', ...(date && { date }) })
@@ -81,13 +89,17 @@ export function TripList() {
     update(next)
   }
 
-  const tile = (c: CardSnapshot) => (
+  const tile = (c: CardSnapshot, stayUntil?: string, inDay?: boolean) => (
     <CardTile
       key={c.id}
       card={c}
       files={fileCounts.get(c.id)}
+      variants={variants.get(c.id)?.length}
+      stayUntil={stayUntil}
+      inDay={inDay}
       onOpen={() => open(c.id)}
-      onHold={() => setMoving(c)}
+      // Wariant nie ma własnego dnia, więc nie ma czego przenosić.
+      onHold={c.variantOf ? undefined : () => setMoving(c)}
     />
   )
   const live = cards.filter((c) => !c.deletedAt).length
@@ -95,7 +107,11 @@ export function TripList() {
   return (
     <>
       {/* Pod otwartym arkuszem lista jest nieaktywna (fokus i czytniki ekranu zostają w arkuszu). */}
-      <main inert={!!openId} className="mx-auto flex max-w-xl flex-col gap-1">
+      <main
+        inert={!!openId && !wide}
+        className="mx-auto flex max-w-xl flex-col gap-1"
+        style={wide && openId ? { marginRight: CARD_PANEL_WIDTH } : undefined}
+      >
         <TopBar
           theme={false}
           title={trip.title}
@@ -120,7 +136,7 @@ export function TripList() {
         <SessionBanner />
 
         <div
-          className="relative -mx-px mt-1 flex items-center justify-[safe_center] overflow-x-auto border-y border-line bg-panel p-1"
+          className="island relative mt-1 flex items-center overflow-x-auto p-1 [&>:first-child]:ml-auto [&>:last-child]:mr-auto"
           role="group"
           aria-label="filtry"
         >
@@ -149,11 +165,7 @@ export function TripList() {
               on={statuses.has(s)}
               onClick={() => toggle(statuses, s, setStatuses)}
             >
-              {s === 'idea' ? (
-                <Lightbulb className="size-5" aria-hidden="true" strokeWidth={1.8} />
-              ) : (
-                <StatusMark status={s} />
-              )}
+              <StatusMark status={s} />
             </FilterChip>
           ))}
         </div>
@@ -181,7 +193,7 @@ export function TripList() {
         {groups.pinned.length > 0 && (
           <section className="flex flex-col gap-1">
             <SectionLabel>⌖ przypięte</SectionLabel>
-            {groups.pinned.map(tile)}
+            {groups.pinned.map((c) => tile(c))}
           </section>
         )}
 
@@ -222,7 +234,7 @@ export function TripList() {
         {groups.undated.length > 0 && (
           <section className="flex flex-col gap-1">
             <SectionLabel>bez daty</SectionLabel>
-            {groups.undated.map(tile)}
+            {groups.undated.map((c) => tile(c))}
           </section>
         )}
 
@@ -294,11 +306,18 @@ function DayCards({
 }: {
   date: string
   cards: CardSnapshot[]
-  tile: (c: CardSnapshot) => ReactNode
+  tile: (c: CardSnapshot, stayUntil?: string, inDay?: boolean) => ReactNode
 }) {
   const { trip } = useTrip()
   const { legs, plans, limited, refresh } = useDayPlans(date)
+  const everything = useCards()
+  const options = useMemo(() => variantsByMain(everything), [everything])
+  const stays = stayTimes(cards, legs, plans, trip.travelBufferMin)
   const now = useTripNow()
+  // Minione dojazdy są schowane, ale po zmianie planu w trasie można je odsłonić.
+  const [showPast, setShowPast] = useState(false)
+  const isPast = (leg: DayGap) => Boolean(now && legIsPast(leg, date, now, cards))
+  const hiddenLegs = legs.filter(isPast).length
   // Linia „teraz” przed pierwszą kartą, której pora jeszcze nie minęła.
   const timed = cards.filter((c) => c.time)
   const upcoming = now && timed.find((c) => (c.time as string) > now.time)
@@ -306,37 +325,47 @@ function DayCards({
   const lineAtEnd = now?.date === date && !upcoming && timed.length > 0
   const endLeg = legs.find((l) => l.kind === 'end')
   const row = (leg: DayGap | undefined) =>
-    leg && (
-      <LegRow
-        leg={leg}
-        date={date}
-        plan={plans[leg.id]}
-        bufferMin={trip.travelBufferMin}
-        onRefresh={refresh}
-      />
+    leg &&
+    (showPast || !isPast(leg)) && (
+      <div className="pl-[52px]">
+        <LegRow
+          leg={leg}
+          date={date}
+          plan={plans[leg.id]}
+          bufferMin={trip.travelBufferMin}
+          onRefresh={refresh}
+        />
+      </div>
     )
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="day-rail flex flex-col gap-1">
+      <div className="flex flex-col gap-1">
         {row(legs.find((l) => l.kind === 'start'))}
         {cards.map((c) => (
           <Fragment key={c.id}>
             {lineBefore === c.id && now && <NowLine time={now.time} />}
             <div
               className={cx(
-                'relative transition-opacity duration-500',
-                now && cardIsPast(c, now) && 'opacity-60',
+                'flex gap-1 transition-opacity duration-500',
+                now && cardIsPast(c, now, nextStart(c, cards)) && 'opacity-60',
               )}
             >
-              <span
-                aria-hidden="true"
-                className={cx(
-                  'absolute top-5 -left-[12px] size-2 rounded-full',
-                  TYPE_STYLE[c.type].bar,
-                )}
-              />
-              {tile(c)}
+              {options.has(c.id) ? (
+                <div className="min-w-0 flex-1">
+                  <VariantCarousel
+                    main={c}
+                    variants={options.get(c.id) ?? []}
+                    time={(card) => <TimeCell card={card} />}
+                    tile={(card) => tile(card, stays.get(card.id), true)}
+                  />
+                </div>
+              ) : (
+                <>
+                  <TimeCell card={c} />
+                  <div className="min-w-0 flex-1">{tile(c, stays.get(c.id), true)}</div>
+                </>
+              )}
             </div>
             {/* Powrót do noclegu jest jeszcze przed Wami, więc „teraz” stoi nad nim. */}
             {lineAtEnd && now && endLeg?.from === c.id && <NowLine time={now.time} />}
@@ -345,6 +374,16 @@ function DayCards({
         ))}
         {lineAtEnd && now && !endLeg && <NowLine time={now.time} />}
       </div>
+      {hiddenLegs > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowPast((v) => !v)}
+          aria-expanded={showPast}
+          className="min-h-11 px-3 text-left text-xs text-subtle italic"
+        >
+          {showPast ? 'ukryj minione dojazdy' : `pokaż minione dojazdy (${hiddenLegs})`}
+        </button>
+      )}
       <DayTravelSummary plans={plans} limited={limited} />
     </div>
   )
@@ -389,6 +428,20 @@ function FilterChip({
         {label}
       </span>
     </button>
+  )
+}
+
+/** Godzina i czas trwania w kolumnie obok karty. */
+function TimeCell({ card }: { card: CardSnapshot }) {
+  return (
+    <span className="w-12 shrink-0 pt-3 text-right leading-tight">
+      <span className="block text-sm font-bold">{card.time}</span>
+      {card.durationMin && (
+        <span className="block text-[11px] text-subtle">
+          {formatDuration(card.durationMin).replace(/ h (\d+) min/, ' h $1')}
+        </span>
+      )}
+    </span>
   )
 }
 

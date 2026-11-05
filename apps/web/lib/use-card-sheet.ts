@@ -23,8 +23,14 @@ export function useCardSheet() {
     // history.back() z zamknięcia kończy się asynchronicznie — gdyby nowa karta weszła wcześniej,
     // spóźnione „wstecz” zdjęłoby właśnie ją.
     void pendingBack.then(() => {
-      openedHere.current = true
-      window.history.pushState(null, '', `${pathname}?card=${encodeURIComponent(id)}`)
+      const url = `${pathname}?card=${encodeURIComponent(id)}`
+      // Przy otwartym panelu kolejna karta zastępuje poprzednią: „wstecz” ma zamknąć panel.
+      if (new URLSearchParams(window.location.search).has('card'))
+        window.history.replaceState(null, '', url)
+      else {
+        openedHere.current = true
+        window.history.pushState(null, '', url)
+      }
     })
   }
 

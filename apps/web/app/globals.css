@@ -133,6 +133,10 @@ body {
   from { stroke-dashoffset: 1; }
   to { stroke-dashoffset: 0; }
 }
+.panel-in { animation: panel-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.panel-out { animation: panel-out 190ms ease-in both; }
+@keyframes panel-in { from { transform: translateX(100%); } }
+@keyframes panel-out { to { transform: translateX(100%); } }
 .sheet-in { animation: sheet-in 260ms cubic-bezier(0.23, 1, 0.32, 1) both; }
 .sheet-out { animation: sheet-out 200ms cubic-bezier(0.4, 0, 1, 1) both; }
 .fade-in { animation: fade-in 200ms ease-out both; }
@@ -141,20 +145,6 @@ body {
 .pop-menu > * { animation: pop-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i, 0) * 30ms); }
 
 /* Lista: oś dnia łącząca karty, jak strzałki na Tablicy. */
-.day-rail {
-  position: relative;
-  padding-left: 14px;
-}
-.day-rail::before {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 12px;
-  bottom: 12px;
-  width: 1px;
-  background: var(--line);
-}
-
 /* Treść karty (Tiptap). */
 .card-prose {
   font-size: 15px;
@@ -193,6 +183,11 @@ body {
 }
 
 /* Tablica (React Flow): kolory z motywu, własne tło zamiast „mgły”. */
+.planer-board .react-flow__node.is-drop {
+  border-radius: 12px;
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .planer-board .react-flow__node.is-past {
   opacity: 0.6;
 }
@@ -245,6 +240,17 @@ body {
 
 /* Pinezka na mapach (MapLibre): element znacznika to wrapper (MapLibre nadpisuje jego transform),
    kształt kropli w środku; kolor przez --pin, opcjonalny numer kolejności. */
+.maplibregl-popup-content {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-island);
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+.maplibregl-popup-content strong { color: var(--text); }
+.maplibregl-popup-tip { display: none; }
 .map-pin {
   width: 30px;
   height: 34px;

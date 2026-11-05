@@ -1,6 +1,6 @@
 'use client'
 
-import { CARD_TYPE_LABELS, type CardSnapshot, formatShortDate } from '@planer/core'
+import type { CardSnapshot } from '@planer/core'
 import {
   Handle,
   type Node,
@@ -11,43 +11,53 @@ import {
 } from '@xyflow/react'
 import { Pin, PinOff, SquarePen, Trash2 } from 'lucide-react'
 import { memo } from 'react'
-import { AmountBadge } from '@/components/amounts'
-import { fieldsSummary } from '@/components/card/card-fields'
-import { CardMetaLine } from '@/components/card/card-tile'
-import { StatusMark } from '@/components/card/status-mark'
-import { TYPE_STYLE } from '@/components/card/type-style'
+import { VariantBadge } from '@/components/card/variant-badge'
 import { cx } from '@/components/ui'
 import { useBoard } from './board-context'
+import { CardFace } from './card-face'
 import { useHoldDrag } from './use-hold-drag'
+import { ChooseButton } from './variant-node'
 
 const SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left]
 
-export type CardNodeType = Node<{ card: CardSnapshot; files: number }, 'card'>
+export type CardNodeType = Node<
+  {
+    card: CardSnapshot
+    files: number
+    /** Liczba wariantów tej karty. */
+    variants: number
+    /** Warianty rysowane obok, jako rozgałęzienie. */
+    branch?: boolean
+    /** Karta w zaznaczeniu kilku kart: bez narzędzi pojedynczej karty. */
+    grouped?: boolean
+    stayUntil?: string
+  },
+  'card'
+>
 
 export const CardNode = memo(function CardNode({
   id,
-  data: { card, files },
+  data: { card, files, variants, branch, grouped, stayUntil },
   selected,
 }: NodeProps<CardNodeType>) {
   const board = useBoard()
   const connecting = useConnection((c) => c.inProgress)
   const gesture = useHoldDrag({
-    // Tap w zaznaczoną kartę otwiera edytor (to też podwójny tap).
-    onTap: () => (selected ? board.openCard(id) : board.select({ kind: 'card', id })),
+    // Tap w zaznaczoną kartę otwiera edytor (to też podwójny tap); Ctrl i Shift zbierają karty.
+    onTap: (e) => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey) board.toggleGroup(id)
+      else if (selected && !grouped) board.openCard(id)
+      else board.select({ kind: 'card', id })
+    },
     onStart: () => board.dragStart('card', id),
     onMove: board.dragMove,
     onEnd: board.dragEnd,
     onPan: board.panBy,
   })
-  const style = TYPE_STYLE[card.type]
-  const Icon = style.icon
-  const meta = [card.date && formatShortDate(card.date), fieldsSummary(card)]
-    .filter(Boolean)
-    .join(' · ')
 
   return (
     <>
-      <NodeToolbar isVisible={selected} position={Position.Top} offset={20}>
+      <NodeToolbar isVisible={selected && !grouped} position={Position.Top} offset={20}>
         <div className="flex gap-1 rounded-island border border-line bg-panel p-1">
           <ToolButton label="otwórz kartę" onClick={() => board.openCard(id)}>
             <SquarePen className="size-5" aria-hidden="true" />
@@ -69,6 +79,13 @@ export const CardNode = memo(function CardNode({
         </div>
       </NodeToolbar>
 
+      {variants > 0 && !branch && (
+        <>
+          <span className="absolute inset-0 translate-x-2 translate-y-2 rounded-island border border-line bg-panel" />
+          <span className="absolute inset-0 translate-x-1 translate-y-1 rounded-island border border-line bg-panel" />
+        </>
+      )}
+
       {/* nopan: React Flow nie zaczyna tu własnego przesuwania; robi to gest karty, a karta reaguje na tap i przytrzymanie. */}
       <div
         {...gesture}
@@ -82,38 +99,15 @@ export const CardNode = memo(function CardNode({
         aria-label={card.title || 'karta bez tytułu'}
         onKeyDown={(e) => e.key === 'Enter' && board.openCard(id)}
       >
-        <span className={cx('absolute inset-y-0 left-0 w-1', style.bar)} aria-hidden="true" />
-        <div className="flex items-start gap-2">
-          <span
-            className={cx(
-              'flex size-7 shrink-0 items-center justify-center rounded-small',
-              style.chip,
-            )}
-            title={CARD_TYPE_LABELS[card.type]}
-          >
-            <Icon className="size-4" aria-hidden="true" />
-          </span>
-          <span
-            className={cx(
-              'line-clamp-2 min-w-0 flex-1 font-bold leading-tight',
-              !card.title && 'font-normal text-dim italic',
-            )}
-          >
-            {card.title || 'bez tytułu'}
-          </span>
-          {card.pinned && <span className="text-accent">⌖</span>}
-          <AmountBadge amounts={card.amounts ?? []} />
-        </div>
-        {(meta || card.status) && (
-          <div className="flex items-center gap-2 text-xs">
-            {meta && <span className="truncate text-subtle italic">{meta}</span>}
-            {card.status && <StatusMark status={card.status} className="ml-auto" />}
-          </div>
+        <CardFace card={card} files={files} stayUntil={stayUntil} />
+        {variants > 0 && !branch && (
+          <VariantBadge
+            card={card}
+            count={variants}
+            className="absolute right-2 bottom-1 rounded-small bg-panel px-1"
+          />
         )}
-        <CardMetaLine card={card} files={files} />
-        {card.preview && (
-          <span className="line-clamp-3 text-[13px] leading-snug text-muted">{card.preview}</span>
-        )}
+        {branch && !card.variantChosen && <ChooseButton onClick={() => board.chooseVariant(id)} />}
       </div>
 
       {/* Strzałka: przeciągnięcie z kropki na krawędzi zaznaczonej karty do dowolnej innej karty.
@@ -127,7 +121,7 @@ export const CardNode = memo(function CardNode({
           aria-label="narysuj strzałkę"
           className={cx(
             '!h-6 !w-6 !rounded-full !border-2 !border-panel !bg-accent transition-opacity',
-            selected ? 'opacity-100' : '!pointer-events-none opacity-0',
+            selected && !grouped ? 'opacity-100' : '!pointer-events-none opacity-0',
           )}
         />
       ))}

@@ -18,8 +18,10 @@ type GestureState = {
 }
 
 type Handlers = {
-  onTap: () => void
-  onStart: () => void
+  /** Klawisze trzymane przy tapnięciu (Ctrl i Shift zbierają karty). */
+  onTap: (keys: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => void
+  /** Punkt ekranu, w którym zaczął się gest. */
+  onStart: (x: number, y: number) => void
   /** Przesunięcie od początku gestu w pikselach ekranu. */
   onMove: (dx: number, dy: number) => void
   onEnd: () => void
@@ -61,7 +63,7 @@ export function useHoldDrag(handlers: Handlers) {
           if (state.current !== s || s.mode !== 'pending') return
           s.mode = 'drag'
           navigator.vibrate?.(10)
-          h.current.onStart()
+          h.current.onStart(s.x, s.y)
         }, HOLD_MS)
       }
     },
@@ -73,7 +75,7 @@ export function useHoldDrag(handlers: Handlers) {
       if (s.mode === 'pending' && Math.hypot(dx, dy) > (s.mouse ? 3 : MOVE_PX)) {
         if (s.timer) clearTimeout(s.timer)
         s.mode = s.mouse ? 'drag' : 'pan'
-        if (s.mouse) h.current.onStart()
+        if (s.mouse) h.current.onStart(s.x, s.y)
       }
       if (s.mode === 'drag') h.current.onMove(dx, dy)
       if (s.mode === 'pan') h.current.onPan?.(e.clientX - s.lastX, e.clientY - s.lastY)
@@ -84,7 +86,7 @@ export function useHoldDrag(handlers: Handlers) {
       const s = state.current
       if (!s || s.pointerId !== e.pointerId) return
       if (s.mode === 'drag') h.current.onEnd()
-      else if (s.mode === 'pending') h.current.onTap()
+      else if (s.mode === 'pending') h.current.onTap(e)
       finish()
     },
     onPointerCancel(e: React.PointerEvent) {

@@ -48,7 +48,7 @@ describe('tripContext', () => {
     )
     expect(text).toContain(`- [transport] **Lot LO 319** (card:${flight})`)
     expect(text).toMatch(
-      /godz\. 10:00 · ogarnięte · miejsce: Lotnisko Chopina \[52\.16570,20\.96710\] · kwoty: 300\sz/,
+      /godz\. 10:00 · zarezerwowane · miejsce: Lotnisko Chopina \[52\.16570,20\.96710\] · kwoty: 300\sz/,
     )
     expect(text).toContain('  > terminal A /+300')
     expect(text).toContain('  plik: bilet.pdf (att:f1, PDF)')

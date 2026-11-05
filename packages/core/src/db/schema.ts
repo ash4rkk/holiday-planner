@@ -13,6 +13,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core'
+import type { CardProposal } from '../proposals'
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
   dataType: () => 'bytea',
@@ -174,6 +175,8 @@ export const aiMessages = pgTable(
     text: text('text').notNull(),
     // Źródła z wyszukiwania w sieci (tytuł, adres) pod odpowiedzią.
     sources: jsonb('sources').$type<{ title: string; url: string }[]>().notNull().default([]),
+    // Karty zaproponowane w odpowiedzi; wracają po ponownym otwarciu czatu.
+    proposals: jsonb('proposals').$type<CardProposal[]>().notNull().default([]),
     // „Nowa rozmowa” — starsze wiadomości zostają w bazie, ale nie idą już do modelu.
     archived: boolean('archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

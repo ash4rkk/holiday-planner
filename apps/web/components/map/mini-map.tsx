@@ -4,7 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import { navigationUrl } from '@planer/core'
 import { useEffect, useRef } from 'react'
 import { cx } from '@/components/ui'
-import { useMapStyle } from './map-style'
+import { themeMap, useMapStyle } from './map-style'
 import { loadMapLibre } from './maplibre'
 
 /** Mała, nieruchoma mapka z pinezką; dotknięcie otwiera nawigację w Google Maps. */
@@ -31,10 +31,11 @@ export function MiniMap({
         container: container.current,
         style,
         center: [lng, lat],
-        zoom: 15,
+        zoom: 14,
         interactive: false,
         attributionControl: false,
       })
+      themeMap(map, { quiet: true })
       const pin = document.createElement('div')
       pin.className = 'map-pin'
       pin.style.setProperty('--pin', `var(${colorVar})`)
