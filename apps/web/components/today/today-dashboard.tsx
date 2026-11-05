@@ -125,9 +125,13 @@ export function TodayDashboard({ userName }: { userName: string }) {
         morph={`trip-${trip.id}`}
         actions={
           <>
-            <TripStatus />
             <ChatButton onOpenCard={(id) => sheet.open(id)} />
             <InboxButton />
+          </>
+        }
+        more={
+          <>
+            <TripStatus />
             <Link
               href={`/trips/${trip.id}/settings`}
               aria-label="ustawienia wyjazdu"
@@ -280,12 +284,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
       {!after && <DayTravelSummary plans={plans} limited={limited} />}
 
       {sheet.openId && (
-        <CardSheet
-          key={sheet.openId}
-          cardId={sheet.openId}
-          isNew={sheet.isNew}
-          onClose={sheet.close}
-        />
+        <CardSheet cardId={sheet.openId} isNew={sheet.isNew} onClose={sheet.close} />
       )}
     </>
   )

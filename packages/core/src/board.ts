@@ -24,7 +24,7 @@ export type Positions = Record<string, { x: number; y: number; frameId?: string 
 
 export const FRAME_SIZE = { w: 600, h: 400 } as const
 // „Ułóż wg dni”: odstęp kolumn mieści obrysy dni (web: DAY_PAD), a pionowy — strzałki kolejności.
-const DAY_GAP = { x: GRID * 5, y: GRID * 3 }
+const DAY_GAP = { x: GRID * 6, y: GRID * 3 }
 
 export function framesOf(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
   return doc.getMap<Y.Map<unknown>>('frames')

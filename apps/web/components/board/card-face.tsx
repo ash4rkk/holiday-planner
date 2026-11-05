@@ -13,17 +13,20 @@ export function CardFace({
   card,
   files,
   stayUntil,
+  onAxis = false,
 }: {
   card: CardSnapshot
   files: number
   /** Karta bez czasu trwania: do kiedy można zostać. */
   stayUntil?: string
+  /** Karta w dniu: data wynika z wysepki, a godzina i czas stoją w kolumnie obok. */
+  onAxis?: boolean
 }) {
   const style = TYPE_STYLE[card.type]
   const Icon = style.icon
-  const meta = [card.date && formatShortDate(card.date), fieldsSummary(card)]
-    .filter(Boolean)
-    .join(' · ')
+  const meta = onAxis
+    ? fieldsSummary({ ...card, time: undefined, durationMin: undefined })
+    : [card.date && formatShortDate(card.date), fieldsSummary(card)].filter(Boolean).join(' · ')
   return (
     <>
       <span className={cx('absolute inset-y-0 left-0 w-1', style.bar)} aria-hidden="true" />

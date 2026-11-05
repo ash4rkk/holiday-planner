@@ -9,7 +9,6 @@ import {
   cardIsPast,
   chooseVariant,
   createCard,
-  createEdge,
   createFrame,
   type DropTarget,
   dayGaps,
@@ -36,7 +35,6 @@ import {
   type Positions,
   renameFrame,
   resizeFrame,
-  restoreCard,
   restorePositions,
   segmentHitsRect,
   setEdgeLabel,
@@ -67,6 +65,7 @@ import { AddButton } from '@/components/add-button'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -85,7 +84,7 @@ import { type BoardApi, BoardContext, frameNodeId, type Selection } from './boar
 import { CardNode } from './card-node'
 import { DayNode } from './day-node'
 import { FrameNode } from './frame-node'
-import { type IdeaDrag, IdeasDrawer, PANEL_WIDTH } from './ideas-drawer'
+import { controlsBottom, type IdeaDrag, IdeasDrawer, PANEL_WIDTH } from './ideas-drawer'
 import { DropNode, NowNode } from './now-node'
 import { RemotePointers } from './remote-pointers'
 import { OrderEdge, SketchEdge } from './sketch-edge'
@@ -100,8 +99,10 @@ const nodeTypes = {
   variant: VariantNode,
 }
 const edgeTypes = { sketch: SketchEdge, order: OrderEdge }
-// Margines obrysu dnia wokół kart; u góry miejsce na etykietę dnia.
-const DAY_PAD = { side: 22, top: 34, bottom: 22 }
+// Margines wysepki dnia wokół kart: z lewej kolumna godzin, u góry nagłówek dnia.
+const DAY_PAD = { left: 64, right: 28, top: 44, bottom: 20 }
+// Najmniejszy odstęp między ramkami dni.
+const DAY_SPACE = 28
 const HOLD_MENU_MS = 500
 // Rozgałęzienie: warianty w pełnym rozmiarze obok karty głównej; kolejne dni odsuwają się w bok.
 const BRANCH_GAP = GRID
@@ -109,6 +110,8 @@ const BRANCH_GAP = GRID
 const EDGE_PX = 48
 const EDGE_STEP = 10
 const PANEL_KEY = 'planer-ideas-panel'
+// Kadr na dzień: miejsce pod nagłówkiem i nad menu, najmniejszy czytelny zoom, wysokość linii „teraz”.
+const FOCUS = { side: 8, top: 64, bottom: 130, readableZoom: 0.6, nowAt: 0.35 }
 
 type Drop = DropTarget | { kind: 'ideas' } | null
 type Placed = { id: string; date: string; time: string; undo: () => void }
@@ -227,7 +230,7 @@ function BoardCanvas() {
             data: {
               card: c,
               files: fileCounts.get(c.id) ?? 0,
-              variants: variants.get(c.id)?.length ?? 0,
+              options: variants.get(c.id) ?? [],
             },
           }),
         ),
@@ -253,14 +256,34 @@ function BoardCanvas() {
   const days = useMemo(() => dayOrder(live), [live])
   const now = useTripNow()
 
-  // Rozgałęzione dni odsuwają wszystko, co leży na prawo od nich. Tylko przy rysowaniu: pozycje
-  // w dokumencie są wspólne z telefonem, który pokazuje stos i niczego nie rozsuwa.
+  // Stały odstęp między dniami, także w starych układach i przy rozgałęzieniach. Tylko przy
+  // rysowaniu: pozycje w dokumencie są wspólne z telefonem, który pokazuje stos i niczego nie rozsuwa.
   const shiftAt = useMemo(() => {
-    const steps = days.flatMap(({ ids }) => {
-      const day = live.filter((c) => ids.includes(c.id))
-      const by = Math.max(...day.map(branchWidth))
-      if (!by) return []
-      return [{ from: Math.max(...day.map((c) => c.x + (c.w ?? CARD_SIZE.w))), by }]
+    const columns = days
+      .flatMap(({ ids }) => {
+        const day = live.filter((c) => ids.includes(c.id))
+        if (!day.length) return []
+        return [
+          {
+            left: Math.min(...day.map((c) => c.x)),
+            right: Math.max(...day.map((c) => c.x + (c.w ?? CARD_SIZE.w) + branchWidth(c))),
+            top: Math.min(...day.map((c) => c.y)),
+            bottom: Math.max(...day.map((c) => c.y + (c.h ?? CARD_SIZE.h))),
+          },
+        ]
+      })
+      .sort((a, b) => a.left - b.left)
+    const steps: { from: number; by: number }[] = []
+    let total = 0
+    columns.forEach((column, i) => {
+      const prev = columns[i - 1]
+      // Dzień ułożony ręcznie wyżej albo niżej nie wymaga rozsuwania.
+      if (!prev || column.top > prev.bottom || column.bottom < prev.top) return
+      const edge = prev.right + total + DAY_PAD.right + DAY_SPACE
+      const by = edge - (column.left + total - DAY_PAD.left)
+      if (by <= 0) return
+      steps.push({ from: column.left, by })
+      total += by
     })
     return (x: number) => steps.reduce((sum, s) => (x >= s.from ? sum + s.by : sum), 0)
   }, [days, live, branchWidth])
@@ -297,7 +320,7 @@ function BoardCanvas() {
       })
       if (!boxes.length) return []
       const left = Math.min(...boxes.map((b) => b.x))
-      const x = left - DAY_PAD.side
+      const x = left - DAY_PAD.left
       const y = Math.min(...boxes.map((b) => b.y)) - DAY_PAD.top
       const index = dayIndexOf(date, trip.startDate, trip.endDate)
       return [
@@ -305,18 +328,23 @@ function BoardCanvas() {
           id: `day:${date}`,
           type: 'day',
           position: { x: x + shiftAt(left), y },
-          width: Math.max(...boxes.map((b) => b.r)) + DAY_PAD.side - x,
+          width: Math.max(...boxes.map((b) => b.r)) + DAY_PAD.right - x,
           height: Math.max(...boxes.map((b) => b.b)) + DAY_PAD.bottom - y,
           zIndex: 0,
           selectable: false,
           draggable: false,
           focusable: false,
           style: { pointerEvents: 'none' },
-          data: { date, label: formatDayHeader(date), sub: index ? `dzień ${index}` : undefined },
+          data: {
+            date,
+            label: formatDayHeader(date),
+            sub: index ? `dzień ${index}` : undefined,
+            today: date === now?.date,
+          },
         },
       ]
     })
-  }, [days, nodes, trip.startDate, trip.endDate, branchWidth, shiftAt])
+  }, [days, nodes, trip.startDate, trip.endDate, branchWidth, shiftAt, now?.date])
 
   // Linia „teraz” w dzisiejszej kolumnie: w przerwie między ostatnią rozpoczętą a następną kartą.
   const nowNode = useMemo((): Node[] => {
@@ -636,12 +664,12 @@ function BoardCanvas() {
     if (!ready || savedViewport || fitted.current || !nodes.length) return
     fitted.current = true
     // Na telefonie cały wyjazd byłby nieczytelną miniaturą — start na dzisiejszym dniu.
-    const today = todayLocal()
+    const today = now?.date ?? todayLocal()
     const day = days.find((d) => d.date === today) ?? days[0]
-    const focus = window.innerWidth < 640 ? day?.ids.map((id) => ({ id })) : undefined
-    requestAnimationFrame(() =>
-      rf.fitView({ padding: focus ? 0.1 : 0.2, maxZoom: 1, nodes: focus }),
-    )
+    requestAnimationFrame(() => {
+      if (day && window.innerWidth < 640) focusDay(day.date)
+      else void rf.fitView({ padding: 0.2, maxZoom: 1 })
+    })
   }, [ready, savedViewport, nodes.length, rf, days])
 
   // Karty płynnie przechodzą na nowe miejsca (układanie, rozsuwanie dni przy wariantach).
@@ -652,6 +680,7 @@ function BoardCanvas() {
 
   // ---------- pomysły: drawer i przeciąganie na dzień ----------
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [trashing, setTrashing] = useState<string | null>(null)
   const [boardDragging, setBoardDragging] = useState(false)
   const [ghost, setGhost] = useState<{ card: CardSnapshot; x: number; y: number } | null>(null)
   const [placed, setPlaced] = useState<Placed | null>(null)
@@ -838,8 +867,7 @@ function BoardCanvas() {
     },
     trash: (id) => {
       setSelection(null)
-      trashCard(doc, id)
-      offerUndo('karta w koszu', () => restoreCard(doc, id))
+      setTrashing(id)
     },
     renameFrame: (id) => {
       const current = framesOf(doc).get(id)?.get('title') as string | undefined
@@ -940,12 +968,31 @@ function BoardCanvas() {
     const day = days[Math.min(days.length - 1, Math.max(0, index))]
     if (!day) return
     setFocused(day.date)
-    void rf.fitView({
-      nodes: [{ id: `day:${day.date}` }],
-      padding: 0.08,
-      maxZoom: 1,
-      duration: 350,
-    })
+    focusDay(day.date, 350)
+  }
+
+  /**
+   * Kadr na dzień: cały, jeśli mieści się czytelnie; inaczej szerokość dnia, a w pionie okolice
+   * „teraz” (dziś) albo początek dnia.
+   */
+  const focusDay = (date: string, duration = 0) => {
+    const node = rf.getNode(`day:${date}`)
+    const box = canvas.current?.getBoundingClientRect()
+    if (!node?.width || !node.height || !box) return
+    const width = box.width - FOCUS.side * 2
+    const height = box.height - FOCUS.top - FOCUS.bottom
+    const across = Math.min(width / node.width, 1)
+    const whole = Math.min(across, height / node.height)
+    const fits = whole >= FOCUS.readableZoom
+    const zoom = fits ? whole : Math.max(across, FOCUS.readableZoom)
+    const x = box.width / 2 - (node.position.x + node.width / 2) * zoom
+    const nowY = date === now?.date ? nowNode[0]?.position.y : undefined
+    const y = fits
+      ? FOCUS.top + (height - node.height * zoom) / 2 - node.position.y * zoom
+      : nowY !== undefined
+        ? FOCUS.top + height * FOCUS.nowAt - nowY * zoom
+        : FOCUS.top - node.position.y * zoom
+    void rf.setViewport({ x, y, zoom }, { duration })
   }
 
   const arrange = () => {
@@ -1001,10 +1048,6 @@ function BoardCanvas() {
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
-          onConnect={(c) => {
-            const id = createEdge(doc, c.source, c.target)
-            if (id) setSelection({ kind: 'edge', id })
-          }}
           onEdgeClick={(_, e) => api.select({ kind: 'edge', id: e.id })}
           onPaneClick={() => api.select(null)}
           onPaneContextMenu={(e) => {
@@ -1025,7 +1068,6 @@ function BoardCanvas() {
           nodesDraggable={false}
           selectionKeyCode={null}
           multiSelectionKeyCode={null}
-          connectionRadius={40}
           proOptions={{ hideAttribution: true }}
           className={cx('planer-board', arranging && 'is-arranging')}
         >
@@ -1040,7 +1082,6 @@ function BoardCanvas() {
             morph={`trip-${trip.id}`}
             actions={
               <>
-                <TripStatus />
                 <ChatButton onOpenCard={(id) => sheet.open(id)} />
                 <InboxButton />
                 {undo && (
@@ -1055,6 +1096,11 @@ function BoardCanvas() {
                     <Undo2 className="size-4" aria-hidden="true" /> cofnij
                   </button>
                 )}
+              </>
+            }
+            more={
+              <>
+                <TripStatus />
                 <button
                   type="button"
                   onClick={arrange}
@@ -1070,7 +1116,10 @@ function BoardCanvas() {
         </div>
 
         {days.length > 0 && (
-          <div className="island absolute bottom-[calc(72px+env(safe-area-inset-bottom))] right-1 z-10 flex items-center">
+          <div
+            className="island absolute right-1 z-10 flex items-center"
+            style={{ bottom: controlsBottom(wide) }}
+          >
             <button
               type="button"
               onClick={() => jump(-1)}
@@ -1107,7 +1156,10 @@ function BoardCanvas() {
         />
 
         {placed && (
-          <div className="island absolute bottom-[calc(124px+env(safe-area-inset-bottom))] left-1 z-10 flex items-center gap-1 pl-3 text-sm">
+          <div
+            className="island absolute left-1 z-10 flex items-center gap-1 pl-3 text-sm"
+            style={{ bottom: `calc(${controlsBottom(wide)} + 52px)` }}
+          >
             <span className="text-subtle">{formatShortDate(placed.date)}</span>
             <input
               type="time"
@@ -1199,13 +1251,21 @@ function BoardCanvas() {
         />
       </div>
 
-      {sheet.openId && (
-        <CardSheet
-          key={sheet.openId}
-          cardId={sheet.openId}
-          isNew={sheet.isNew}
-          onClose={sheet.close}
+      {trashing && (
+        <ConfirmDialog
+          title="Przenieść do kosza?"
+          body="Karta zniknie z planu. Można ją przywrócić z kosza na Liście przez 30 dni."
+          confirm="do kosza"
+          onConfirm={() => {
+            trashCard(doc, trashing)
+            setTrashing(null)
+          }}
+          onCancel={() => setTrashing(null)}
         />
+      )}
+
+      {sheet.openId && (
+        <CardSheet cardId={sheet.openId} isNew={sheet.isNew} onClose={sheet.close} />
       )}
     </BoardContext.Provider>
   )

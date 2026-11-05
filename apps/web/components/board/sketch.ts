@@ -38,8 +38,8 @@ export function sketchRect(w: number, h: number, seed: number): string[] {
     .map((p) => p.d)
 }
 
-/** Zaokrąglony obrys (rysuje się przerywaną kreską — obrys dnia na tablicy). */
-export function sketchRoundRect(w: number, h: number, seed: number, r = 28): string[] {
+/** Zaokrąglona ołówkowa ramka; rough.js rysuje ją dwiema kreskami. */
+export function sketchRoundRect(w: number, h: number, seed: number, r = 14): string[] {
   const x = 3
   const y = 3
   const right = w - 3
@@ -56,6 +56,6 @@ export function sketchRoundRect(w: number, h: number, seed: number, r = 28): str
     `Q${x},${y} ${x + r},${y}`,
   ].join(' ')
   return generator
-    .toPaths(generator.path(d, { ...base, roughness: 1.4, bowing: 2, seed }))
+    .toPaths(generator.path(d, { ...base, roughness: 1.2, bowing: 1.6, seed }))
     .map((p) => p.d)
 }

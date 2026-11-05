@@ -33,7 +33,8 @@ import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
 import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { StatusMark } from '@/components/card/status-mark'
-import { formatDuration, TYPE_STYLE } from '@/components/card/type-style'
+import { TimeCell } from '@/components/card/time-cell'
+import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -119,9 +120,13 @@ export function TripList() {
           morph={`trip-${trip.id}`}
           actions={
             <>
-              <TripStatus />
               <ChatButton onOpenCard={(id) => open(id)} />
               <InboxButton />
+            </>
+          }
+          more={
+            <>
+              <TripStatus />
               <Link
                 href={`/trips/${trip.id}/settings`}
                 aria-label="ustawienia wyjazdu"
@@ -282,7 +287,7 @@ export function TripList() {
         <ImportStatus />
         <DraftReview onEdit={(id) => open(id)} />
       </main>
-      {openId && <CardSheet key={openId} cardId={openId} isNew={isNew} onClose={close} />}
+      {openId && <CardSheet cardId={openId} isNew={isNew} onClose={close} />}
       {moving && (
         <MoveSheet
           card={moving}
@@ -356,13 +361,13 @@ function DayCards({
                   <VariantCarousel
                     main={c}
                     variants={options.get(c.id) ?? []}
-                    time={(card) => <TimeCell card={card} />}
+                    time={(card) => <TimeCell card={card} className="pt-3" />}
                     tile={(card) => tile(card, stays.get(card.id), true)}
                   />
                 </div>
               ) : (
                 <>
-                  <TimeCell card={c} />
+                  <TimeCell card={c} className="pt-3" />
                   <div className="min-w-0 flex-1">{tile(c, stays.get(c.id), true)}</div>
                 </>
               )}
@@ -428,20 +433,6 @@ function FilterChip({
         {label}
       </span>
     </button>
-  )
-}
-
-/** Godzina i czas trwania w kolumnie obok karty. */
-function TimeCell({ card }: { card: CardSnapshot }) {
-  return (
-    <span className="w-12 shrink-0 pt-3 text-right leading-tight">
-      <span className="block text-sm font-bold">{card.time}</span>
-      {card.durationMin && (
-        <span className="block text-[11px] text-subtle">
-          {formatDuration(card.durationMin).replace(/ h (\d+) min/, ' h $1')}
-        </span>
-      )}
-    </span>
   )
 }
 

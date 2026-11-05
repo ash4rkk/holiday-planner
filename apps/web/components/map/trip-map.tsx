@@ -22,6 +22,7 @@ import {
 import { ChevronLeft, ChevronRight, Navigation, SquarePen } from 'lucide-react'
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
@@ -119,6 +120,9 @@ function routeFeatures(legs: DayGap[], plans: Record<string, LegPlan | null>, st
 type Tab = 'all' | string
 
 const CLUSTER_PX = 34
+// Dymek nad pinezką i jego margines od nagłówka z dniami i dolnego menu.
+const BUBBLE_OFFSET = 42
+const BUBBLE_MARGIN = { top: 116, bottom: 130, side: 8 }
 
 /** Łączy pinezki bliższe niż CLUSTER_PX na ekranie przy obecnym przybliżeniu. */
 function groupNearby<T extends { card: MappedCard }>(m: MapLibreMap, pins: T[]): T[][] {
@@ -234,6 +238,8 @@ export function TripMap() {
         el.className = cx('map-pin', selected === card.id && 'is-active')
         el.style.setProperty('--pin', `var(${TYPE_VAR[card.type]})`)
         el.setAttribute('aria-label', card.title || card.location.name)
+        // Podpowiedź po najechaniu: szybki przegląd dnia bez klikania.
+        el.title = [card.title || card.location.name, card.time].filter(Boolean).join(' · ')
         const shape = document.createElement('div')
         shape.className = 'map-pin__shape'
         if (label) {
@@ -446,6 +452,57 @@ export function TripMap() {
   }
 
   const selectedCard = live.find((c) => c.id === selected)
+
+  // Dymek przy pinezce: treść wstawia React przez portal, a mapa dosuwa się, żeby nie wszedł pod paski.
+  const [bubble, setBubble] = useState<HTMLDivElement | null>(null)
+  const bubblePlace = selectedCard && hasCoords(selectedCard) ? selectedCard.location : undefined
+  const bubbleLng = bubblePlace?.lng
+  const bubbleLat = bubblePlace?.lat
+  useEffect(() => {
+    const m = map.current
+    if (!m || bubbleLng === undefined || bubbleLat === undefined) return
+    let popup: import('maplibre-gl').Popup | undefined
+    let cancelled = false
+    const body = document.createElement('div')
+    void loadMapLibre().then(({ Popup }) => {
+      if (cancelled) return
+      popup = new Popup({
+        // Stała strona: dymek zawsze nad pinezką, a mapa sama się dosuwa.
+        anchor: 'bottom',
+        closeButton: false,
+        closeOnClick: false,
+        focusAfterOpen: false,
+        maxWidth: '300px',
+        offset: BUBBLE_OFFSET,
+      })
+        .setLngLat([bubbleLng, bubbleLat])
+        .setDOMContent(body)
+        .addTo(m)
+      setBubble(body)
+    })
+    return () => {
+      cancelled = true
+      popup?.remove()
+      setBubble(null)
+    }
+  }, [bubbleLng, bubbleLat])
+  // Pomiar dopiero z treścią dymka: wcześniej jest pusty i wąski.
+  useEffect(() => {
+    const m = map.current
+    if (!m || !bubble) return
+    const frame = requestAnimationFrame(() => {
+      const box = m.getContainer().getBoundingClientRect()
+      const r = (bubble.closest('.maplibregl-popup-content') ?? bubble).getBoundingClientRect()
+      const dy =
+        Math.min(0, box.bottom - BUBBLE_MARGIN.bottom - r.bottom) ||
+        Math.max(0, box.top + BUBBLE_MARGIN.top - r.top)
+      const dx =
+        Math.min(0, box.right - BUBBLE_MARGIN.side - r.right) ||
+        Math.max(0, box.left + BUBBLE_MARGIN.side - r.left)
+      if (dx || dy) m.panBy([-dx, -dy], { duration: 250 })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [bubble])
   const offMap = route?.offMap ?? []
   const tabs: { id: Tab; label: string; dot?: boolean }[] = [
     { id: 'all', label: 'wszystkie' },
@@ -476,11 +533,11 @@ export function TripMap() {
             morph={`trip-${trip.id}`}
             actions={
               <>
-                <TripStatus />
                 <ChatButton onOpenCard={(id) => sheet.open(id)} />
                 <InboxButton />
               </>
             }
+            more={<TripStatus />}
           />
           <div role="tablist" aria-label="dni" className="island flex gap-1 overflow-x-auto p-1">
             {tabs.map((t) => (
@@ -539,6 +596,62 @@ export function TripMap() {
             )}
           </ul>
         )}
+        {bubble &&
+          selectedCard &&
+          hasCoords(selectedCard) &&
+          createPortal(
+            <div className="flex w-64 flex-col gap-1 text-text">
+              <div className="flex items-start gap-2">
+                <p className="min-w-0 flex-1 truncate text-sm font-bold">
+                  {selectedCard.title || selectedCard.location.name}
+                </p>
+                <span
+                  className={cx(
+                    'shrink-0 rounded-small px-2 py-0.5 text-[11px]',
+                    TYPE_STYLE[selectedCard.type].chip,
+                  )}
+                >
+                  {CARD_TYPE_LABELS[selectedCard.type]}
+                </span>
+              </div>
+              <p className="text-xs text-subtle italic">
+                {[
+                  selectedCard.date && formatDayHeader(selectedCard.date),
+                  fieldsSummary(selectedCard),
+                  selectedCard.location.address,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+              <div className={cx('mt-1 grid grid-cols-2 gap-1', wide && '[direction:rtl]')}>
+                <a
+                  href={navigationUrl(selectedCard.location)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cx(
+                    'flex min-h-11 items-center justify-center gap-1 rounded-small text-sm [direction:ltr]',
+                    wide
+                      ? 'border border-line text-text'
+                      : 'order-last bg-accent font-bold text-on-accent',
+                  )}
+                >
+                  <Navigation className="size-4" aria-hidden="true" /> nawiguj
+                </a>
+                <button
+                  type="button"
+                  onClick={() => sheet.open(selectedCard.id)}
+                  className={cx(
+                    'flex min-h-11 items-center justify-center gap-1 rounded-small text-sm [direction:ltr]',
+                    wide ? 'bg-accent font-bold text-on-accent' : 'border border-line text-text',
+                  )}
+                >
+                  <SquarePen className="size-4" aria-hidden="true" /> otwórz
+                </button>
+              </div>
+            </div>,
+            bubble,
+          )}
+
         <SessionBanner />
 
         <div className="pointer-events-none absolute inset-x-px bottom-[calc(80px+env(safe-area-inset-bottom))] z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
@@ -565,52 +678,7 @@ export function TripMap() {
               <ChevronRight className="size-5" aria-hidden="true" />
             </button>
           </div>
-          {selectedCard && hasCoords(selectedCard) && (
-            <section className="island border-t-2 border-t-accent p-3">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">
-                    {selectedCard.title || selectedCard.location.name}
-                  </p>
-                  <p className="truncate text-xs text-subtle italic">
-                    {[
-                      selectedCard.date && formatDayHeader(selectedCard.date),
-                      fieldsSummary(selectedCard),
-                      selectedCard.location.address,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-                <span
-                  className={cx(
-                    'rounded-small px-2 py-0.5 text-[11px]',
-                    TYPE_STYLE[selectedCard.type].chip,
-                  )}
-                >
-                  {CARD_TYPE_LABELS[selectedCard.type]}
-                </span>
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-1">
-                <button
-                  type="button"
-                  onClick={() => sheet.open(selectedCard.id)}
-                  className="flex min-h-11 items-center justify-center gap-1 rounded-small border border-line text-sm"
-                >
-                  <SquarePen className="size-4" aria-hidden="true" /> otwórz kartę
-                </button>
-                <a
-                  href={navigationUrl(selectedCard.location)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex min-h-11 items-center justify-center gap-1 rounded-small bg-accent text-sm font-bold text-on-accent"
-                >
-                  <Navigation className="size-4" aria-hidden="true" /> nawiguj
-                </a>
-              </div>
-            </section>
-          )}
-          {!selectedCard && offMap.length > 0 && (
+          {offMap.length > 0 && (
             <section className="island max-h-40 overflow-y-auto p-3">
               <p className="text-xs text-subtle italic">poza mapą</p>
               {offMap.map((c) => (
@@ -627,7 +695,7 @@ export function TripMap() {
               ))}
             </section>
           )}
-          {!selectedCard && !pins.length && (
+          {!pins.length && (
             <p className="island p-3 text-sm text-muted">
               ●{' '}
               {tab === 'all'
@@ -638,12 +706,7 @@ export function TripMap() {
         </div>
       </div>
       {sheet.openId && (
-        <CardSheet
-          key={sheet.openId}
-          cardId={sheet.openId}
-          isNew={sheet.isNew}
-          onClose={sheet.close}
-        />
+        <CardSheet cardId={sheet.openId} isNew={sheet.isNew} onClose={sheet.close} />
       )}
     </>
   )

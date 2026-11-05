@@ -5,9 +5,9 @@ import {
   type CardSnapshot,
   chooseVariant,
   createCard,
-  detachVariant,
   variantsByMain,
 } from '@planer/core'
+import { Plus } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useMemo } from 'react'
 import { cx } from '@/components/ui'
@@ -53,8 +53,8 @@ export function VariantBar({ card }: { card: CardSnapshot }) {
 
   const picked = card.id === mainId && card.variantChosen
   return (
-    <div className="island flex flex-col gap-1 p-1">
-      <div className="flex gap-1 overflow-x-auto">
+    <div className="island flex items-center gap-1 p-1">
+      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto [scrollbar-width:none]">
         {[main, ...others].map((c) => (
           <button
             key={c.id}
@@ -62,7 +62,7 @@ export function VariantBar({ card }: { card: CardSnapshot }) {
             aria-pressed={c.id === card.id}
             onClick={() => show(c.id)}
             className={cx(
-              'min-h-11 max-w-40 shrink-0 truncate rounded-small px-3 text-xs',
+              'min-h-9 max-w-36 shrink-0 truncate rounded-small px-2 text-xs',
               c.id === card.id ? 'bg-accent/20 font-bold text-accent' : 'text-muted',
             )}
           >
@@ -71,35 +71,23 @@ export function VariantBar({ card }: { card: CardSnapshot }) {
           </button>
         ))}
       </div>
-      <div className="flex items-center gap-1">
-        {picked ? (
-          <span className="px-3 text-xs text-subtle italic">wybrana</span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => chooseVariant(doc, card.id)}
-            className="min-h-11 rounded-small bg-accent px-3 text-xs font-bold text-on-accent"
-          >
-            wybierz tę
-          </button>
-        )}
-        <span className="flex-1" />
-        {card.variantOf && (
-          <button
-            type="button"
-            onClick={() => {
-              detachVariant(doc, card.id)
-              show(mainId)
-            }}
-            className="min-h-11 px-2 text-xs text-muted"
-          >
-            do pomysłów
-          </button>
-        )}
-        <button type="button" onClick={addOption} className="min-h-11 px-2 text-xs text-accent">
-          dodaj wariant
+      {!picked && (
+        <button
+          type="button"
+          onClick={() => chooseVariant(doc, card.id)}
+          className="min-h-9 shrink-0 rounded-small bg-accent px-2 text-xs font-bold text-on-accent"
+        >
+          wybierz
         </button>
-      </div>
+      )}
+      <button
+        type="button"
+        onClick={addOption}
+        aria-label="dodaj wariant"
+        className="flex size-9 shrink-0 items-center justify-center text-muted hover:text-accent"
+      >
+        <Plus className="size-4" aria-hidden="true" />
+      </button>
     </div>
   )
 }

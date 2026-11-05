@@ -107,8 +107,8 @@ describe('ułóż wg dni', () => {
       endDate: '2027-07-16',
     })
     expect(byId(doc, first)).toMatchObject({ x: 100, y: 300 })
-    expect(byId(doc, early)).toMatchObject({ x: 460, y: 300 })
-    expect(byId(doc, late)?.x).toBe(460)
+    expect(byId(doc, early)).toMatchObject({ x: 480, y: 300 })
+    expect(byId(doc, late)?.x).toBe(480)
     expect(byId(doc, late)?.y).toBeGreaterThan(300)
     expect(byId(doc, loose)).toMatchObject({ x: 5, y: 5 })
 
@@ -281,9 +281,9 @@ describe('upuszczanie na dzień', () => {
       endDate: '2027-07-16',
     })
     expect(all.map((c) => [c.date, c.x]).sort()).toEqual([
-      ['2027-07-14', -360],
+      ['2027-07-14', -380],
       ['2027-07-15', 0],
-      ['2027-07-16', 360],
+      ['2027-07-16', 380],
     ])
   })
 })

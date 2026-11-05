@@ -89,6 +89,15 @@ body {
     border: 1px solid var(--line);
     border-radius: var(--radius-island);
   }
+  .more-panel {
+    right: 0;
+    width: max-content;
+  }
+  /* Akcje paska leżą w jednej wysepce, więc same nie mają już ramki. */
+  .top-actions .island:not(.more-panel) {
+    background-color: transparent;
+    border-color: transparent;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -240,7 +249,7 @@ body {
 
 /* Pinezka na mapach (MapLibre): element znacznika to wrapper (MapLibre nadpisuje jego transform),
    kształt kropli w środku; kolor przez --pin, opcjonalny numer kolejności. */
-.maplibregl-popup-content {
+.maplibregl-map .maplibregl-popup-content {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-island);
@@ -249,8 +258,8 @@ body {
   font-size: 12px;
   padding: 8px 10px;
 }
-.maplibregl-popup-content strong { color: var(--text); }
-.maplibregl-popup-tip { display: none; }
+.maplibregl-map .maplibregl-popup-content strong { color: var(--text); }
+.maplibregl-map .maplibregl-popup-tip { display: none; }
 .map-pin {
   width: 30px;
   height: 34px;

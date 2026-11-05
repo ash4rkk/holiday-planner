@@ -7,19 +7,20 @@ import {
   type CardSnapshot,
   cardsOf,
   contentOf,
+  detachVariant,
   type EditableCardFields,
   fragmentLines,
-  restoreCard,
+  moveCardToDay,
   trashCard,
   updateCard,
 } from '@planer/core'
 import type { Editor } from '@tiptap/react'
-import { Calendar, ChevronDown, ChevronRight, Pin, Trash2 } from 'lucide-react'
+import { Calendar, ChevronDown, ChevronRight, Lightbulb, Pin, Trash2 } from 'lucide-react'
 import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { CardAttachments } from '@/components/attachments/card-attachments'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { cx } from '@/components/ui'
-import { offerUndo } from '@/lib/undo'
 import { useWide } from '@/lib/use-wide'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { CardEditor } from './card-editor'
@@ -66,6 +67,7 @@ export function CardSheet({
   const [typing, setTyping] = useState(isNew)
   const tall = expanded || typing
   const [typesOpen, setTypesOpen] = useState(false)
+  const [asking, setAsking] = useState<'trash' | 'ideas' | null>(null)
   const [closing, setClosing] = useState(false)
   const [dragY, setDragY] = useState(0)
   const dragFrom = useRef<number | null>(null)
@@ -119,8 +121,13 @@ export function CardSheet({
 
   const remove = () => {
     trashCard(doc, cardId)
-    offerUndo('karta w koszu', () => restoreCard(doc, cardId))
     onClose()
+  }
+
+  const toIdeas = () => {
+    setAsking(null)
+    if (card.variantOf) detachVariant(doc, cardId)
+    else moveCardToDay(doc, cardId, undefined)
   }
 
   const grip = {
@@ -245,12 +252,23 @@ export function CardSheet({
           </button>
           <button
             type="button"
-            onClick={remove}
+            onClick={() => setAsking('trash')}
             aria-label="przenieś do kosza"
             className="flex size-11 items-center justify-center text-muted hover:text-red"
           >
             <Trash2 className="size-5" aria-hidden="true" />
           </button>
+          {(card.date || card.variantOf) && (
+            <button
+              type="button"
+              onClick={() => setAsking('ideas')}
+              aria-label="przenieś do pomysłów"
+              title="do pomysłów"
+              className="flex size-11 items-center justify-center text-muted hover:text-accent"
+            >
+              <Lightbulb className="size-5" aria-hidden="true" />
+            </button>
+          )}
         </div>
         {typesOpen && (
           <div className="fade-in flex shrink-0 gap-1 overflow-x-auto px-1 pb-1">
@@ -302,14 +320,16 @@ export function CardSheet({
                 </button>
                 <button
                   type="button"
-                  onClick={remove}
+                  onClick={() => setAsking('trash')}
                   className="min-h-9 rounded-small border border-line px-3 text-muted"
                 >
                   odrzuć
                 </button>
               </div>
             )}
+            {/* Panel zostaje przy zmianie karty, żeby nie grał animacji; edytor i pola są per karta. */}
             <CardEditor
+              key={cardId}
               cardId={cardId}
               fragment={contentOf(cardMap)}
               autoFocus={isNew}
@@ -317,7 +337,12 @@ export function CardSheet({
             />
             {card.linkPreview && <LinkPreviewBlock preview={card.linkPreview} />}
           </div>
-          <CardSections card={card} onChange={change} addons={<AddVariantChip card={card} />}>
+          <CardSections
+            key={cardId}
+            card={card}
+            onChange={change}
+            addons={<AddVariantChip card={card} />}
+          >
             {card.amounts.length > 0 && (
               <Section label="koszt">
                 <AmountBadge amounts={card.amounts} className="self-start" />
@@ -332,6 +357,28 @@ export function CardSheet({
 
         {editor && <FormatToolbar editor={editor} />}
       </div>
+      {asking === 'trash' && (
+        <ConfirmDialog
+          title="Przenieść do kosza?"
+          body="Karta zniknie z planu. Można ją przywrócić z kosza na Liście przez 30 dni."
+          confirm="do kosza"
+          onConfirm={remove}
+          onCancel={() => setAsking(null)}
+        />
+      )}
+      {asking === 'ideas' && (
+        <ConfirmDialog
+          title="Przenieść do pomysłów?"
+          body={
+            card.variantOf
+              ? 'Wariant wyjdzie ze stosu i stanie się zwykłym pomysłem.'
+              : 'Karta straci dzień w planie.'
+          }
+          confirm="do pomysłów"
+          onConfirm={toIdeas}
+          onCancel={() => setAsking(null)}
+        />
+      )}
     </>
   )
 }

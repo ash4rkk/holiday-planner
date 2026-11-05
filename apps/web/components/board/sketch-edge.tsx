@@ -43,12 +43,13 @@ function borderPoint(b: Box, to: { x: number; y: number }, pad = 6) {
   return { x: cx + dx * scale, y: cy + dy * scale }
 }
 
-/** Jak daleko łuk wychodzi poza kolumnę; mieści się w obrysie dnia. */
-const AROUND_BEND = 12
+/** Jak daleko łuk wychodzi poza kolumnę; mieści się w wysepce dnia. */
+const AROUND_BEND = { down: 12, up: 24 }
 
 /**
- * Szkicowa strzałka od brzegu karty `source` do brzegu `target`. Z `around` idzie łukiem obok kolumny:
- * w dół po prawej, w górę po lewej, żeby para strzałek tam i z powrotem się nie nakładała.
+ * Szkicowa strzałka od brzegu karty `source` do brzegu `target`. Z `around` idzie łukiem po prawej
+ * stronie kolumny (z lewej stoją godziny); strzałka w górę szerzej, żeby para tam i z powrotem się
+ * nie nakładała.
  */
 function useArrow(id: string, source: string, target: string, around = false) {
   const s = useInternalNode(source)
@@ -61,20 +62,17 @@ function useArrow(id: string, source: string, target: string, around = false) {
     const tc = { x: tb.x + tb.w / 2, y: tb.y + tb.h / 2 }
     const seed = seedOf(id)
     if (around && Math.abs(tc.y - sc.y) > Math.abs(tc.x - sc.x)) {
-      const side = tc.y > sc.y ? 1 : -1
-      const a = { x: sc.x + side * (sb.w / 2 + 6), y: sc.y }
-      const b = { x: tc.x + side * (tb.w / 2 + 6), y: tc.y }
-      const bend = side * AROUND_BEND
+      const a = { x: sc.x + sb.w / 2 + 6, y: sc.y }
+      const b = { x: tc.x + tb.w / 2 + 6, y: tc.y }
+      const bend = tc.y > sc.y ? AROUND_BEND.down : AROUND_BEND.up
       const c1 = { x: a.x + bend, y: a.y }
       const c2 = { x: b.x + bend, y: b.y }
+      const angle = Math.PI
       return {
         a,
         b,
         mid: { x: (a.x + b.x) / 2 + bend * 0.75, y: (a.y + b.y) / 2 },
-        paths: [
-          ...sketchCurve(a, c1, c2, b, seed),
-          ...sketchArrowHead(b.x, b.y, side > 0 ? Math.PI : 0, seed),
-        ],
+        paths: [...sketchCurve(a, c1, c2, b, seed), ...sketchArrowHead(b.x, b.y, angle, seed)],
       }
     }
     const a = borderPoint(sb, tc)
@@ -159,7 +157,7 @@ export const SketchEdge = memo(function SketchEdge({
 
 export type OrderEdgeType = Edge<{ warn?: boolean; label?: string; around?: boolean }, 'order'>
 
-/** Strzałka kolejności w dniu (z godzin kart, niezapisana): cieńsza, w kolorze obrysu dnia, bez gestów. */
+/** Strzałka kolejności w dniu (z godzin kart, niezapisana): cieńsza, bez gestów. */
 export const OrderEdge = memo(function OrderEdge({
   id,
   source,

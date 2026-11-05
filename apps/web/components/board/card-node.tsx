@@ -1,31 +1,22 @@
 'use client'
 
 import type { CardSnapshot } from '@planer/core'
-import {
-  Handle,
-  type Node,
-  type NodeProps,
-  NodeToolbar,
-  Position,
-  useConnection,
-} from '@xyflow/react'
-import { Pin, PinOff, SquarePen, Trash2 } from 'lucide-react'
-import { memo } from 'react'
-import { VariantBadge } from '@/components/card/variant-badge'
+import { Handle, type Node, type NodeProps, NodeToolbar, Position } from '@xyflow/react'
+import { ChevronLeft, ChevronRight, Pin, PinOff, SquarePen, Trash2 } from 'lucide-react'
+import { memo, useState } from 'react'
+import { TimeCell } from '@/components/card/time-cell'
 import { cx } from '@/components/ui'
 import { useBoard } from './board-context'
 import { CardFace } from './card-face'
 import { useHoldDrag } from './use-hold-drag'
 import { ChooseButton } from './variant-node'
 
-const SIDES = [Position.Top, Position.Right, Position.Bottom, Position.Left]
-
 export type CardNodeType = Node<
   {
     card: CardSnapshot
     files: number
-    /** Liczba wariantów tej karty. */
-    variants: number
+    /** Warianty tej karty. */
+    options: CardSnapshot[]
     /** Warianty rysowane obok, jako rozgałęzienie. */
     branch?: boolean
     /** Karta w zaznaczeniu kilku kart: bez narzędzi pojedynczej karty. */
@@ -37,16 +28,23 @@ export type CardNodeType = Node<
 
 export const CardNode = memo(function CardNode({
   id,
-  data: { card, files, variants, branch, grouped, stayUntil },
+  data: { card, files, options, branch, grouped, stayUntil },
   selected,
 }: NodeProps<CardNodeType>) {
   const board = useBoard()
-  const connecting = useConnection((c) => c.inProgress)
+  // Podgląd opcji w stosie jest lokalny: plan zmienia dopiero „wybierz”.
+  const [shownIndex, setShownIndex] = useState(0)
+  const all = [card, ...options]
+  const stacked = options.length > 0 && !branch
+  const index = stacked ? shownIndex % all.length : 0
+  const shown = all[index] ?? card
+  const onAxis = Boolean(card.date && card.time)
+  const step = (by: number) => setShownIndex((index + by + all.length) % all.length)
   const gesture = useHoldDrag({
     // Tap w zaznaczoną kartę otwiera edytor (to też podwójny tap); Ctrl i Shift zbierają karty.
     onTap: (e) => {
       if (e.ctrlKey || e.metaKey || e.shiftKey) board.toggleGroup(id)
-      else if (selected && !grouped) board.openCard(id)
+      else if (selected && !grouped) board.openCard(shown.id)
       else board.select({ kind: 'card', id })
     },
     onStart: () => board.dragStart('card', id),
@@ -79,7 +77,11 @@ export const CardNode = memo(function CardNode({
         </div>
       </NodeToolbar>
 
-      {variants > 0 && !branch && (
+      {onAxis && (
+        <TimeCell card={shown} className="pointer-events-none absolute top-2 right-full mr-2" />
+      )}
+
+      {stacked && (
         <>
           <span className="absolute inset-0 translate-x-2 translate-y-2 rounded-island border border-line bg-panel" />
           <span className="absolute inset-0 translate-x-1 translate-y-1 rounded-island border border-line bg-panel" />
@@ -99,42 +101,63 @@ export const CardNode = memo(function CardNode({
         aria-label={card.title || 'karta bez tytułu'}
         onKeyDown={(e) => e.key === 'Enter' && board.openCard(id)}
       >
-        <CardFace card={card} files={files} stayUntil={stayUntil} />
-        {variants > 0 && !branch && (
-          <VariantBadge
-            card={card}
-            count={variants}
-            className="absolute right-2 bottom-1 rounded-small bg-panel px-1"
-          />
+        <CardFace
+          card={shown}
+          files={files}
+          stayUntil={index ? undefined : stayUntil}
+          onAxis={onAxis}
+        />
+        {stacked && (
+          <div className="absolute inset-x-1 bottom-1 flex items-center gap-1 bg-panel">
+            <button
+              type="button"
+              onClick={() => step(-1)}
+              aria-label="poprzednia opcja"
+              className="flex size-9 items-center justify-center rounded-small border border-line text-muted"
+            >
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+            <span className="text-xs text-subtle">
+              {index + 1} / {all.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => step(1)}
+              aria-label="następna opcja"
+              className="flex size-9 items-center justify-center rounded-small border border-line text-muted"
+            >
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+            <span className="flex-1" />
+            {(index > 0 || !card.variantChosen) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShownIndex(0)
+                  board.chooseVariant(shown.id)
+                }}
+                className="min-h-9 px-2 text-xs font-bold text-accent"
+              >
+                wybierz
+              </button>
+            )}
+          </div>
         )}
         {branch && !card.variantChosen && <ChooseButton onClick={() => board.chooseVariant(id)} />}
       </div>
 
-      {/* Strzałka: przeciągnięcie z kropki na krawędzi zaznaczonej karty do dowolnej innej karty.
-          Kropka na każdym boku — ciągnie się w stronę celu; kształt strzałki i tak liczy SketchEdge. */}
-      {SIDES.map((side) => (
-        <Handle
-          key={side}
-          id={side}
-          type="source"
-          position={side}
-          aria-label="narysuj strzałkę"
-          className={cx(
-            '!h-6 !w-6 !rounded-full !border-2 !border-panel !bg-accent transition-opacity',
-            selected && !grouped ? 'opacity-100' : '!pointer-events-none opacity-0',
-          )}
-        />
-      ))}
+      {/* Niewidoczne: React Flow rysuje strzałki tylko między węzłami z uchwytami. */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        isConnectable={false}
+        className="!pointer-events-none !opacity-0"
+      />
       <Handle
         type="target"
-        position={Position.Left}
-        isConnectableStart={false}
-        className={cx(
-          '!rounded-island !border-0 !bg-transparent',
-          connecting
-            ? '!inset-0 !h-full !w-full !transform-none'
-            : '!pointer-events-none !opacity-0',
-        )}
+        position={Position.Top}
+        isConnectable={false}
+        className="!pointer-events-none !opacity-0"
       />
     </>
   )

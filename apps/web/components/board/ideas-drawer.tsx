@@ -12,6 +12,11 @@ import { useHoldDrag } from './use-hold-drag'
 
 export const PANEL_WIDTH = 320
 
+/** Przyciski Tablicy: na szerokim ekranie w linii z dolnym menu, na telefonie rząd wyżej. */
+export function controlsBottom(wide: boolean): string {
+  return wide ? 'max(8px, env(safe-area-inset-bottom))' : 'calc(72px + env(safe-area-inset-bottom))'
+}
+
 export type IdeaDrag = {
   start: (card: CardSnapshot, x: number, y: number) => void
   move: (card: CardSnapshot, x: number, y: number) => void
@@ -121,8 +126,9 @@ export function IdeasDrawer({
           data-ideas-drop
           onClick={onToggle}
           aria-label={`pomysły (${ideas.length})`}
+          style={{ bottom: controlsBottom(wide) }}
           className={cx(
-            'island absolute bottom-[calc(72px+env(safe-area-inset-bottom))] left-1 z-10 flex h-11 items-center gap-2 px-3 text-sm',
+            'island absolute left-1 z-10 flex h-11 items-center gap-2 px-3 text-sm',
             dragging
               ? 'right-1 justify-center border-dashed border-accent text-accent'
               : 'text-muted',
