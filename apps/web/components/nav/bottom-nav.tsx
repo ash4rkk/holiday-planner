@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, List, Map as MapIcon, Sun } from 'lucide-react'
+import { CloudSun, LayoutDashboard, List, Map as MapIcon, Sun } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -13,7 +13,7 @@ const SWIPE_MAX_MS = 600
 export const NAV_SLOT = 'nav-slot'
 
 /**
- * Pływająca kapsuła wyjazdu: dziś, lista, tablica, mapa. Poza wyjazdem prowadzi do ostatnio
+ * Pływająca kapsuła wyjazdu: dziś, lista, tablica, mapa, pogoda. Poza wyjazdem prowadzi do ostatnio
  * otwartego, a bez żadnego wyjazdu do listy wyjazdów. Na wyborze profilu jej nie ma.
  */
 export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
@@ -40,6 +40,12 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
       active: pathname.endsWith('/board'),
     },
     { href: tripHref('map'), label: 'mapa', icon: MapIcon, active: pathname.endsWith('/map') },
+    {
+      href: tripHref('weather'),
+      label: 'pogoda',
+      icon: CloudSun,
+      active: pathname.endsWith('/weather'),
+    },
   ]
 
   // Przesunięcie palcem w bok zmienia ekran. Na Tablicy i Mapie palec rusza widokiem, więc tam nie.
@@ -47,7 +53,7 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
   const order = tripId ? items.map((i) => i.href) : []
   const orderKey = order.join()
   useEffect(() => {
-    if (!/\/(today|list)$/.test(pathname) || !orderKey) return
+    if (!/\/(today|list|weather)$/.test(pathname) || !orderKey) return
     const hrefs = orderKey.split(',')
     let start: { x: number; y: number; at: number } | null = null
     const down = (e: TouchEvent) => {

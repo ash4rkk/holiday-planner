@@ -1,6 +1,7 @@
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import webpush from 'web-push'
 import { getDb, pushSubscriptions, users } from './db'
+import { logEvent } from './events'
 import { isPushEndpoint } from './push-endpoint'
 
 // Wysyłka Web Push (VAPID) — wspólna dla workera (przypomnienia) i serwera sync (zmiany).
@@ -44,6 +45,7 @@ export async function sendPush(
       endpoint: pushSubscriptions.endpoint,
       p256dh: pushSubscriptions.p256dh,
       auth: pushSubscriptions.auth,
+      name: users.name,
     })
     .from(pushSubscriptions)
     .innerJoin(users, eq(users.id, pushSubscriptions.userId))
@@ -70,7 +72,11 @@ export async function sendPush(
           await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id))
         } else {
           failed++
-          console.warn('[push] wysyłka nie powiodła się', status ?? String(error))
+          await logEvent(
+            'error',
+            'push',
+            `powiadomienie nie doszło (${sub.name}) · ${status ?? String(error)}`,
+          )
         }
       }
     }),

@@ -1,6 +1,7 @@
 import { and, eq, gte, lte } from 'drizzle-orm'
 import { addDays } from './dates'
 import { fxRates, getDb } from './db'
+import { logEvent } from './events'
 
 // Kursy NBP (tabela A) z cache w fx_rates. Tylko po stronie serwera (web API i worker).
 // NBP nie publikuje w weekendy i święta, więc kurs „z dnia” to ostatni opublikowany do tego dnia.
@@ -83,7 +84,7 @@ export async function getRates(
           rows = await cached(currency, from, to)
         }
       } catch (error) {
-        console.warn(`[fx] NBP ${currency}: ${String(error)}`)
+        void logEvent('warn', 'nbp', `kurs ${currency} bez odpowiedzi NBP · ${String(error)}`)
       }
     }
     for (const d of new Set(dates)) {

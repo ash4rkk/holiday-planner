@@ -1,3 +1,4 @@
+import { logEvent } from '@planer/core/events'
 import { memoCache, parseLatLng } from '@/lib/memo-cache'
 
 export type Leg = { minutes: number; km: number }
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
     })
     return Response.json(route, { headers: { 'cache-control': 'private, max-age=600' } })
   } catch (error) {
+    void logEvent('warn', 'trasy', `OSRM: ${String(error)}`)
     return Response.json({ error: String(error) }, { status: 502 })
   }
 }

@@ -38,7 +38,7 @@ async function followRedirects(start: string): Promise<string> {
 }
 
 /** Geokodowanie zapasowe (Nominatim, OSM). */
-async function geocode(query: string): Promise<LatLng | undefined> {
+export async function geocode(query: string): Promise<LatLng | undefined> {
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.search = new URLSearchParams({
     q: query,

@@ -1,8 +1,10 @@
 import { readCards } from '@planer/core'
 import { eq, getDb, trips, users } from '@planer/core/db'
+import { logEvent } from '@planer/core/events'
 import { sendPush } from '@planer/core/push'
 import { cardsDigest, changedTitles, changesBody, computeReminders } from '@planer/core/reminders'
 import { replaceReminders } from '@planer/core/reminders-db'
+import { getReminderDefaults } from '@planer/core/settings'
 import type * as Y from 'yjs'
 
 // Skutki zmian dokumentu wyjazdu po stronie serwera: przeliczenie przypomnień push i powiadomienie
@@ -31,8 +33,11 @@ export function scheduleReminders(tripId: string, doc: Y.Doc) {
       void (async () => {
         const trip = await tripInfo(tripId)
         if (!trip) return
-        await replaceReminders(tripId, computeReminders(readCards(doc), trip.title, trip.timezone))
-      })().catch((e) => console.warn('[sync] przypomnienia', String(e)))
+        await replaceReminders(
+          tripId,
+          computeReminders(readCards(doc), trip.title, trip.timezone, await getReminderDefaults()),
+        )
+      })().catch((e) => logEvent('warn', 'sync', `przypomnienia: ${String(e)}`))
     }, REMINDERS_DEBOUNCE_MS),
   )
 }
@@ -69,7 +74,7 @@ export function trackChange(
     timer: setTimeout(() => {
       pending.delete(key)
       void flush(tripId, doc, email, before, connectedEmails()).catch((e) =>
-        console.warn('[sync] zmiany', String(e)),
+        logEvent('warn', 'sync', `powiadomienie o zmianach: ${String(e)}`),
       )
     }, CHANGES_QUIET_MS),
   })

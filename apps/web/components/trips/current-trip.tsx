@@ -4,6 +4,7 @@ import { daysBetween, formatAmount, formatDateSpan } from '@planer/core'
 import type { Trip } from '@planer/core/db'
 import Link from 'next/link'
 import { type ReactNode, useEffect, useState, ViewTransition } from 'react'
+import { TripSettingsLink } from '@/components/trips/trip-settings-link'
 import { cx } from '@/components/ui'
 import { useWeather, weatherIcon } from '@/components/weather'
 import type { TripSummary } from '@/lib/trip-summary'
@@ -62,81 +63,87 @@ export function CurrentTrip({
   const max = Math.max(...summary.days.map((d) => d.pln), 0)
 
   return (
-    <Link
-      href={`/trips/${trip.id}/today`}
-      className="island flex flex-col gap-3 border-accent p-4 transition-colors hover:border-accent-hover"
-    >
-      <div>
-        <p className="text-xs text-accent">
-          ● trwa · dzień {dayNo} z {dayCount}
-        </p>
-        <div className="flex min-w-0 items-center gap-2">
-          {flag}
-          <ViewTransition name={`trip-${trip.id}`}>
-            <p className="truncate text-2xl font-bold">{trip.title}</p>
-          </ViewTransition>
-        </div>
-        <p className="text-xs text-subtle italic">
-          {country && `${country} · `}
-          {formatDateSpan(trip.startDate, trip.endDate)}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-1">
-        <div className={cx(tile, 'col-span-2 flex-row items-end gap-3')}>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-subtle italic">wydatki</p>
-            <p className="truncate text-xl font-bold">
-              {formatAmount(summary.main ?? { value: summary.pln, currency: 'PLN' })}
-            </p>
-            {summary.main && (
-              <p className="text-xs text-muted">
-                ≈ {formatAmount({ value: summary.pln, currency: 'PLN' })}
-              </p>
-            )}
+    <div className="relative">
+      <Link
+        href={`/trips/${trip.id}/today`}
+        className="island flex flex-col gap-3 border-accent p-4 transition-colors hover:border-accent-hover"
+      >
+        <div>
+          <p className="text-xs text-accent">
+            ● trwa · dzień {dayNo} z {dayCount}
+          </p>
+          <div className="flex min-w-0 items-center gap-2">
+            {flag}
+            <ViewTransition name={`trip-${trip.id}`}>
+              <p className="truncate text-2xl font-bold">{trip.title}</p>
+            </ViewTransition>
           </div>
-          {summary.any && summary.days.length > 1 && (
-            <div className="flex h-10 w-2/5 max-w-40 items-end gap-0.5" aria-hidden="true">
-              {summary.days.map((d) => (
-                <span
-                  key={d.date}
-                  title={d.date}
-                  className={cx(
-                    'min-h-0.5 flex-1 rounded-[2px]',
-                    d.date === today ? 'bg-accent' : d.date < today ? 'bg-subtle' : 'bg-line',
-                  )}
-                  style={{ height: `${max ? (d.pln / max) * 100 : 0}%` }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {summary.place && (
-          <div className={tile}>
-            <p className="text-xs text-subtle italic">pogoda</p>
-            {now && icon ? (
-              <p className="flex items-center gap-1.5 font-bold" title={icon.label}>
-                <icon.icon className="size-4 text-muted" aria-hidden="true" />
-                {Math.round(now.temp)}°<span className="sr-only">{icon.label}</span>
-              </p>
-            ) : (
-              <p className="text-dim">—</p>
-            )}
-          </div>
-        )}
-        <div className={cx(tile, !summary.place && 'col-span-2')}>
-          <p className="text-xs text-subtle italic">tam jest</p>
-          <p className="font-bold">
-            {local?.time ?? '—'}
-            {local && <span className="ml-1.5 text-xs font-normal text-muted">{local.shift}</span>}
+          <p className="text-xs text-subtle italic">
+            {country && `${country} · `}
+            {formatDateSpan(trip.startDate, trip.endDate)}
           </p>
         </div>
-      </div>
 
-      <span className="flex min-h-11 items-center justify-center rounded-island bg-accent font-bold text-on-accent">
-        otwórz dziś ›
-      </span>
-    </Link>
+        <div className="grid grid-cols-2 gap-1">
+          <div className={cx(tile, 'col-span-2 flex-row items-end gap-3')}>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-subtle italic">wydatki</p>
+              <p className="truncate text-xl font-bold">
+                {formatAmount(summary.main ?? { value: summary.pln, currency: 'PLN' })}
+              </p>
+              {summary.main && (
+                <p className="text-xs text-muted">
+                  ≈ {formatAmount({ value: summary.pln, currency: 'PLN' })}
+                </p>
+              )}
+            </div>
+            {summary.any && summary.days.length > 1 && (
+              <div className="flex h-10 w-2/5 max-w-40 items-end gap-0.5" aria-hidden="true">
+                {summary.days.map((d) => (
+                  <span
+                    key={d.date}
+                    title={d.date}
+                    className={cx(
+                      'min-h-0.5 flex-1 rounded-[2px]',
+                      d.date === today ? 'bg-accent' : d.date < today ? 'bg-subtle' : 'bg-line',
+                    )}
+                    style={{ height: `${max ? (d.pln / max) * 100 : 0}%` }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {summary.place && (
+            <div className={tile}>
+              <p className="text-xs text-subtle italic">pogoda</p>
+              {now && icon ? (
+                <p className="flex items-center gap-1.5 font-bold" title={icon.label}>
+                  <icon.icon className="size-4 text-muted" aria-hidden="true" />
+                  {Math.round(now.temp)}°<span className="sr-only">{icon.label}</span>
+                </p>
+              ) : (
+                <p className="text-dim">—</p>
+              )}
+            </div>
+          )}
+          <div className={cx(tile, !summary.place && 'col-span-2')}>
+            <p className="text-xs text-subtle italic">tam jest</p>
+            <p className="font-bold">
+              {local?.time ?? '—'}
+              {local && (
+                <span className="ml-1.5 text-xs font-normal text-muted">{local.shift}</span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        <span className="flex min-h-11 items-center justify-center rounded-island bg-accent font-bold text-on-accent">
+          otwórz dziś ›
+        </span>
+      </Link>
+      {/* Osobny link w rogu — zagnieżdżony w kafelku byłby linkiem w linku. */}
+      <TripSettingsLink tripId={trip.id} className="absolute top-1.5 right-1.5" />
+    </div>
   )
 }

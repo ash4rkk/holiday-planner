@@ -1,4 +1,5 @@
 import {
+  bigserial,
   boolean,
   customType,
   date,
@@ -227,6 +228,30 @@ export const shareLinks = pgTable('share_links', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 })
 
+/** Wspólne ustawienia aplikacji (dla obu osób), np. domyślne przypomnienia: klucz → JSON. */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/**
+ * Dziennik zdarzeń do „logi i problemy” w ustawieniach: błędy i ostrzeżenia z workera, sync i API
+ * oraz udane zadania w tle (np. nocna kopia). Worker usuwa wpisy starsze niż 30 dni.
+ */
+export const appEvents = pgTable(
+  'app_events',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    level: text('level').$type<'error' | 'warn' | 'ok'>().notNull(),
+    // skąd: push, nbp, kopia, sync, pogoda, trasy…
+    source: text('source').notNull(),
+    message: text('message').notNull(),
+  },
+  (t) => [index('app_events_at_idx').on(t.at)],
+)
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Trip = typeof trips.$inferSelect
@@ -235,3 +260,4 @@ export type InboxItem = typeof inboxItems.$inferSelect
 export type Attachment = typeof attachments.$inferSelect
 export type CardTemplate = typeof cardTemplates.$inferSelect
 export type AiMessage = typeof aiMessages.$inferSelect
+export type AppEvent = typeof appEvents.$inferSelect

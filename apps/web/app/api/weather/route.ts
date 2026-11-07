@@ -1,3 +1,4 @@
+import { logEvent } from '@planer/core/events'
 import { memoCache, parseLatLng } from '@/lib/memo-cache'
 
 export type Weather = {
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
     })
     return Response.json(weather, { headers: { 'cache-control': 'private, max-age=1800' } })
   } catch (error) {
+    void logEvent('warn', 'pogoda', `Open-Meteo: ${String(error)}`)
     return Response.json({ error: String(error) }, { status: 502 })
   }
 }

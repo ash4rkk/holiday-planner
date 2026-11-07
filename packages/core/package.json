@@ -11,6 +11,8 @@
     "./fx": "./src/fx.ts",
     "./reminders": "./src/reminders.ts",
     "./reminders-db": "./src/reminders-db.ts",
+    "./events": "./src/events.ts",
+    "./settings": "./src/settings.ts",
     "./push": "./src/push.ts",
     "./routes": "./src/routes.ts"
   },

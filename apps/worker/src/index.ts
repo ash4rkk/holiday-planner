@@ -1,5 +1,6 @@
 import { shiftClock, TRAVEL_MODE_LABELS } from '@planer/core'
 import { and, eq, getDb, gte, lte, tripDocs, trips } from '@planer/core/db'
+import { logEvent, pruneEvents } from '@planer/core/events'
 import { getRates } from '@planer/core/fx'
 import { sendPush } from '@planer/core/push'
 import { dueReminders, markReminderSent, unmarkReminderSent } from '@planer/core/reminders-db'
@@ -104,7 +105,7 @@ function every(ms: number, job: () => Promise<void>, name: string) {
     try {
       await job()
     } catch (error) {
-      console.warn(`worker: ${name} —`, String(error))
+      await logEvent('error', name, String(error))
     } finally {
       running = false
     }
@@ -114,13 +115,14 @@ function every(ms: number, job: () => Promise<void>, name: string) {
 }
 
 every(REMINDERS_EVERY_MS, sendReminders, 'przypomnienia')
+every(24 * 60 * 60_000, () => pruneEvents(30), 'porządki dziennika')
 every(FX_EVERY_MS, refreshRates, 'kursy NBP')
 every(LEAVE_CHECK_MS, leaveReminders, 'czas wyjść')
 every(
   BACKUP_CHECK_MS,
   async () => {
     const done = await nightlyBackup()
-    if (done) console.log(`worker: kopia zapasowa ${done}`)
+    if (done) await logEvent('ok', 'kopia zapasowa', String(done))
   },
   'kopia zapasowa',
 )

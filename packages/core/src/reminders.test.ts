@@ -35,6 +35,18 @@ describe('computeReminders', () => {
     )
     expect(computeReminders(readCards(doc), 'x', 'Nie/Istnieje')).toEqual([])
   })
+
+  it('domyślne z ustawień zastępują wbudowane; własne z karty wygrywają', () => {
+    const doc = new Y.Doc()
+    createCard(doc, { type: 'transport', date: '2027-07-14', time: '10:00' })
+    createCard(doc, { type: 'sight', date: '2027-07-14', time: '12:00' }) // brak w ustawieniach
+    createCard(doc, { type: 'food', date: '2027-07-14', time: '20:00', remindMin: 15 })
+    const rows = computeReminders(readCards(doc), 'Rzym', 'Europe/Rome', { transport: 60 })
+    expect(rows.map((r) => r.fireAt.toISOString())).toEqual([
+      '2027-07-14T07:00:00.000Z', // 10:00 CEST − 1 h
+      '2027-07-14T17:45:00.000Z', // 20:00 CEST − 15 min (własne)
+    ])
+  })
 })
 
 describe('zmiany drugiej osoby', () => {

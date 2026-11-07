@@ -3,8 +3,14 @@ import type { CardSnapshot, CardType } from './cards'
 // Przypomnienia z kart: data + godzina (czas lokalny miejsca wyjazdu) − wyprzedzenie.
 // Tylko po stronie serwera (Temporal w Node 26; przeglądarki go jeszcze nie mają wszędzie).
 
-/** Domyślne wyprzedzenie wg typu, gdy karta nie ma własnego; notatki bez przypomnień. */
-export const DEFAULT_REMIND_MIN: Partial<Record<CardType, number>> = {
+/** Wyprzedzenie przypomnienia w minutach wg typu karty; brak typu = bez przypomnienia. */
+export type ReminderDefaults = Partial<Record<CardType, number>>
+
+/**
+ * Domyślne wyprzedzenie wg typu, gdy karta nie ma własnego; notatki bez przypomnień. Ustawienia
+ * aplikacji (`app_settings`, klucz `reminders`) mogą je zmienić.
+ */
+export const DEFAULT_REMIND_MIN: ReminderDefaults = {
   transport: 180,
   stay: 120,
   sight: 60,
@@ -24,11 +30,12 @@ export function computeReminders(
   cards: CardSnapshot[],
   tripTitle: string,
   timezone: string,
+  defaults: ReminderDefaults = DEFAULT_REMIND_MIN,
 ): ReminderRow[] {
   const out: ReminderRow[] = []
   for (const card of cards) {
     if (card.deletedAt || !card.date || !card.time) continue
-    const remind = card.remindMin ?? DEFAULT_REMIND_MIN[card.type]
+    const remind = card.remindMin ?? defaults[card.type]
     if (!remind) continue
     let start: Temporal.ZonedDateTime
     try {

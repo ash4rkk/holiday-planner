@@ -45,7 +45,7 @@ type Entry = {
 const entries = new Map<string, Entry>()
 
 /** Adres serwera sync: w dev osobny port (NEXT_PUBLIC_SYNC_URL), na serwerze ta sama domena /sync. */
-function syncUrl(): string {
+export function syncUrl(): string {
   const configured = process.env.NEXT_PUBLIC_SYNC_URL
   if (configured) return configured
   const { protocol, host } = window.location
@@ -62,7 +62,20 @@ async function sessionExpired(): Promise<boolean> {
   }
 }
 
+/** Ostatnia udana synchronizacja na tym urządzeniu (ms) — dla ustawień. */
+export const LAST_SYNC_KEY = 'planer-last-sync'
+let lastMark = 0
+function markSynced() {
+  // Przy ciągłej edycji zapis najwyżej co 30 s.
+  if (Date.now() - lastMark < 30_000) return
+  lastMark = Date.now()
+  try {
+    localStorage.setItem(LAST_SYNC_KEY, String(lastMark))
+  } catch {}
+}
+
 function setStatus(entry: Entry, status: SyncStatus) {
+  if (status === 'live') markSynced()
   if (entry.status === status) return
   entry.status = status
   for (const listener of entry.listeners) listener()
@@ -92,7 +105,12 @@ function openTripDoc(tripId: string, user: PresenceUser): Entry {
   let socket: WebSocketStatus = WebSocketStatus.Connecting
   provider.on('synced', () => {
     failures = 0
+    lastMark = 0
     setStatus(created, 'live')
+  })
+  // Zmiany wysłane lub odebrane na żywo też liczą się jako synchronizacja.
+  doc.on('update', () => {
+    if (created.status === 'live') markSynced()
   })
   provider.on('status', ({ status }: { status: WebSocketStatus }) => {
     socket = status
@@ -232,6 +250,11 @@ export function usePresence<T = Record<string, unknown>>(): (T & { clientId: num
 
 // Migawki map dokumentu (karty, ramki, strzałki) przeliczane przy zmianie; ta sama referencja
 // między zmianami, więc useSyncExternalStore nie renderuje bez potrzeby.
+//
+// Ważność migawki wyznacza licznik zmian, który podbija stały obserwator podpięty przy pierwszym
+// odczycie — nie obserwator subskrybenta. Inaczej zmiana z IndexedDB albo sync, która przyjdzie
+// między renderem a podpięciem subskrypcji (wejście w wyjazd), zostawiała pustą migawkę na stałe,
+// aż do odświeżenia strony.
 type Key = 'cards' | 'frames' | 'edges' | 'attachments'
 const READERS = {
   cards: readCards,
@@ -239,28 +262,41 @@ const READERS = {
   edges: readEdges,
   attachments: readAttachments,
 }
-const snapshots = new WeakMap<Y.Doc, Partial<Record<Key, unknown>>>()
+const KEYS = Object.keys(READERS) as Key[]
+const versions = new WeakMap<Y.Doc, Record<Key, number>>()
+const snapshots = new WeakMap<Y.Doc, Partial<Record<Key, { version: number; value: unknown }>>>()
 const EMPTY: never[] = []
 
-function subscribe(doc: Y.Doc, key: Key, onChange: () => void) {
-  const map = doc.getMap(key)
-  const handler = () => {
-    const cache = snapshots.get(doc)
-    if (cache) delete cache[key]
-    onChange()
+function versionsOf(doc: Y.Doc): Record<Key, number> {
+  let v = versions.get(doc)
+  if (!v) {
+    const created = { cards: 0, frames: 0, edges: 0, attachments: 0 }
+    for (const key of KEYS) doc.getMap(key).observeDeep(() => created[key]++)
+    versions.set(doc, created)
+    v = created
   }
-  map.observeDeep(handler)
-  return () => map.unobserveDeep(handler)
+  return v
 }
 
-function getSnapshot<K extends Key>(doc: Y.Doc, key: K): ReturnType<(typeof READERS)[K]> {
+export function subscribe(doc: Y.Doc, key: Key, onChange: () => void) {
+  versionsOf(doc) // stały obserwator musi być pierwszy, żeby licznik rósł przed onChange
+  const map = doc.getMap(key)
+  map.observeDeep(onChange)
+  return () => map.unobserveDeep(onChange)
+}
+
+export function getSnapshot<K extends Key>(doc: Y.Doc, key: K): ReturnType<(typeof READERS)[K]> {
+  const version = versionsOf(doc)[key]
   let cache = snapshots.get(doc)
   if (!cache) {
     cache = {}
     snapshots.set(doc, cache)
   }
-  if (!(key in cache)) cache[key] = READERS[key](doc)
-  return cache[key] as ReturnType<(typeof READERS)[K]>
+  const hit = cache[key]
+  if (hit && hit.version === version) return hit.value as ReturnType<(typeof READERS)[K]>
+  const value = READERS[key](doc)
+  cache[key] = { version, value }
+  return value as ReturnType<(typeof READERS)[K]>
 }
 
 function useDocMap<K extends Key>(key: K): ReturnType<(typeof READERS)[K]> {
