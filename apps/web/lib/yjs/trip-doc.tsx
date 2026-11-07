@@ -130,6 +130,8 @@ export type TripMeta = {
   travelMode: TravelMode
   travelBufferMin: number
   timezone: string
+  /** Flaga kraju (komponent serwerowy z layoutu, żeby zestaw flag nie trafiał do bundla klienta). */
+  flag?: ReactNode
 }
 
 type Ctx = {

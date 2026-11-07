@@ -22,7 +22,7 @@ import {
   todayLocal,
   variantsByMain,
 } from '@planer/core'
-import { Luggage, Plus, Settings2 } from 'lucide-react'
+import { Luggage, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { Fragment, type ReactNode, useMemo, useState } from 'react'
 import { AddButton } from '@/components/add-button'
@@ -37,6 +37,7 @@ import { TimeCell } from '@/components/card/time-cell'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
+import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { buttonClass, cx, SectionLabel } from '@/components/ui'
 import { DayWeather } from '@/components/weather'
@@ -114,10 +115,10 @@ export function TripList() {
         style={wide && openId ? { marginRight: CARD_PANEL_WIDTH } : undefined}
       >
         <TopBar
-          theme={false}
-          title={trip.title}
+          title={<TripTitle />}
           back={TRIPS_BACK}
           morph={`trip-${trip.id}`}
+          menu={<TripMenu />}
           actions={
             <>
               <ChatButton onOpenCard={(id) => open(id)} />
@@ -127,13 +128,6 @@ export function TripList() {
           more={
             <>
               <TripStatus />
-              <Link
-                href={`/trips/${trip.id}/settings`}
-                aria-label="ustawienia wyjazdu"
-                className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
-              >
-                <Settings2 className="size-5" aria-hidden="true" />
-              </Link>
             </>
           }
         />

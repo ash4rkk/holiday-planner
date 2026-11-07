@@ -20,8 +20,9 @@ import {
   stayTimes,
   TRAVEL_MODE_LABELS,
   todayLocal,
+  weatherPlace,
 } from '@planer/core'
-import { LocateFixed, Navigation, Settings2 } from 'lucide-react'
+import { LocateFixed, Navigation } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import type { PlanResponse } from '@/app/api/route/plan/route'
@@ -33,10 +34,13 @@ import { CardSheet } from '@/components/card/card-sheet'
 import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
+import { CountdownRing } from '@/components/today/countdown-ring'
+import { DayAxis } from '@/components/today/day-axis'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
+import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
-import { useWeather, weatherIcon, weatherPlace } from '@/components/weather'
+import { useWeather, weatherIcon } from '@/components/weather'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
 import { useFetchCached } from '@/lib/use-fetch-cached'
@@ -106,6 +110,18 @@ export function TodayDashboard({ userName }: { userName: string }) {
       />
     )
   const nextLeg = next && legs.find((l) => l.to === next.id)
+  // Dojazd do miejsca w podglądzie osi: „17 min pieszo · wyjdź do 20:03”.
+  const legText = (id: string) => {
+    const leg = legs.find((l) => l.to === id)
+    const plan = leg && plans[leg.id]
+    if (!leg || !plan) return undefined
+    const leave = leg.arriveBy
+      ? shiftClock(plan.departAt ?? shiftClock(leg.arriveBy, -plan.minutes), -trip.travelBufferMin)
+      : undefined
+    return [`${plan.minutes} min ${TRAVEL_MODE_LABELS[plan.mode]}`, leave && `wyjdź do ${leave}`]
+      .filter(Boolean)
+      .join(' · ')
+  }
   const tripDays = startDate && endDate ? daysBetween(startDate, endDate) + 1 : undefined
   const dayNumber = during && startDate ? daysBetween(startDate, today) + 1 : undefined
   const status = dayNumber
@@ -119,10 +135,10 @@ export function TodayDashboard({ userName }: { userName: string }) {
   return (
     <>
       <TopBar
-        theme={false}
-        title={trip.title}
+        title={<TripTitle />}
         back={TRIPS_BACK}
         morph={`trip-${trip.id}`}
+        menu={<TripMenu />}
         actions={
           <>
             <ChatButton onOpenCard={(id) => sheet.open(id)} />
@@ -132,77 +148,107 @@ export function TodayDashboard({ userName }: { userName: string }) {
         more={
           <>
             <TripStatus />
-            <Link
-              href={`/trips/${trip.id}/settings`}
-              aria-label="ustawienia wyjazdu"
-              className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
-            >
-              <Settings2 className="size-5" aria-hidden="true" />
-            </Link>
           </>
         }
       />
       <SessionBanner />
 
-      <section
-        className={cx(
-          'island overflow-hidden border-t-2 border-t-accent p-4 transition-colors duration-500',
-          heroTone(weather?.current?.code),
-        )}
-      >
-        <p className="text-xl font-bold">cześć, {userName}</p>
-        <p className="mt-1 text-sm text-muted">
-          {status} ·{' '}
-          <Link href={`/trips/${trip.id}/list`} className="text-accent">
-            lista ›
-          </Link>
-        </p>
-        {stay && (
-          <p className="mt-1 text-xs text-subtle italic">
-            nocleg: {stay.title || stay.location.name}
-          </p>
-        )}
-        {dayNumber && tripDays && (
-          <div className="mt-3 h-1 overflow-hidden rounded-full bg-raised" aria-hidden="true">
-            <div
-              className="h-full rounded-full bg-accent transition-[width] duration-500"
-              style={{ width: `${Math.min(100, (dayNumber / tripDays) * 100)}%` }}
+      {during ? (
+        <>
+          {next && (
+            <NextPlace
+              card={next}
+              from={stay}
+              leg={nextLeg}
+              plan={nextLeg && plans[nextLeg.id]}
+              now={now}
+              onOpen={() => sheet.open(next.id)}
             />
+          )}
+          <section className="island flex flex-col gap-3 p-3" aria-label="dzień">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="min-w-0 truncate text-sm">
+                <span className="font-bold">{weekday(planDate)}</span>
+                <span className="text-subtle italic"> · {status}</span>
+              </p>
+              <Link href={`/trips/${trip.id}/list`} className="shrink-0 text-xs text-accent">
+                lista ›
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              <WeatherTile at={place} today={planDate} compact />
+              <div className="flex flex-col justify-center rounded-small bg-raised px-3 py-2">
+                <p className="text-xs text-subtle italic">wydatki dzisiaj</p>
+                {todays.some((c) => c.amounts?.length) ? (
+                  <TotalsText cards={todays} mainCurrency={main} className="text-sm font-bold" />
+                ) : (
+                  <p className="text-sm text-dim">{formatAmount({ value: 0, currency: 'PLN' })}</p>
+                )}
+              </div>
+            </div>
+            {todays.some((c) => c.time) && (
+              <DayAxis cards={todays} now={now} onOpen={(id) => sheet.open(id)} legText={legText} />
+            )}
+            {stay && (
+              <p className="text-xs text-subtle italic">
+                nocleg: {stay.title || stay.location.name}
+              </p>
+            )}
+          </section>
+        </>
+      ) : (
+        <>
+          <section
+            className={cx(
+              'island overflow-hidden border-t-2 border-t-accent p-4 transition-colors duration-500',
+              heroTone(weather?.current?.code),
+            )}
+          >
+            <p className="text-xl font-bold">cześć, {userName}</p>
+            <p className="mt-1 text-sm text-muted">
+              {status} ·{' '}
+              <Link href={`/trips/${trip.id}/list`} className="text-accent">
+                lista ›
+              </Link>
+            </p>
+            {stay && (
+              <p className="mt-1 text-xs text-subtle italic">
+                nocleg: {stay.title || stay.location.name}
+              </p>
+            )}
+            {dayNumber && tripDays && (
+              <div className="mt-3 h-1 overflow-hidden rounded-full bg-raised" aria-hidden="true">
+                <div
+                  className="h-full rounded-full bg-accent transition-[width] duration-500"
+                  style={{ width: `${Math.min(100, (dayNumber / tripDays) * 100)}%` }}
+                />
+              </div>
+            )}
+          </section>
+
+          <div className="grid grid-cols-2 gap-1">
+            {(during || place) && !after && <WeatherTile at={place} today={planDate} />}
+            <section
+              className={cx(
+                'island flex flex-col justify-center p-3',
+                (after || (!during && !place)) && 'col-span-2',
+              )}
+            >
+              <p className="text-xs text-subtle italic">
+                {during ? 'wydatki dzisiaj' : 'wydatki wyjazdu'}
+              </p>
+              {(during ? todays : live).some((c) => c.amounts?.length) ? (
+                <TotalsText
+                  cards={during ? todays : live}
+                  mainCurrency={main}
+                  className="text-sm font-bold"
+                />
+              ) : (
+                <p className="text-sm text-dim">{formatAmount({ value: 0, currency: 'PLN' })}</p>
+              )}
+            </section>
           </div>
-        )}
-      </section>
-
-      <div className="grid grid-cols-2 gap-1">
-        {(during || place) && !after && <WeatherTile at={place} today={planDate} />}
-        <section
-          className={cx(
-            'island flex flex-col justify-center p-3',
-            (after || (!during && !place)) && 'col-span-2',
-          )}
-        >
-          <p className="text-xs text-subtle italic">
-            {during ? 'wydatki dzisiaj' : 'wydatki wyjazdu'}
-          </p>
-          {(during ? todays : live).some((c) => c.amounts?.length) ? (
-            <TotalsText
-              cards={during ? todays : live}
-              mainCurrency={main}
-              className="text-sm font-bold"
-            />
-          ) : (
-            <p className="text-sm text-dim">{formatAmount({ value: 0, currency: 'PLN' })}</p>
-          )}
-        </section>
-      </div>
-
-      {next && (
-        <NextPlace
-          card={next}
-          from={stay}
-          leg={nextLeg}
-          plan={nextLeg && plans[nextLeg.id]}
-          onOpen={() => sheet.open(next.id)}
-        />
+        </>
       )}
 
       {!after && <SectionLabel>{before ? 'pierwszy dzień' : 'plan dnia'}</SectionLabel>}
@@ -377,7 +423,25 @@ function heroTone(code: number | undefined): string | undefined {
   return 'bg-teal/15'
 }
 
-function WeatherTile({ at, today }: { at?: LatLng; today: string }) {
+const weekdayFormat = new Intl.DateTimeFormat('pl-PL', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+})
+/** „sobota, 7 listopada” z daty ISO. */
+const weekday = (date: string) => weekdayFormat.format(new Date(`${date}T12:00:00Z`))
+
+function WeatherTile({
+  at,
+  today,
+  compact,
+}: {
+  at?: LatLng
+  today: string
+  /** Wewnątrz karty dnia: tło `raised` zamiast osobnej wysepki. */
+  compact?: boolean
+}) {
   const { position, request, denied } = usePosition()
   const place = at ?? position
   const weather = useWeather(place)
@@ -389,7 +453,10 @@ function WeatherTile({ at, today }: { at?: LatLng; today: string }) {
         type="button"
         onClick={request}
         disabled={denied}
-        className="island flex flex-col justify-center p-3 text-left"
+        className={cx(
+          'flex flex-col justify-center text-left',
+          compact ? 'rounded-small bg-raised px-3 py-2' : 'island p-3',
+        )}
       >
         <span className="text-xs text-subtle italic">pogoda</span>
         <span className="flex items-center gap-1 text-sm text-accent">
@@ -402,8 +469,17 @@ function WeatherTile({ at, today }: { at?: LatLng; today: string }) {
   const code = weather?.current?.code ?? day?.code
   const { icon: Icon, label } = weatherIcon(code ?? 0)
   return (
-    <section className="island flex items-center gap-3 p-3" aria-label={`pogoda: ${label}`}>
-      <Icon className="size-7 shrink-0 text-amber" aria-hidden="true" />
+    <section
+      className={cx(
+        'flex items-center gap-3',
+        compact ? 'rounded-small bg-raised px-3 py-2' : 'island p-3',
+      )}
+      aria-label={`pogoda: ${label}`}
+    >
+      <Icon
+        className={cx('shrink-0 text-amber', compact ? 'size-6' : 'size-7')}
+        aria-hidden="true"
+      />
       <div>
         <p className="text-lg font-bold leading-tight">
           {weather?.current ? `${Math.round(weather.current.temp)}°` : '—'}
@@ -423,12 +499,14 @@ function NextPlace({
   from,
   leg,
   plan,
+  now,
   onOpen,
 }: {
   card: MappedCard
   from?: MappedCard
   leg?: DayGap
   plan?: LegPlan | null
+  now: string
   onOpen: () => void
 }) {
   const { trip } = useTrip()
@@ -445,38 +523,41 @@ function NextPlace({
       ? `${walk.minutes} min pieszo · ${String(walk.km).replace('.', ',')} km`
       : `${route.car.minutes} min autem · ${walk.minutes} min pieszo`
     : undefined
+  const leaveBy =
+    plan && leg?.arriveBy
+      ? shiftClock(plan.departAt ?? shiftClock(leg.arriveBy, -plan.minutes), -trip.travelBufferMin)
+      : undefined
 
   return (
-    <section className="island border-t-2 border-t-accent p-3">
-      <p className="text-xs text-subtle italic">następne{card.time ? ` · ${card.time}` : ''}</p>
-      <button type="button" onClick={onOpen} className="mt-0.5 block text-left">
-        <span className="font-bold">{card.title || card.location.name}</span>
-        <span className="block text-xs text-subtle">⌖ {card.location.name}</span>
+    <section className="island flex flex-col items-center border-accent p-4 text-center">
+      <CountdownRing now={now} leaveBy={leaveBy} startsAt={card.time} />
+      <button type="button" onClick={onOpen} className="mt-2 block">
+        <span className="text-lg font-bold">
+          {card.title || card.location.name}
+          {card.time && <span className="text-muted"> · {card.time}</span>}
+        </span>
+        <span className="block text-xs text-subtle italic">
+          ⌖ {card.location.name}
+          {plan && ` · ${plan.minutes} min ${TRAVEL_MODE_LABELS[plan.mode]}`}
+        </span>
       </button>
-      {plan && leg?.arriveBy && (
-        <p className="mt-1 text-sm font-bold">
-          {plan.minutes} min {TRAVEL_MODE_LABELS[plan.mode]} · wyjdź do{' '}
-          {shiftClock(
-            plan.departAt ?? shiftClock(leg.arriveBy, -plan.minutes),
-            -trip.travelBufferMin,
-          )}
-        </p>
-      )}
       {travel && (
-        <p className="mt-1 text-sm">
+        <p className="mt-1 text-xs text-muted">
           {travel}
           {!position && from ? ' z noclegu' : ''}
         </p>
       )}
-      <CanWeMakeIt card={card} />
-      <a
-        href={navigationUrl(card.location)}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-2 flex min-h-11 items-center justify-center gap-1 rounded-small bg-accent text-sm font-bold text-on-accent"
-      >
-        <Navigation className="size-4" aria-hidden="true" /> nawiguj
-      </a>
+      <div className="w-full">
+        <CanWeMakeIt card={card} />
+        <a
+          href={navigationUrl(card.location)}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 flex min-h-11 items-center justify-center gap-1 rounded-small bg-accent text-sm font-bold text-on-accent"
+        >
+          <Navigation className="size-4" aria-hidden="true" /> nawiguj
+        </a>
+      </div>
     </section>
   )
 }

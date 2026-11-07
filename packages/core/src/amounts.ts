@@ -94,3 +94,20 @@ export function formatAmount({ value, currency }: Amount): string {
     return `${value.toLocaleString('pl-PL')} ${currency}`
   }
 }
+
+/** Wydatki w PLN na każdy z `days` (karty z tą datą; karty bez daty i spoza listy pomijamy). */
+export function spendingByDay(
+  cards: Pick<CardSnapshot, 'amounts' | 'date' | 'deletedAt'>[],
+  rate: RateLookup,
+  today: string,
+  days: string[],
+): number[] {
+  return days.map(
+    (day) =>
+      totals(
+        cards.filter((c) => c.date === day),
+        rate,
+        today,
+      ).pln,
+  )
+}

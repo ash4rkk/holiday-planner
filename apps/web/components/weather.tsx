@@ -1,13 +1,6 @@
 'use client'
 
-import {
-  addDays,
-  type CardSnapshot,
-  hasCoords,
-  type LatLng,
-  staysOver,
-  todayLocal,
-} from '@planer/core'
+import { addDays, type CardSnapshot, type LatLng, todayLocal, weatherPlace } from '@planer/core'
 import {
   Cloud,
   CloudDrizzle,
@@ -38,17 +31,6 @@ export function weatherIcon(code: number): { icon: LucideIcon; label: string } {
 export function useWeather(at: LatLng | undefined): Weather | undefined {
   const url = at ? `/api/weather?at=${at.lat.toFixed(2)},${at.lng.toFixed(2)}` : null
   return useFetchCached<Weather>(url, 3 * 60 * 60_000)
-}
-
-/** Miejsce dla pogody danego dnia: nocleg tej nocy, pierwsze miejsce dnia, jakiekolwiek miejsce wyjazdu. */
-export function weatherPlace(cards: CardSnapshot[], date: string): LatLng | undefined {
-  const live = cards.filter((c) => !c.deletedAt).filter(hasCoords)
-  const pick =
-    live.find((c) => staysOver(c, date)) ??
-    live.find((c) => c.date === date) ??
-    live.find((c) => c.type === 'stay') ??
-    live[0]
-  return pick ? { lat: pick.location.lat, lng: pick.location.lng } : undefined
 }
 
 /** Ikona i temperatura dnia: Lista i obrys dnia na Tablicy (Open-Meteo: 7 dni wstecz, 16 naprzód). */

@@ -71,6 +71,13 @@
       "when": 1793908543102,
       "tag": "0009_pretty_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794075446404,
+      "tag": "0010_harsh_magneto",
+      "breakpoints": true
     }
   ]
 }

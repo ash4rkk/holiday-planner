@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { Flag } from '@/components/trips/flag'
 import { UndoToast } from '@/components/undo-toast'
 import { getCurrentUser } from '@/lib/auth/user'
 import { countInbox } from '@/lib/inbox'
@@ -31,6 +32,7 @@ export default async function TripLayout({ params, children }: LayoutProps<'/tri
         travelMode,
         travelBufferMin,
         timezone,
+        flag: trip.country ? <Flag country={trip.country} className="h-3.5 w-[21px]" /> : undefined,
       }}
       user={{ name: user.name, color: user.color }}
     >

@@ -1,6 +1,7 @@
 'use client'
 
 import type { Trip } from '@planer/core/db'
+import { countries } from 'country-flag-icons'
 import { useActionState } from 'react'
 import { buttonClass, Field, inputClass } from '@/components/ui'
 import type { TripFormState } from '@/lib/trip-form'
@@ -12,6 +13,14 @@ const TIMEZONES =
         /^(Europe|Atlantic|Africa|Asia|America)\//.test(tz),
       )
     : ['Europe/Warsaw']
+
+// Kraje po polsku, alfabetycznie; tylko dwuliterowe kody (bez regionów typu GB-SCT).
+const regionNames = new Intl.DisplayNames('pl', { type: 'region' })
+const COUNTRIES = countries
+  .filter((code) => /^[A-Z]{2}$/.test(code))
+  .map((code) => ({ code, name: regionNames.of(code) ?? code }))
+  .filter((c) => c.name !== c.code)
+  .sort((a, b) => a.name.localeCompare(b.name, 'pl'))
 
 type Action = (prev: TripFormState, form: FormData) => Promise<TripFormState>
 
@@ -72,6 +81,20 @@ export function TripForm({
           autoCapitalize="characters"
           autoComplete="off"
         />
+      </Field>
+      <Field label="kraj" error={e.country} hint="flaga przy nazwie na liście wyjazdów">
+        <select
+          name="country"
+          defaultValue={v?.country ?? trip?.country ?? ''}
+          className={inputClass}
+        >
+          <option value="">—</option>
+          {COUNTRIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </Field>
       <Field
         label="strefa czasowa miejsca"

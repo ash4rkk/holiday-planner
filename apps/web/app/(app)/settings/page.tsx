@@ -2,6 +2,7 @@ import { formatAmount } from '@planer/core'
 import { routesBudgetPln, routesLimit, routesUsedThisMonth } from '@planer/core/routes'
 import { Route, Sparkles } from 'lucide-react'
 import { PushSettings } from '@/components/settings/push-settings'
+import { ThemeSettings } from '@/components/settings/theme-settings'
 import { TopBar } from '@/components/top-bar'
 import { MONTHLY_BUDGET_PLN, spentThisMonthPln } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured } from '@/lib/ai/client'
@@ -15,6 +16,7 @@ export default async function SettingsPage() {
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
       <TopBar title="ustawienia" back={{ href: '/trips', label: 'wróć do wyjazdów' }} />
+      <ThemeSettings />
       <PushSettings publicKey={process.env.VAPID_PUBLIC_KEY} />
       <section className="island flex items-start gap-3 p-4 text-sm">
         <Sparkles className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />

@@ -38,6 +38,8 @@ export const trips = pgTable('trips', {
   // główna waluta wyjazdu pierwsza, np. ['EUR', 'CHF']
   currencies: text('currencies').array().notNull().default([]),
   archived: boolean('archived').notNull().default(false),
+  // Kraj wyjazdu (ISO 3166-1 alfa-2, np. 'PT') — flaga przy nazwie na liście wyjazdów.
+  country: text('country'),
   // Godziny kart są lokalne dla miejsca wyjazdu; strefa potrzebna do przypomnień push.
   timezone: text('timezone').notNull().default('Europe/Warsaw'),
   // Jak się poruszacie: domyślny sposób dojazdu między kartami i zapas w minutach.

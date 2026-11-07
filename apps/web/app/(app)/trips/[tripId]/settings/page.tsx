@@ -23,7 +23,7 @@ export default async function TripSettingsPage({ params }: PageProps<'/trips/[tr
       <Island className="p-4">
         <TripForm action={updateTrip.bind(null, trip.id)} trip={trip} submitLabel="zapisz" />
       </Island>
-      <section className="island mt-1 flex flex-col gap-2 p-4 text-sm">
+      <section id="eksport" className="island mt-1 flex scroll-mt-2 flex-col gap-2 p-4 text-sm">
         <p className="font-bold">eksport</p>
         <div className="grid grid-cols-3 gap-1">
           <a href={exportUrl('pdf')} className={buttonClass('island', 'px-2')}>
@@ -45,7 +45,9 @@ export default async function TripSettingsPage({ params }: PageProps<'/trips/[tr
           plan dzień po dniu z treścią kart, kwotami i nazwami plików
         </p>
       </section>
-      <FamilyLink tripId={trip.id} tripTitle={trip.title} token={token} />
+      <div id="rodzina" className="scroll-mt-2">
+        <FamilyLink tripId={trip.id} tripTitle={trip.title} token={token} />
+      </div>
       <form action={setTripArchived.bind(null, trip.id, !trip.archived)} className="mt-1">
         <button type="submit" className={buttonClass('island', 'w-full')}>
           {trip.archived ? 'przywróć z archiwum' : 'przenieś do archiwum'}

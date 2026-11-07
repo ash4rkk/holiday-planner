@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { formatAmount, parseAmounts, sumByCurrency, totals, withoutAmounts } from './amounts'
+import {
+  formatAmount,
+  parseAmounts,
+  spendingByDay,
+  sumByCurrency,
+  totals,
+  withoutAmounts,
+} from './amounts'
 
 describe('parseAmounts', () => {
   it.each([
@@ -81,5 +88,23 @@ describe('withoutAmounts', () => {
     expect(withoutAmounts('Bilety online. /+30 EUR')).toBe('Bilety online.')
     expect(withoutAmounts('obiad /+12,50 chf na rynku')).toBe('obiad na rynku')
     expect(withoutAmounts('/+45 EUR')).toBe('')
+  })
+})
+
+describe('spendingByDay', () => {
+  it('suma w PLN na dzień, bez kart usuniętych i bez daty', () => {
+    const rate = (c: string) => (c === 'EUR' ? 4 : undefined)
+    const days = spendingByDay(
+      [
+        { amounts: [{ value: 10, currency: 'EUR' }], date: '2027-07-01' },
+        { amounts: [{ value: 5, currency: 'PLN' }], date: '2027-07-01' },
+        { amounts: [{ value: 100, currency: 'PLN' }], date: '2027-07-02', deletedAt: 'x' },
+        { amounts: [{ value: 50, currency: 'PLN' }] },
+      ],
+      rate,
+      '2027-07-05',
+      ['2027-07-01', '2027-07-02'],
+    )
+    expect(days).toEqual([45, 0])
   })
 })

@@ -68,6 +68,7 @@ import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
+import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
 import { enqueueImport, runImports } from '@/lib/ai-import'
@@ -1076,10 +1077,10 @@ function BoardCanvas() {
 
         <div className="pointer-events-none absolute inset-x-px top-1 z-10 [&>*]:pointer-events-auto">
           <TopBar
-            theme={false}
-            title={trip.title}
+            title={<TripTitle />}
             back={TRIPS_BACK}
             morph={`trip-${trip.id}`}
+            menu={<TripMenu />}
             actions={
               <>
                 <ChatButton onOpenCard={(id) => sheet.open(id)} />

@@ -1,4 +1,5 @@
 import { isIsoDate } from '@planer/core'
+import { hasFlag } from 'country-flag-icons'
 import { z } from 'zod'
 
 export function isTimeZone(value: string): boolean {
@@ -13,7 +14,7 @@ export function isTimeZone(value: string): boolean {
 export type TripFormState = {
   errors?: Partial<
     Record<
-      'title' | 'startDate' | 'endDate' | 'currencies' | 'timezone' | 'travelBufferMin',
+      'title' | 'startDate' | 'endDate' | 'currencies' | 'country' | 'timezone' | 'travelBufferMin',
       string
     >
   >
@@ -48,6 +49,13 @@ export const tripSchema = z
         (list) => list.every((c) => /^[A-Z]{3}$/.test(c)),
         'kody walut po 3 litery, np. EUR, CHF',
       ),
+    // Kraj (kod ISO, np. PT) — tylko kody, dla których mamy flagę; puste = brak.
+    country: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .transform((v) => v || null)
+      .refine((v) => v === null || (/^[A-Z]{2}$/.test(v) && hasFlag(v)), 'nieznany kraj'),
     // Strefa miejsca wyjazdu (godziny kart i przypomnienia), np. Europe/Rome.
     timezone: z
       .string()
@@ -72,6 +80,7 @@ export function parseTripForm(form: FormData) {
     startDate: String(form.get('startDate') ?? ''),
     endDate: String(form.get('endDate') ?? ''),
     currencies: String(form.get('currencies') ?? ''),
+    country: String(form.get('country') ?? ''),
     timezone: String(form.get('timezone') ?? ''),
     travelMode: String(form.get('travelMode') ?? 'transit'),
     travelBufferMin: String(form.get('travelBufferMin') ?? '10'),

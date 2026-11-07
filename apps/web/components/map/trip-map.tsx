@@ -29,6 +29,7 @@ import { CardSheet } from '@/components/card/card-sheet'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
+import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
 import { useCardSheet } from '@/lib/use-card-sheet'
@@ -527,10 +528,10 @@ export function TripMap() {
 
         <div className="pointer-events-none absolute inset-x-px top-1 z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
           <TopBar
-            theme={false}
-            title={trip.title}
+            title={<TripTitle />}
             back={TRIPS_BACK}
             morph={`trip-${trip.id}`}
+            menu={<TripMenu />}
             actions={
               <>
                 <ChatButton onOpenCard={(id) => sheet.open(id)} />
