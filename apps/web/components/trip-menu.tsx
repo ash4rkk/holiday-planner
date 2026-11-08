@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, FileDown, Luggage, Settings2, Users } from 'lucide-react'
+import { ChevronDown, FileDown, Luggage, MapPinned, Settings2, Users } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useRef, useState, ViewTransition } from 'react'
@@ -84,6 +84,14 @@ export function TripMenu() {
             onClick={() => setOpen(false)}
           >
             <FileDown className="size-4 text-muted" aria-hidden="true" /> eksport
+          </Link>
+          <Link
+            role="menuitem"
+            href={`${settings}#mapa`}
+            className={item}
+            onClick={() => setOpen(false)}
+          >
+            <MapPinned className="size-4 text-muted" aria-hidden="true" /> mapa offline
           </Link>
         </div>
       )}

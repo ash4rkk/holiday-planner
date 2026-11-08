@@ -465,7 +465,7 @@ Gałąź `etap-10`. Kolejność od małych do większych; każdy punkt to osobny
 
 ### 5. Mapa offline (M)
 
-- W ustawieniach wyjazdu „mapa offline”: obszar z miejsc kart plus margines, zoom do 15; przed pobraniem liczba kafelków i rozmiar (limit np. 150 MB), postęp, „usuń”.
+- W ustawieniach wyjazdu „mapa offline” (`lib/offline-map.ts`, `lib/map-tiles.ts`): zarys całości do zoomu 6, okolica każdego skupiska miejsc (miasta) do 11, ulice tylko ok. 1 km od miejsc z kart (do 14) — Lizbona z lotniskiem w Warszawie to ok. 160 kafelków, ~4 MB. Szacunek przed pobraniem, postęp, „przerwij”, „usuń”.
 - Kafelki wektorowe OpenFreeMap, styl, fonty i sprite w osobnym cache SW (`map-tiles`), cache-first; nowe miejsca dociągają brakujące kafelki przy zasięgu.
 - Pobieranie kolejką z przerwami (bez zalewania serwera OpenFreeMap), wznawiane po utracie sieci.
 

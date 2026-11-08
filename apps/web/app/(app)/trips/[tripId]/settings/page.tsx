@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { OfflineMapPanel } from '@/components/map/offline-map-panel'
 import { TopBar } from '@/components/top-bar'
 import { FamilyLink } from '@/components/trips/family-link'
 import { TripForm } from '@/components/trips/trip-form'
@@ -46,6 +47,7 @@ export default async function TripSettingsPage({
           plan dzień po dniu z treścią kart, kwotami i nazwami plików
         </p>
       </section>
+      <OfflineMapPanel />
       <div id="rodzina" className="scroll-mt-2">
         <FamilyLink tripId={trip.id} tripTitle={trip.title} token={token} />
       </div>

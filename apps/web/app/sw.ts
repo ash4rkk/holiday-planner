@@ -3,6 +3,7 @@ import { defaultCache } from '@serwist/turbopack/worker'
 import {
   CacheableResponsePlugin,
   CacheFirst,
+  NetworkFirst,
   NetworkOnly,
   type PrecacheEntry,
   Serwist,
@@ -34,6 +35,28 @@ const serwist = new Serwist({
         sameOrigin && /^\/api\/attachments\/[0-9a-f-]{36}$/.test(url.pathname),
       handler: new CacheFirst({
         cacheName: 'attachments',
+        plugins: [new CacheableResponsePlugin({ statuses: [200] })],
+      }),
+    },
+    // Mapa offline (lib/offline-map.ts): kafelki, czcionki i sprite OpenFreeMap są wersjonowane
+    // w adresie, więc z pamięci. Style i TileJSON zmieniają się co tydzień (nowa wersja kafelków) —
+    // najpierw sieć, a bez zasięgu zapisana wersja, która wskazuje na zapisane kafelki.
+    {
+      matcher: ({ url }) =>
+        url.hostname === 'tiles.openfreemap.org' &&
+        /^\/(?:planet\/[^/]+\/|natural_earth\/|fonts\/|sprites\/)/.test(url.pathname),
+      handler: new CacheFirst({
+        cacheName: 'map-tiles',
+        plugins: [new CacheableResponsePlugin({ statuses: [200] })],
+      }),
+    },
+    {
+      matcher: ({ url }) =>
+        url.hostname === 'tiles.openfreemap.org' &&
+        /^\/(?:styles\/[^/]+|planet)$/.test(url.pathname),
+      handler: new NetworkFirst({
+        cacheName: 'map-tiles',
+        networkTimeoutSeconds: 4,
         plugins: [new CacheableResponsePlugin({ statuses: [200] })],
       }),
     },
