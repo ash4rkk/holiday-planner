@@ -2,7 +2,7 @@
 
 import { CARD_TYPES, type CardType } from '@planer/core'
 import type { ReminderDefaults } from '@planer/core/reminders'
-import { setReminderDefaults } from '@planer/core/settings'
+import { setBriefingSettings, setReminderDefaults } from '@planer/core/settings'
 import { revalidatePath } from 'next/cache'
 import { getCurrentUser } from '@/lib/auth/user'
 import { recomputeAllReminders, revokeFamilyLinkByToken } from '@/lib/settings-data'
@@ -19,6 +19,16 @@ export async function saveReminderDefaults(form: FormData) {
   }
   await setReminderDefaults(value)
   await recomputeAllReminders(value)
+  revalidatePath('/settings', 'layout')
+}
+
+/** Wieczorne podsumowanie na jutro: włączone i godzina (w strefie wyjazdu). */
+export async function saveBriefing(form: FormData) {
+  await getCurrentUser()
+  await setBriefingSettings({
+    enabled: form.get('enabled') === 'on',
+    time: String(form.get('time') ?? ''),
+  })
   revalidatePath('/settings', 'layout')
 }
 

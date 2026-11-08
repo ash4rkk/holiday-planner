@@ -1,10 +1,22 @@
-import { shiftClock, TRAVEL_MODE_LABELS } from '@planer/core'
+import {
+  addDays,
+  composeBriefing,
+  dayLegs,
+  docFromState,
+  readAttachments,
+  readCards,
+  shiftClock,
+  TRAVEL_MODE_LABELS,
+  weatherPlace,
+} from '@planer/core'
 import { and, eq, getDb, gte, lte, tripDocs, trips } from '@planer/core/db'
 import { logEvent, pruneEvents } from '@planer/core/events'
+import { dayForecast } from '@planer/core/forecast'
 import { getRates } from '@planer/core/fx'
 import { sendPush } from '@planer/core/push'
 import { dueReminders, markReminderSent, unmarkReminderSent } from '@planer/core/reminders-db'
 import { legsFromDoc, markLegAlerted, planLeg } from '@planer/core/routes'
+import { briefingSentFor, getBriefingSettings, markBriefingSent } from '@planer/core/settings'
 import { nightlyBackup } from './backup'
 
 // Zadania w tle: przypomnienia push z kart (co 30 s), odświeżanie kursów NBP (co 6 h)
@@ -16,6 +28,9 @@ const BACKUP_CHECK_MS = 10 * 60_000
 const LEAVE_CHECK_MS = 2 * 60_000
 const LEAVE_LOOKAHEAD_MIN = 150
 const LEAVE_NOTICE_MIN = 10
+const BRIEFING_CHECK_MS = 2 * 60_000
+// Po tym czasie od ustawionej godziny podsumowanie już nie idzie (np. worker stał w nocy).
+const BRIEFING_LATE_MIN = 180
 
 const toMinutes = (time: string) => {
   const [h = 0, m = 0] = time.split(':').map(Number)
@@ -59,6 +74,63 @@ async function leaveReminders() {
       )
       console.log(`worker: czas wyjść ${trip.title} ${leaveBy}`)
     }
+  }
+}
+
+/**
+ * Wieczorne podsumowanie na jutro: raz na wyjazd i dzień, o ustawionej godzinie w strefie wyjazdu,
+ * od dnia przed wyjazdem do przedostatniego dnia.
+ */
+async function eveningBriefing() {
+  const settings = await getBriefingSettings()
+  if (!settings.enabled) return
+  const rows = await getDb()
+    .select({ trip: trips, state: tripDocs.state })
+    .from(trips)
+    .innerJoin(tripDocs, eq(tripDocs.tripId, trips.id))
+    .where(eq(trips.archived, false))
+  for (const { trip, state } of rows) {
+    if (!trip.startDate) continue
+    const now = Temporal.Now.zonedDateTimeISO(trip.timezone)
+    const tomorrow = addDays(now.toPlainDate().toString(), 1)
+    if (tomorrow < trip.startDate || tomorrow > (trip.endDate ?? trip.startDate)) continue
+    const late = now.hour * 60 + now.minute - toMinutes(settings.time)
+    if (late < 0 || late > BRIEFING_LATE_MIN) continue
+    if ((await briefingSentFor(trip.id)) === tomorrow) continue
+    // Najpierw znacznik: przy awarii w trakcie lepiej nie wysłać niż wysłać dwa razy.
+    await markBriefingSent(trip.id, tomorrow)
+
+    const doc = docFromState(state)
+    const cards = readCards(doc)
+    const start = dayLegs(cards, tomorrow).find((l) => l.kind === 'start' && l.route && l.arriveBy)
+    let leaveBy: string | undefined
+    if (start?.route && start.arriveBy) {
+      const { plan } = await planLeg(
+        { ...start.route, date: tomorrow, arriveBy: start.arriveBy },
+        trip,
+      ).catch(() => ({ plan: null }))
+      if (plan)
+        leaveBy = shiftClock(
+          plan.departAt ?? shiftClock(start.arriveBy, -plan.minutes),
+          -trip.travelBufferMin,
+        )
+    }
+    const place = weatherPlace(cards, tomorrow)
+    const forecast = place ? await dayForecast(place, tomorrow) : undefined
+    const briefing = composeBriefing({
+      date: tomorrow,
+      cards,
+      attachments: readAttachments(doc),
+      leaveBy,
+      forecast,
+    })
+    doc.destroy()
+    if (!briefing) continue
+    const { sent } = await sendPush(
+      {},
+      { ...briefing, url: `/trips/${trip.id}/today`, tag: `briefing-${trip.id}` },
+    )
+    console.log(`worker: podsumowanie ${trip.title} na ${tomorrow} → ${sent} urządz.`)
   }
 }
 
@@ -118,6 +190,7 @@ every(REMINDERS_EVERY_MS, sendReminders, 'przypomnienia')
 every(24 * 60 * 60_000, () => pruneEvents(30), 'porządki dziennika')
 every(FX_EVERY_MS, refreshRates, 'kursy NBP')
 every(LEAVE_CHECK_MS, leaveReminders, 'czas wyjść')
+every(BRIEFING_CHECK_MS, eveningBriefing, 'podsumowanie na jutro')
 every(
   BACKUP_CHECK_MS,
   async () => {

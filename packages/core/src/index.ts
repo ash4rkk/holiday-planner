@@ -1,6 +1,7 @@
 export * from './amounts'
 export * from './attachments'
 export * from './board'
+export * from './briefing'
 export * from './cards'
 export * from './dates'
 export * from './export'

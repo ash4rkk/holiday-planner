@@ -1,17 +1,17 @@
 import { CARD_TYPE_LABELS, CARD_TYPES, type CardType } from '@planer/core'
-import { getReminderDefaults } from '@planer/core/settings'
+import { getBriefingSettings, getReminderDefaults } from '@planer/core/settings'
 import { connection } from 'next/server'
 import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 import { buttonClass, inputClass } from '@/components/ui'
 import { formatLead } from '@/lib/format-remind'
-import { saveReminderDefaults } from '../actions'
+import { saveBriefing, saveReminderDefaults } from '../actions'
 
 const OPTIONS = [0, 15, 30, 60, 120, 180, 360, 720, 1440]
 
 export default async function RemindersPage() {
   await connection()
-  const defaults = await getReminderDefaults()
+  const [defaults, briefing] = await Promise.all([getReminderDefaults(), getBriefingSettings()])
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
       <TopBar title="przypomnienia" back={SETTINGS_BACK} />
@@ -33,6 +33,29 @@ export default async function RemindersPage() {
             </select>
           </label>
         ))}
+        <button type="submit" className={buttonClass('primary')}>
+          zapisz
+        </button>
+      </form>
+      <form action={saveBriefing} className="island mt-1 flex flex-col gap-3 p-4 text-sm">
+        <p className="font-bold">podsumowanie na jutro</p>
+        <p className="text-xs text-subtle italic">
+          wieczorem push z pierwszą kartą i godziną wyjścia, biletami, rezerwacjami i pogodą — od
+          dnia przed wyjazdem, w strefie czasowej wyjazdu
+        </p>
+        <label className="flex min-h-11 items-center gap-3">
+          <input
+            type="checkbox"
+            name="enabled"
+            defaultChecked={briefing.enabled}
+            className="size-5 accent-(--accent)"
+          />
+          wysyłaj podsumowanie
+        </label>
+        <label className="grid grid-cols-[1fr_9rem] items-center gap-3">
+          <span>godzina</span>
+          <input type="time" name="time" defaultValue={briefing.time} className={inputClass} />
+        </label>
         <button type="submit" className={buttonClass('primary')}>
           zapisz
         </button>

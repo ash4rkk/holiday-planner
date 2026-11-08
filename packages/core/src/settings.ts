@@ -1,3 +1,4 @@
+import { type BriefingSettings, DEFAULT_BRIEFING } from './briefing'
 import type { CardType } from './cards'
 import { appSettings, eq, getDb } from './db'
 import { DEFAULT_REMIND_MIN, type ReminderDefaults } from './reminders'
@@ -30,4 +31,44 @@ export async function setReminderDefaults(value: ReminderDefaults): Promise<void
     .values({ key: REMINDERS_KEY, value: clean })
     .onConflictDoUpdate({ target: appSettings.key, set: { value: clean, updatedAt: new Date() } })
   cached = { at: Date.now(), value: clean }
+}
+
+// ---------- wieczorne podsumowanie ----------
+
+const BRIEFING_KEY = 'briefing'
+const briefingSentKey = (tripId: string) => `briefing-sent:${tripId}`
+
+export async function getBriefingSettings(): Promise<BriefingSettings> {
+  const [row] = await getDb()
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, BRIEFING_KEY))
+  return { ...DEFAULT_BRIEFING, ...((row?.value as Partial<BriefingSettings>) ?? {}) }
+}
+
+export async function setBriefingSettings(value: BriefingSettings): Promise<void> {
+  const clean: BriefingSettings = {
+    enabled: Boolean(value.enabled),
+    time: /^\d{2}:\d{2}$/.test(value.time) ? value.time : DEFAULT_BRIEFING.time,
+  }
+  await getDb()
+    .insert(appSettings)
+    .values({ key: BRIEFING_KEY, value: clean })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: clean, updatedAt: new Date() } })
+}
+
+/** Dzień (jutro), na który podsumowanie już poszło — jedno na wyjazd i dzień. */
+export async function briefingSentFor(tripId: string): Promise<string | undefined> {
+  const [row] = await getDb()
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, briefingSentKey(tripId)))
+  return row?.value as string | undefined
+}
+
+export async function markBriefingSent(tripId: string, date: string): Promise<void> {
+  await getDb()
+    .insert(appSettings)
+    .values({ key: briefingSentKey(tripId), value: date })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: date, updatedAt: new Date() } })
 }

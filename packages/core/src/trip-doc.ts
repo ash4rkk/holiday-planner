@@ -68,6 +68,13 @@ export function cardsOf(doc: Y.Doc): Y.Map<CardMap> {
   return doc.getMap<CardMap>('cards')
 }
 
+/** Dokument wyjazdu z zapisanego stanu (`trip_docs.state`) — serwer, sync, worker. */
+export function docFromState(state: Uint8Array): Y.Doc {
+  const doc = new Y.Doc()
+  Y.applyUpdate(doc, state)
+  return doc
+}
+
 export function contentOf(card: CardMap): Y.XmlFragment {
   return card.get('content') as Y.XmlFragment
 }

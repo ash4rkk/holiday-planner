@@ -14,7 +14,8 @@
     "./events": "./src/events.ts",
     "./settings": "./src/settings.ts",
     "./push": "./src/push.ts",
-    "./routes": "./src/routes.ts"
+    "./routes": "./src/routes.ts",
+    "./forecast": "./src/forecast.ts"
   },
   "scripts": {
     "typecheck": "tsc",

@@ -1,8 +1,8 @@
-import { formatAmount } from '@planer/core'
+import { DEFAULT_BRIEFING, formatAmount } from '@planer/core'
 import { recentEvents } from '@planer/core/events'
 import type { ReminderDefaults } from '@planer/core/reminders'
 import { routesLimit, routesUsedThisMonth } from '@planer/core/routes'
-import { getReminderDefaults } from '@planer/core/settings'
+import { getBriefingSettings, getReminderDefaults } from '@planer/core/settings'
 import Link from 'next/link'
 import { connection } from 'next/server'
 import { ProfilePhoto } from '@/components/profile/profile-photo'
@@ -22,13 +22,14 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
   await connection()
   const { from } = await searchParams
   const routes = Boolean(process.env.GOOGLE_ROUTES_API_KEY)
-  const [user, spent, checks, defaults, links, events] = await Promise.all([
+  const [user, spent, checks, defaults, links, events, briefing] = await Promise.all([
     getCurrentUser(),
     spentThisMonthPln().catch(() => 0),
     routes ? routesUsedThisMonth().catch(() => 0) : 0,
     getReminderDefaults().catch((): ReminderDefaults => ({})),
     activeFamilyLinks().catch(() => []),
     recentEvents(7 * 24).catch(() => []),
+    getBriefingSettings().catch(() => DEFAULT_BRIEFING),
   ])
   const dayAgo = Date.now() - 24 * 3_600_000
   const problems = events.filter((e) => e.level !== 'ok' && e.at.getTime() > dayAgo)
@@ -69,7 +70,12 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         <SettingsRow
           href="/settings/reminders"
           label="przypomnienia"
-          value={defaults.transport ? `transport ${formatLead(defaults.transport)}` : 'wyłączone'}
+          value={[
+            defaults.transport ? `transport ${formatLead(defaults.transport)}` : 'bez przypomnień',
+            briefing.enabled && `podsumowanie ${briefing.time}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         />
       </SettingsGroup>
 
