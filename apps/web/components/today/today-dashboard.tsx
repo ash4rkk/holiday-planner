@@ -33,6 +33,7 @@ import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
 import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { TYPE_STYLE } from '@/components/card/type-style'
+import { SearchButton } from '@/components/search/search-button'
 import { CountdownRing } from '@/components/today/countdown-ring'
 import { DayAxis } from '@/components/today/day-axis'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
@@ -141,6 +142,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
         menu={<TripMenu />}
         actions={
           <>
+            <SearchButton onOpenCard={(id) => sheet.open(id)} />
             <ChatButton onOpenCard={(id) => sheet.open(id)} />
             <TripStatus />
           </>

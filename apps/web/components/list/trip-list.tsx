@@ -36,6 +36,7 @@ import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { StatusMark } from '@/components/card/status-mark'
 import { TimeCell } from '@/components/card/time-cell'
 import { TYPE_STYLE } from '@/components/card/type-style'
+import { SearchButton } from '@/components/search/search-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -148,6 +149,7 @@ export function TripList() {
           menu={<TripMenu />}
           actions={
             <>
+              <SearchButton onOpenCard={(id) => open(id)} />
               <ChatButton onOpenCard={(id) => open(id)} />
               <TripStatus />
             </>

@@ -27,6 +27,7 @@ import { ChatButton } from '@/components/ai/chat-panel'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
 import { TYPE_STYLE } from '@/components/card/type-style'
+import { SearchButton } from '@/components/search/search-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -583,6 +584,7 @@ export function TripMap() {
             menu={<TripMenu />}
             actions={
               <>
+                <SearchButton onOpenCard={(id) => sheet.open(id)} />
                 <ChatButton onOpenCard={(id) => sheet.open(id)} />
                 <TripStatus />
               </>

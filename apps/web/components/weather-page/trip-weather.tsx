@@ -17,6 +17,7 @@ import type { NormalWeather } from '@/app/api/weather/normal/route'
 import type { Weather } from '@/app/api/weather/route'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { CardSheet } from '@/components/card/card-sheet'
+import { SearchButton } from '@/components/search/search-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -178,6 +179,7 @@ export function TripWeather({ fallback }: { fallback?: LatLng }) {
         menu={<TripMenu />}
         actions={
           <>
+            <SearchButton onOpenCard={(id) => sheet.open(id)} />
             <ChatButton onOpenCard={(id) => sheet.open(id)} />
             <TripStatus />
           </>

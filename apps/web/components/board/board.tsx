@@ -87,6 +87,7 @@ import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
 import { askText, ConfirmDialog, DialogFrame } from '@/components/confirm-dialog'
+import { SearchButton } from '@/components/search/search-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -1347,6 +1348,7 @@ function BoardCanvas() {
             menu={<TripMenu />}
             actions={
               <>
+                <SearchButton onOpenCard={(id) => sheet.open(id)} />
                 <ChatButton onOpenCard={(id) => sheet.open(id)} />
                 <TripStatus />
                 {undo && (
