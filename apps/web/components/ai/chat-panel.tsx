@@ -18,7 +18,7 @@ import {
 } from '@planer/core'
 import { Check, RotateCcw, Send, Sparkles, Square, X } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { useKeyboardInset } from '@/components/card/format-toolbar'
 import { TYPE_STYLE } from '@/components/card/type-style'
@@ -85,6 +85,22 @@ function writeOffline(tripId: string, messages: Msg[]) {
 
 const fromServer = (rows: ServerMsg[]): Msg[] => rows.map((m) => ({ ...m, saved: true }))
 
+// Pytanie z innego miejsca aplikacji („ułóż dzień”, „plan B na deszcz”): otwiera czat i od razu je
+// wysyła. Odbiera przycisk czatu w widocznym widoku.
+let request: { text: string; at: number } | null = null
+const requestListeners = new Set<() => void>()
+const requestStore = {
+  subscribe: (cb: () => void) => {
+    requestListeners.add(cb)
+    return () => requestListeners.delete(cb)
+  },
+  get: () => request,
+}
+export function askChat(text: string) {
+  request = { text, at: Date.now() }
+  for (const l of requestListeners) l()
+}
+
 /** Przycisk czatu w nagłówku wyjazdu. */
 export function ChatButton({ onOpenCard }: { onOpenCard: (id: string) => void }) {
   const [open, setOpen] = useState(false)
@@ -93,6 +109,14 @@ export function ChatButton({ onOpenCard }: { onOpenCard: (id: string) => void })
   const card = useSearchParams().get('card')
   const [reopen, setReopen] = useState(false)
   const sawCard = useRef(false)
+  const asked = useSyncExternalStore(requestStore.subscribe, requestStore.get, () => null)
+  const [initial, setInitial] = useState<string>()
+  useEffect(() => {
+    if (!asked) return
+    request = null
+    setInitial(asked.text)
+    setOpen(true)
+  }, [asked])
   // Przejście na inny widok zamyka czat; do tego czasu ukryty widok nie zostawia go nad nowym.
   useEffect(() => () => setOpen(false), [])
   const portal = useRef<HTMLDivElement>(null)
@@ -124,7 +148,11 @@ export function ChatButton({ onOpenCard }: { onOpenCard: (id: string) => void })
           <div ref={portal}>
             <ChatPanel
               wide={wide}
-              onClose={() => setOpen(false)}
+              initial={initial}
+              onClose={() => {
+                setOpen(false)
+                setInitial(undefined)
+              }}
               onOpenCard={(id) => {
                 // Na szerokim ekranie czat stoi z lewej, a karta z prawej — oba naraz.
                 if (!wide) {
@@ -460,10 +488,13 @@ function dayLabel(iso: string, today: string): string {
 
 function ChatPanel({
   wide,
+  initial,
   onClose,
   onOpenCard,
 }: {
   wide: boolean
+  /** Pytanie do wysłania od razu po wczytaniu rozmowy. */
+  initial?: string
   onClose: () => void
   onOpenCard: (id: string) => void
 }) {
@@ -519,6 +550,7 @@ function ChatPanel({
     setMessages(() => fromServer(b.messages))
   }
 
+  const sentInitial = useRef(false)
   useEffect(() => {
     void refresh().finally(() => setLoaded(true))
     return () => abort.current?.abort()
@@ -662,6 +694,13 @@ function ChatPanel({
       setStatus(undefined)
     }
   }
+
+  // Pytanie z przycisku „ułóż dzień” / „plan B”: wysyłamy raz, po wczytaniu rozmowy.
+  useEffect(() => {
+    if (!loaded || !initial || sentInitial.current || offline) return
+    sentInitial.current = true
+    void send(initial)
+  }, [loaded, initial, offline])
 
   const stop = () =>
     void fetch('/api/ai/chat/stop', {

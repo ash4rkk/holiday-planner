@@ -104,7 +104,8 @@ export function tripContext(
         ...(day.cards.length ? day.cards.map(block) : ['(nic nie zaplanowano)']),
       )
     }
-    if (groups.undated.length) parts.push('## Bez daty', ...groups.undated.map(block))
+    if (groups.undated.length)
+      parts.push('## Pomysły (bez dnia — do ułożenia w plan)', ...groups.undated.map(block))
     return parts.join('\n\n')
   }
 

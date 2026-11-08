@@ -23,11 +23,11 @@ import {
   todayLocal,
   variantsByMain,
 } from '@planer/core'
-import { Lightbulb, Luggage, Plus } from 'lucide-react'
+import { Lightbulb, Luggage, Plus, WandSparkles } from 'lucide-react'
 import Link from 'next/link'
 import { Fragment, type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { AddButton } from '@/components/add-button'
-import { ChatButton } from '@/components/ai/chat-panel'
+import { askChat, ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { TotalsText } from '@/components/amounts'
 import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
@@ -132,6 +132,7 @@ export function TripList() {
     />
   )
   const live = cards.filter((c) => !c.deletedAt).length
+  const ideaCount = cards.filter((c) => !c.deletedAt && !c.date && !c.variantOf).length
   const filtering = types.size > 0 || statuses.size > 0
   const shown = filtered.filter((c) => !c.deletedAt).length
 
@@ -288,6 +289,20 @@ export function TripList() {
                       .join(' · ')}
                   </span>
                   <span className="flex-1" />
+                  {/* Są pomysły: czat dokłada je do dnia w wolne godziny (zmiany do zatwierdzenia). */}
+                  {ideaCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        askChat(`ułóż dzień ${formatDayHeader(day.date)} (${day.date}) z pomysłów`)
+                      }
+                      aria-label={`ułóż ${formatShortDate(day.date)} z pomysłów`}
+                      title="ułóż z pomysłów"
+                      className="flex size-11 items-center justify-center text-muted hover:text-accent"
+                    >
+                      <WandSparkles className="size-4" aria-hidden="true" />
+                    </button>
+                  )}
                   <TicketsButton start={day.date} compact />
                   <button
                     type="button"

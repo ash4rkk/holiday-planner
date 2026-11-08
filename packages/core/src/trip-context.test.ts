@@ -53,7 +53,7 @@ describe('tripContext', () => {
     expect(text).toContain('  > terminal A /+300')
     expect(text).toContain('  plik: bilet.pdf (att:f1, PDF)')
     expect(text).toContain('## czw., 15 lipca (2027-07-15) · dzień 2\n\n(nic nie zaplanowano)')
-    expect(text).toContain('## Bez daty')
+    expect(text).toContain('## Pomysły (bez dnia')
     expect(text).not.toContain('Usunięta')
   })
 
