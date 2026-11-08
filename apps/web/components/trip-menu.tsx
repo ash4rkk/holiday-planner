@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, FileDown, Settings2, Users } from 'lucide-react'
+import { ChevronDown, FileDown, Luggage, Settings2, Users } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useRef, useState, ViewTransition } from 'react'
@@ -58,6 +58,14 @@ export function TripMenu() {
           role="menu"
           className="island fade-in absolute top-full right-0 z-(--z-nav) mt-2 flex w-56 flex-col p-1"
         >
+          <Link
+            role="menuitem"
+            href={`/trips/${trip.id}/packing`}
+            className={item}
+            onClick={() => setOpen(false)}
+          >
+            <Luggage className="size-4 text-muted" aria-hidden="true" /> lista pakowania
+          </Link>
           <Link role="menuitem" href={settings} className={item} onClick={() => setOpen(false)}>
             <Settings2 className="size-4 text-muted" aria-hidden="true" /> ustawienia wyjazdu
           </Link>

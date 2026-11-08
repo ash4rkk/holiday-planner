@@ -193,8 +193,8 @@ export function undoable(
   change: () => void,
 ): { undo: () => void; dispose: () => void } {
   const origin = Symbol('undoable')
-  // Karty, ramki i strzałki: usunięcie ramki zmienia też karty, które w niej leżały.
-  const scope = [cardsOf(doc), doc.getMap('frames'), doc.getMap('edges')]
+  // Karty, ramki, strzałki i lista pakowania: usunięcie ramki zmienia też karty, które w niej leżały.
+  const scope = [cardsOf(doc), doc.getMap('frames'), doc.getMap('edges'), doc.getMap('packing')]
   const manager = new Y.UndoManager(scope, {
     trackedOrigins: new Set([origin]),
     captureTimeout: 0,

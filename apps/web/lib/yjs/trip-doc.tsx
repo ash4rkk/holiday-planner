@@ -7,11 +7,13 @@ import {
   type CardSnapshot,
   type EdgeSnapshot,
   type FrameSnapshot,
+  type PackingItem,
   purgeTrash,
   readAttachments,
   readCards,
   readEdges,
   readFrames,
+  readPacking,
 } from '@planer/core'
 import {
   createContext,
@@ -261,12 +263,13 @@ export function usePresence<T = Record<string, unknown>>(): (T & { clientId: num
 // odczycie — nie obserwator subskrybenta. Inaczej zmiana z IndexedDB albo sync, która przyjdzie
 // między renderem a podpięciem subskrypcji (wejście w wyjazd), zostawiała pustą migawkę na stałe,
 // aż do odświeżenia strony.
-type Key = 'cards' | 'frames' | 'edges' | 'attachments'
+type Key = 'cards' | 'frames' | 'edges' | 'attachments' | 'packing'
 const READERS = {
   cards: readCards,
   frames: readFrames,
   edges: readEdges,
   attachments: readAttachments,
+  packing: readPacking,
 }
 const KEYS = Object.keys(READERS) as Key[]
 const versions = new WeakMap<Y.Doc, Record<Key, number>>()
@@ -276,7 +279,7 @@ const EMPTY: never[] = []
 function versionsOf(doc: Y.Doc): Record<Key, number> {
   let v = versions.get(doc)
   if (!v) {
-    const created = { cards: 0, frames: 0, edges: 0, attachments: 0 }
+    const created = { cards: 0, frames: 0, edges: 0, attachments: 0, packing: 0 }
     for (const key of KEYS) doc.getMap(key).observeDeep(() => created[key]++)
     versions.set(doc, created)
     v = created
@@ -357,4 +360,8 @@ export function useEdges(): EdgeSnapshot[] {
 
 export function useAttachments(): AttachmentMeta[] {
   return useDocMap('attachments')
+}
+
+export function usePacking(): PackingItem[] {
+  return useDocMap('packing')
 }

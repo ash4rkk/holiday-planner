@@ -454,7 +454,7 @@ Gałąź `etap-10`. Kolejność od małych do większych; każdy punkt to osobny
 ### 3. Lista pakowania (S–M)
 
 - Osobny ekran w menu wyjazdu („lista pakowania”), wspólny dla obu osób: nowa mapa `packing` w dokumencie Yjs (pozycja, kategoria, kto bierze: ja / druga osoba / wspólne, spakowane).
-- Szablony list w Postgresie (`packing_templates`), „z poprzedniego wyjazdu” kopiuje pozycje bez zaznaczeń.
+- Bez osobnych szablonów: pusta lista proponuje „z poprzedniego wyjazdu” (`/api/packing` czyta listy z `trip_docs` innych wyjazdów) i kopiuje pozycje bez zaznaczeń i bez powtórzeń.
 - Postęp „spakowane 34 z 52” w „dziś” przed wyjazdem; w trakcie wyjazdu lista schowana w menu.
 
 ### 4. Wieczorne podsumowanie (S)
