@@ -80,7 +80,7 @@ export function ProfilePicker({ profiles }: { profiles: Profile[] }) {
       </div>
       {zooming && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-bg"
+          className="fixed inset-0 z-(--z-dialog) flex items-center justify-center bg-bg"
           aria-hidden="true"
         >
           <ProfilePhoto

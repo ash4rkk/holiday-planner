@@ -22,11 +22,102 @@ const LABELS: Record<DayGap['kind'], string | undefined> = {
   end: 'powrót do noclegu',
 }
 
-function stepText(s: LegStep): string {
-  if (s.kind === 'walk') return `pieszo ${s.minutes} min`
-  const ride = [s.vehicle, s.line].filter(Boolean).join(' ')
-  const stops = s.stops ? ` · ${s.stops} przyst.` : ''
-  return `${ride}${s.departs ? ` o ${s.departs}` : ''}: ${s.from ?? ''} → ${s.to ?? ''}${stops}`
+type TimelineRow = {
+  time?: string
+  kind: 'walk' | 'transit' | 'end'
+  title: string
+  detail?: string
+  line?: string
+}
+
+/**
+ * Kroki dojazdu jako oś: każdy krok z godziną (wyjście, odjazd, wysiadka, na miejscu). Godziny
+ * odjazdów z rozkładu; odcinki piesze liczone od wyjścia albo od wysiadki.
+ */
+export function timeline(steps: LegStep[], start?: string): TimelineRow[] {
+  const rows: TimelineRow[] = []
+  let at = start
+  let place = 'wyjście'
+  for (const s of steps) {
+    if (s.kind === 'walk') {
+      rows.push({ time: at, kind: 'walk', title: place, detail: `pieszo ${s.minutes} min` })
+      if (at) at = shiftClock(at, s.minutes)
+      place = 'na miejscu'
+    } else {
+      const ride = [s.vehicle, s.stops && `${s.stops} przyst.`, `${s.minutes} min`]
+      rows.push({
+        time: s.departs ?? at,
+        kind: 'transit',
+        title: s.from ?? 'przystanek',
+        detail: [...ride, s.headsign && `kierunek ${s.headsign}`].filter(Boolean).join(' · '),
+        line: s.line ?? s.vehicle,
+      })
+      const from = s.departs ?? at
+      at = from ? shiftClock(from, s.minutes) : undefined
+      place = s.to ?? 'przystanek'
+    }
+  }
+  rows.push({ time: at, kind: 'end', title: place === 'wyjście' ? 'na miejscu' : place })
+  // Ostatni pieszy odcinek kończy się „na miejscu” — bez powtórzenia nazwy przystanku.
+  const last = rows.at(-1)
+  if (last && rows.at(-2)?.kind === 'walk') last.title = 'na miejscu'
+  return rows
+}
+
+/** Pionowa oś dojazdu (J1): godzina, znacznik i linia odcinka, opis kroku. */
+function StepTimeline({ rows }: { rows: TimelineRow[] }) {
+  return (
+    <ol className="grid grid-cols-[2.75rem_0.875rem_1fr] gap-x-2 py-1">
+      {rows.map((r, i) => {
+        const next = rows[i + 1]
+        return (
+          <li key={i} className="contents">
+            <span
+              className={cx(
+                'pt-px text-right tabular-nums',
+                i === 0 ? 'font-bold text-accent' : r.kind === 'end' ? 'text-muted' : 'text-text',
+              )}
+            >
+              {r.time ?? ''}
+            </span>
+            <span className="flex flex-col items-center" aria-hidden="true">
+              <span
+                className={cx(
+                  'mt-1 shrink-0',
+                  r.kind === 'transit'
+                    ? 'size-2.5 rounded-full bg-blue'
+                    : r.kind === 'end'
+                      ? 'size-2.5 rounded-[3px] bg-green'
+                      : 'size-2.5 rounded-full border-2 border-muted',
+                )}
+              />
+              {next && (
+                <span
+                  className={cx(
+                    'my-0.5 min-h-4 flex-1',
+                    r.kind === 'transit'
+                      ? 'border-l-[3px] border-blue'
+                      : 'border-l-2 border-dotted border-dim',
+                  )}
+                />
+              )}
+            </span>
+            <span className={cx('min-w-0', next && 'pb-2')}>
+              <span className="flex items-center gap-1.5 text-text">
+                {r.line && (
+                  <span className="rounded-small bg-blue px-1.5 text-2xs font-bold text-bg">
+                    {r.line}
+                  </span>
+                )}
+                <span className="truncate">{r.title}</span>
+              </span>
+              {r.detail && <span className="block text-subtle">{r.detail}</span>}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
 }
 
 function checkedText(iso: string): string {
@@ -111,12 +202,13 @@ export function LegRow({
             aria-expanded={open}
             disabled={!details}
             className={cx(
-              'flex min-h-7 items-center gap-1 text-left',
+              'hit flex min-h-7 items-center gap-1 text-left',
               late || plan.noService ? 'text-red' : 'text-green',
             )}
           >
             <span>
-              {late || plan.noService ? '●' : '•'} {label && `${label}: `}
+              {(late || plan.noService) && '● '}
+              {label && `${label}: `}
               {plan.noService && 'już nic nie jedzie, '}
               {plan.minutes} min {TRAVEL_MODE_LABELS[plan.mode]}
               {leaveBy && !overlap && ` · wyjdź do ${leaveBy}`}
@@ -131,47 +223,55 @@ export function LegRow({
           </button>
         )}
         {plan === null && leg.route && (
-          <span className="text-orange">● {label && `${label}: `}nie znaleziono połączenia</span>
+          <span className="text-orange">● {label && `${label}: `}brak połączenia</span>
         )}
         {leg.route && (
           <a
             href={transitUrl(leg.route.from, leg.route.to)}
             target="_blank"
             rel="noreferrer"
-            className="ml-auto flex min-h-7 items-center text-subtle italic hover:text-accent"
+            className="hit ml-auto flex min-h-7 items-center text-subtle italic hover:text-accent"
           >
             dojazd ›
           </a>
         )}
       </div>
       {open && plan && (
-        <div className="fade-in flex flex-col gap-0.5 pb-1 pl-3 text-subtle">
-          {plan.steps.map((s, i) => (
-            <span key={i}>{stepText(s)}</span>
-          ))}
+        <div className="fade-in flex flex-col gap-0.5 pb-1 pl-1 text-subtle">
+          {plan.steps.length > 0 && (
+            <StepTimeline rows={timeline(plan.steps, leaveBy ?? plan.departAt)} />
+          )}
           {plan.mode === 'transit' && (
-            <span className="flex items-center gap-3">
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="text-subtle italic">odjazd</span>
               <button
                 type="button"
                 disabled={searching}
                 onClick={() => void shift('earlier')}
-                className="min-h-9 text-accent disabled:opacity-50"
+                aria-label="wcześniejsze połączenie"
+                className="flex min-h-11 items-center rounded-full border border-line px-3 text-muted hover:text-accent disabled:opacity-50"
               >
-                ‹ wcześniejsze
+                ‹ wcześniej
               </button>
+              {plan.steps.find((s) => s.kind === 'transit')?.departs && (
+                <span className="flex min-h-11 items-center rounded-full border border-accent bg-active px-3 font-bold text-accent">
+                  {plan.steps.find((s) => s.kind === 'transit')?.departs}
+                </span>
+              )}
               <button
                 type="button"
                 disabled={searching}
                 onClick={() => void shift('later')}
-                className="min-h-9 text-accent disabled:opacity-50"
+                aria-label="późniejsze połączenie"
+                className="flex min-h-11 items-center rounded-full border border-line px-3 text-muted hover:text-accent disabled:opacity-50"
               >
-                późniejsze ›
+                później ›
               </button>
               {other && (
                 <button
                   type="button"
                   onClick={() => setOther(null)}
-                  className="min-h-9 text-subtle italic"
+                  className="min-h-11 px-1 text-subtle italic hover:text-accent"
                 >
                   wróć do planu
                 </button>
@@ -188,7 +288,7 @@ export function LegRow({
                 type="button"
                 onClick={onRefresh}
                 aria-label="sprawdź ponownie"
-                className="flex size-7 items-center justify-center hover:text-accent"
+                className="hit flex size-7 items-center justify-center hover:text-accent"
               >
                 <RefreshCw className="size-3" aria-hidden="true" />
               </button>

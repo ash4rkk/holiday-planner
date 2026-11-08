@@ -1,5 +1,6 @@
 'use server'
 
+import { daysBetween, isIsoDate } from '@planer/core'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth/user'
@@ -56,4 +57,16 @@ export async function setTripArchived(tripId: string, archived: boolean) {
   await patchTrip(tripId, { archived })
   revalidatePath('/', 'layout')
   redirect(archived ? '/trips' : `/trips/${tripId}/list`)
+}
+
+/** „Dodaj dzień” / upuszczenie na nowy dzień: wyjazd kończy się później (najwyżej o tydzień naraz). */
+export async function extendTrip(tripId: string, endDate: string): Promise<boolean> {
+  await getCurrentUser()
+  const trip = await getTrip(tripId)
+  if (!trip?.startDate || !isIsoDate(endDate) || endDate < trip.startDate) return false
+  if (trip.endDate && (endDate <= trip.endDate || daysBetween(trip.endDate, endDate) > 7))
+    return false
+  await patchTrip(tripId, { endDate })
+  revalidatePath(`/trips/${tripId}`, 'layout')
+  return true
 }

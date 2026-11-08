@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
+import { totals } from './amounts'
+import { isIdea } from './cards'
+import { computeReminders } from './reminders'
 import {
   cardsOf,
   contentOf,
@@ -7,10 +10,12 @@ import {
   fragmentLines,
   groupCardsByDay,
   moveCardToDay,
+  moveToIdeas,
   purgeTrash,
   readCards,
   restoreCard,
   trashCard,
+  undoable,
   updateCard,
 } from './trip-doc'
 
@@ -175,5 +180,61 @@ describe('status karty', () => {
     const [a, b] = readCards(doc)
     expect(a?.status).toBe('booked')
     expect(b?.status).toBeUndefined()
+  })
+})
+
+describe('do pomysłów i pomijanie', () => {
+  it('moveToIdeas: bez dnia, bez przypięcia, ramki i pominięcia', () => {
+    const doc = new Y.Doc()
+    const id = createCard(doc, { type: 'sight', date: '2027-07-14', time: '10:00', pinned: true })
+    updateCard(doc, id, { skipped: true })
+    moveToIdeas(doc, id)
+    const card = readCards(doc).find((c) => c.id === id)
+    expect(card?.date).toBeUndefined()
+    expect(card?.pinned).toBe(false)
+    expect(card?.skipped).toBeUndefined()
+    expect(card && isIdea(card)).toBe(true)
+  })
+
+  it('pominięta karta: bez przypomnień, dojazdów i w sumie', () => {
+    const doc = new Y.Doc()
+    const a = createCard(
+      doc,
+      { type: 'food', date: '2027-07-14', time: '12:00' },
+      new Date(),
+      'Obiad /+20€',
+    )
+    createCard(
+      doc,
+      { type: 'food', date: '2027-07-14', time: '19:00' },
+      new Date(),
+      'Kolacja /+30€',
+    )
+    updateCard(doc, a, { skipped: true })
+    const cards = readCards(doc)
+    expect(computeReminders(cards, 'x', 'Europe/Rome').map((r) => r.title)).toEqual([
+      'Kolacja /+30€',
+    ])
+    expect(totals(cards, () => 4, '2027-07-14', 'EUR').main?.value).toBe(30)
+  })
+})
+
+describe('undoable', () => {
+  it('cofa kosz i przeniesienie do pomysłów, nie ruszając cudzych zmian', () => {
+    const doc = new Y.Doc()
+    const a = createCard(doc, { type: 'note', date: '2027-07-14', time: '10:00' })
+    const b = createCard(doc, { type: 'note', date: '2027-07-14' })
+    const trash = undoable(doc, () => trashCard(doc, a))
+    updateCard(doc, b, { time: '12:00' })
+    trash.undo()
+    expect(readCards(doc).find((c) => c.id === a)?.deletedAt).toBeUndefined()
+    expect(readCards(doc).find((c) => c.id === b)?.time).toBe('12:00')
+
+    const ideas = undoable(doc, () => moveToIdeas(doc, a))
+    expect(readCards(doc).find((c) => c.id === a)?.date).toBeUndefined()
+    ideas.undo()
+    expect(readCards(doc).find((c) => c.id === a)?.date).toBe('2027-07-14')
+    ideas.undo()
+    expect(readCards(doc).find((c) => c.id === a)?.date).toBe('2027-07-14')
   })
 })

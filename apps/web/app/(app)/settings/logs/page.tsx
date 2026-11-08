@@ -1,10 +1,9 @@
 import { recentEvents } from '@planer/core/events'
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 import { cx } from '@/components/ui'
-
-export const dynamic = 'force-dynamic'
 
 const TZ = 'Europe/Warsaw'
 const day = new Intl.DateTimeFormat('pl-PL', {
@@ -17,6 +16,7 @@ const time = new Intl.DateTimeFormat('pl-PL', { hour: '2-digit', minute: '2-digi
 const DOT = { error: 'bg-red', warn: 'bg-amber', ok: 'bg-green' } as const
 
 export default async function LogsPage({ searchParams }: PageProps<'/settings/logs'>) {
+  await connection()
   const { all } = await searchParams
   const showAll = all === '1'
   const events = (await recentEvents(7 * 24)).filter((e) => showAll || e.level !== 'ok')
@@ -35,7 +35,7 @@ export default async function LogsPage({ searchParams }: PageProps<'/settings/lo
           href="/settings/logs"
           className={cx(
             'rounded-small px-3 py-2',
-            !showAll ? 'bg-accent/20 text-accent' : 'text-muted',
+            !showAll ? 'bg-active text-accent' : 'text-muted',
           )}
         >
           problemy
@@ -44,7 +44,7 @@ export default async function LogsPage({ searchParams }: PageProps<'/settings/lo
           href="/settings/logs?all=1"
           className={cx(
             'rounded-small px-3 py-2',
-            showAll ? 'bg-accent/20 text-accent' : 'text-muted',
+            showAll ? 'bg-active text-accent' : 'text-muted',
           )}
         >
           wszystko

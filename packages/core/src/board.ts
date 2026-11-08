@@ -226,6 +226,44 @@ export function nowLineY(
   return before.bottom + (room > 0 ? Math.min(room / 2, DAY_GAP.y / 2) : DAY_GAP.y / 2)
 }
 
+const toMin = (hhmm: string) => {
+  const [h = 0, m = 0] = hhmm.split(':').map(Number)
+  return h * 60 + m
+}
+
+/**
+ * Linia „teraz” wg godziny, nie wg odstępu: w trakcie karty przecina ją w miejscu proporcjonalnym do
+ * upływu jej czasu; między kartami stoi w przerwie proporcjonalnie do czasu, jaki z niej minął.
+ * Karta bez czasu trwania trwa do następnej. `column` — karty dnia z godziną, w kolejności.
+ */
+export function nowLineAt(
+  column: { time: string; durationMin?: number; top: number; bottom: number }[],
+  now: string,
+): number {
+  const t = toMin(now)
+  const MARGIN = 6
+  for (const [i, c] of column.entries()) {
+    const start = toMin(c.time)
+    const next = column[i + 1]
+    const end = c.durationMin ? start + c.durationMin : next ? toMin(next.time) : start + 60
+    if (t >= start && t < end && c.durationMin) {
+      return c.top + ((c.bottom - c.top) * (t - start)) / Math.max(1, end - start)
+    }
+    if (next && t >= end && t < toMin(next.time)) {
+      const gapFrom = c.bottom + MARGIN
+      const gapTo = next.top - MARGIN
+      const frac = (t - end) / Math.max(1, toMin(next.time) - end)
+      return gapTo > gapFrom ? gapFrom + (gapTo - gapFrom) * frac : (c.bottom + next.top) / 2
+    }
+    // Karta bez czasu trwania, która właśnie trwa: linia tuż pod nią (do startu następnej).
+    if (t >= start && t < end) return next ? c.bottom + MARGIN : c.bottom + 16
+  }
+  const first = column[0]
+  if (first && t < toMin(first.time)) return first.top - 16
+  const last = column.at(-1)
+  return (last?.bottom ?? 0) + 16
+}
+
 export type DropCard = {
   id: string
   top: number
@@ -324,6 +362,28 @@ export function dropTarget(
 }
 
 /**
+ * Miejsca w kolumnie, do których można upuścić kartę: między kartami i za ostatnią, z godziną, jaką
+ * dostałaby karta. Pokazywane podczas przeciągania, żeby było widać, gdzie wyląduje.
+ */
+export function dropSlots(
+  column: DropColumn,
+  card: { id: string; time?: string; durationMin?: number },
+  bufferMin: number,
+): { y: number; time?: string }[] {
+  const others = column.cards.filter((c) => c.id !== card.id)
+  const x = column.x + column.w / 2
+  const points = [
+    ...(others.length ? [others[0] ? others[0].top - 1 : 0] : []),
+    ...others.slice(0, -1).map((c, i) => (c.bottom + (others[i + 1] as DropCard).top) / 2),
+    ...(others.length ? [(others.at(-1) as DropCard).bottom + 1] : []),
+  ]
+  return points.flatMap((y) => {
+    const target = dropTarget({ x, y }, [column], card, bufferMin)
+    return target?.kind === 'day' ? [{ y: target.y, time: target.time }] : []
+  })
+}
+
+/**
  * Karty z datą w kolumny dni (po godzinie), od lewego górnego rogu obecnych kart z datą.
  * Karty bez daty, ramki i strzałki zostają. Zwraca poprzednie pozycje do jednego „cofnij”.
  */
@@ -332,7 +392,8 @@ export function arrangeByDays(
   cards: CardSnapshot[],
   trip: { startDate?: string | null; endDate?: string | null } = {},
 ): Positions {
-  const dated = cards.filter((c) => !c.deletedAt && c.date)
+  // Noclegi są belkami nad dniami — w kolumnach ich nie układamy.
+  const dated = cards.filter((c) => !c.deletedAt && c.date && c.type !== 'stay')
   const previous: Positions = {}
   if (!dated.length) return previous
 

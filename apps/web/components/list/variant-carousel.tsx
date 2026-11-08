@@ -103,7 +103,7 @@ export function VariantCarousel({
               <button
                 type="button"
                 onClick={() => chooseVariant(doc, c.id)}
-                className="absolute right-1 bottom-1 min-h-9 rounded-small px-2 text-xs font-bold text-accent"
+                className="hit absolute right-1 bottom-1 min-h-9 rounded-small px-2 text-xs font-bold text-accent"
               >
                 wybierz
               </button>

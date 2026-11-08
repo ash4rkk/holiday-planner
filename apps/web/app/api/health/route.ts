@@ -1,5 +1,6 @@
-export const dynamic = 'force-dynamic'
+import { connection } from 'next/server'
 
-export function GET() {
+export async function GET() {
+  await connection()
   return Response.json({ ok: true })
 }

@@ -16,15 +16,16 @@ import {
   groupCardsByDay,
   legIsPast,
   moveCardToDay,
+  moveToIdeas,
   nextStart,
   restoreCard,
   stayTimes,
   todayLocal,
   variantsByMain,
 } from '@planer/core'
-import { Luggage, Plus } from 'lucide-react'
+import { Lightbulb, Luggage, Plus } from 'lucide-react'
 import Link from 'next/link'
-import { Fragment, type ReactNode, useMemo, useState } from 'react'
+import { Fragment, type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { AddButton } from '@/components/add-button'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
@@ -35,7 +36,6 @@ import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { StatusMark } from '@/components/card/status-mark'
 import { TimeCell } from '@/components/card/time-cell'
 import { TYPE_STYLE } from '@/components/card/type-style'
-import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -45,18 +45,23 @@ import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
+import { withUndo } from '@/lib/undo'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
+import { useDismiss } from '@/lib/use-dismiss'
 import { useTripNow } from '@/lib/use-trip-now'
 import { useWide } from '@/lib/use-wide'
 import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { VariantCarousel } from './variant-carousel'
 
+const HOLD_HINT_KEY = 'planer-hint-hold'
+
 export function TripList() {
   const { trip, doc, ready, templates } = useTrip()
   // Waluta główna wyjazdu (pierwsza z listy); bez walut — same złotówki.
   const main = trip.currencies[0] ?? 'PLN'
-  const cards = useCards()
+  // Pisanie w otwartej karcie ma pierwszeństwo; widok pod nią nadąża chwilę później.
+  const cards = useDeferredValue(useCards())
   const attachments = useAttachments()
   const fileCounts = useMemo(() => countByCard(attachments), [attachments])
   const { openId, isNew, open, close } = useCardSheet()
@@ -66,6 +71,19 @@ export function TripList() {
   const [showTrash, setShowTrash] = useState(false)
   const [moving, setMoving] = useState<CardSnapshot | null>(null)
   const today = todayLocal()
+  // Przytrzymanie karty niczym się nie zdradza, więc raz o nim mówimy.
+  const [hint, setHint] = useState(false)
+  useEffect(() => {
+    try {
+      setHint(!localStorage.getItem(HOLD_HINT_KEY))
+    } catch {}
+  }, [])
+  const hideHint = () => {
+    setHint(false)
+    try {
+      localStorage.setItem(HOLD_HINT_KEY, '1')
+    } catch {}
+  }
 
   const filtered = useMemo(
     () =>
@@ -101,10 +119,19 @@ export function TripList() {
       inDay={inDay}
       onOpen={() => open(c.id)}
       // Wariant nie ma własnego dnia, więc nie ma czego przenosić.
-      onHold={c.variantOf ? undefined : () => setMoving(c)}
+      onHold={
+        c.variantOf
+          ? undefined
+          : () => {
+              hideHint()
+              setMoving(c)
+            }
+      }
     />
   )
   const live = cards.filter((c) => !c.deletedAt).length
+  const filtering = types.size > 0 || statuses.size > 0
+  const shown = filtered.filter((c) => !c.deletedAt).length
 
   return (
     <>
@@ -122,11 +149,6 @@ export function TripList() {
           actions={
             <>
               <ChatButton onOpenCard={(id) => open(id)} />
-              <InboxButton />
-            </>
-          }
-          more={
-            <>
               <TripStatus />
             </>
           }
@@ -169,6 +191,37 @@ export function TripList() {
           ))}
         </div>
 
+        {filtering && (
+          <p className="flex items-center gap-2 px-3 text-xs text-subtle italic">
+            <span className="flex-1">
+              {shown ? `pokazane ${shown} z ${live}` : '● żadna karta nie pasuje do filtrów'}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setTypes(new Set())
+                setStatuses(new Set())
+              }}
+              className="min-h-11 px-2 font-bold text-accent not-italic"
+            >
+              wyczyść filtry
+            </button>
+          </p>
+        )}
+
+        {hint && live > 1 && !filtering && (
+          <p className="flex items-center gap-2 px-3 text-xs text-subtle italic">
+            <span className="flex-1">● przytrzymaj kartę, żeby przenieść ją na inny dzień</span>
+            <button
+              type="button"
+              onClick={hideHint}
+              className="min-h-11 px-2 font-bold text-accent not-italic"
+            >
+              rozumiem
+            </button>
+          </p>
+        )}
+
         {cards.some((c) => !c.deletedAt && c.amounts?.length) && (
           <p className="px-3 text-xs text-subtle italic">
             wydatki wyjazdu ·{' '}
@@ -196,43 +249,60 @@ export function TripList() {
           </section>
         )}
 
-        {groups.days.map((day) => {
-          const isToday = day.date === today
-          return (
-            <section
-              key={day.date}
-              className="flex flex-col gap-1"
-              aria-label={formatDayHeader(day.date)}
-            >
-              <div className="flex items-center gap-2 pt-3 pl-3">
-                <DayWeather date={day.date} cards={cards} className="shrink-0" />
-                <h2 className={cx('truncate text-sm font-bold', isToday && 'text-accent')}>
-                  {formatDayHeader(day.date)}
-                </h2>
-                <span className="shrink-0 text-xs text-subtle italic">
-                  {[isToday && 'dziś', day.dayIndex && `dzień ${day.dayIndex}`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-                <span className="flex-1" />
-                <button
-                  type="button"
-                  onClick={() => add(day.date)}
-                  aria-label={`dodaj kartę na ${formatShortDate(day.date)}`}
-                  className="flex size-11 items-center justify-center text-muted hover:text-accent"
-                >
-                  <Plus className="size-4" aria-hidden="true" />
-                </button>
+        {/* Do wczytania dokumentu z telefonu: kształt dni zamiast pustych nagłówków, które potem
+            wypełniłyby się kartami naraz. */}
+        {!ready && (
+          <div aria-busy="true" aria-label="ładowanie planu" className="flex flex-col gap-1">
+            {[0, 1].map((d) => (
+              <div key={d} className="flex flex-col gap-1">
+                <div className="mt-3 ml-3 h-4 w-40 animate-pulse rounded-small bg-raised motion-reduce:animate-none" />
+                <div className="island h-16 animate-pulse motion-reduce:animate-none" />
+                <div className="island h-16 animate-pulse motion-reduce:animate-none" />
               </div>
-              <TotalsText cards={day.cards} mainCurrency={main} className="-mt-2 px-3 text-xs" />
-              {day.cards.length > 0 && <DayCards date={day.date} cards={day.cards} tile={tile} />}
-            </section>
-          )
-        })}
+            ))}
+          </div>
+        )}
+
+        {ready &&
+          groups.days.map((day) => {
+            // Przy filtrach puste dni tylko zajmują miejsce.
+            if (filtering && !day.cards.length) return null
+            const isToday = day.date === today
+            return (
+              <section
+                key={day.date}
+                className="flex flex-col gap-1"
+                aria-label={formatDayHeader(day.date)}
+              >
+                <div className="flex items-center gap-2 pt-3 pl-3">
+                  <DayWeather date={day.date} cards={cards} className="shrink-0" />
+                  <h2 className={cx('truncate text-sm font-bold', isToday && 'text-accent')}>
+                    {formatDayHeader(day.date)}
+                  </h2>
+                  <span className="shrink-0 text-xs text-subtle italic">
+                    {[isToday && 'dziś', day.dayIndex && `dzień ${day.dayIndex}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <span className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={() => add(day.date)}
+                    aria-label={`dodaj kartę na ${formatShortDate(day.date)}`}
+                    className="flex size-11 items-center justify-center text-muted hover:text-accent"
+                  >
+                    <Plus className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+                <TotalsText cards={day.cards} mainCurrency={main} className="-mt-2 px-3 text-xs" />
+                {day.cards.length > 0 && <DayCards date={day.date} cards={day.cards} tile={tile} />}
+              </section>
+            )
+          })}
 
         {groups.undated.length > 0 && (
           <section className="flex flex-col gap-1">
-            <SectionLabel>bez daty</SectionLabel>
+            <SectionLabel>pomysły</SectionLabel>
             {groups.undated.map((c) => tile(c))}
           </section>
         )}
@@ -245,7 +315,8 @@ export function TripList() {
               aria-expanded={showTrash}
               className="px-3 py-2 text-left text-xs text-subtle italic"
             >
-              kosz ({groups.trash.length}) {showTrash ? '·' : '›'} karty znikają po 30 dniach
+              kosz · {groups.trash.length} {showTrash ? '' : '›'}
+              <span className="block text-dim">karty znikają po 30 dniach</span>
             </button>
             {showTrash &&
               groups.trash.map((c) => (
@@ -287,7 +358,12 @@ export function TripList() {
           card={moving}
           days={groups.days.map((d) => d.date)}
           onPick={(date) => {
-            moveCardToDay(doc, moving.id, date)
+            const id = moving.id
+            if (date)
+              withUndo(doc, `przeniesiono na ${formatShortDate(date)}`, () =>
+                moveCardToDay(doc, id, date),
+              )
+            else withUndo(doc, 'karta w pomysłach', () => moveToIdeas(doc, id))
             setMoving(null)
           }}
           onClose={() => setMoving(null)}
@@ -380,7 +456,7 @@ function DayCards({
           aria-expanded={showPast}
           className="min-h-11 px-3 text-left text-xs text-subtle italic"
         >
-          {showPast ? 'ukryj minione dojazdy' : `pokaż minione dojazdy (${hiddenLegs})`}
+          {showPast ? 'ukryj minione dojazdy' : `pokaż minione dojazdy · ${hiddenLegs}`}
         </button>
       )}
       <DayTravelSummary plans={plans} limited={limited} />
@@ -413,8 +489,8 @@ function FilterChip({
         setTimeout(() => chip.scrollIntoView({ inline: 'nearest', block: 'nearest' }), 220)
       }}
       className={cx(
-        'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-[9px] transition-colors',
-        on ? 'bg-accent/20 px-3 text-accent' : 'text-muted hover:text-text',
+        'flex h-11 min-w-11 shrink-0 items-center justify-center rounded-inner transition-colors',
+        on ? 'bg-active px-3 text-accent' : 'text-muted hover:text-text',
       )}
     >
       {children}
@@ -433,7 +509,7 @@ function FilterChip({
 function NowLine({ time }: { time: string }) {
   return (
     <div
-      className="flex items-center gap-2 text-[11px] font-bold text-accent"
+      className="flex items-center gap-2 text-2xs font-bold text-accent"
       aria-label={`teraz ${time}`}
     >
       <span className="h-0.5 flex-1 rounded-full bg-accent" />
@@ -442,7 +518,7 @@ function NowLine({ time }: { time: string }) {
   )
 }
 
-/** Przytrzymanie karty: wybór dnia. Godzina zostaje, nocleg zachowuje liczbę nocy. */
+/** Przytrzymanie karty: wybór dnia (godzina zostaje, nocleg zachowuje liczbę nocy) albo do pomysłów. */
 function MoveSheet({
   card,
   days,
@@ -454,14 +530,22 @@ function MoveSheet({
   onPick: (date: string | undefined) => void
   onClose: () => void
 }) {
+  useDismiss(true, onClose)
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="przenieś kartę"
-      className="fade-in fixed inset-0 z-50 flex flex-col justify-end bg-bg/70"
+      className="fade-in fixed inset-0 z-(--z-dialog) flex flex-col justify-end bg-bg/70"
     >
-      <button type="button" aria-label="anuluj" onClick={onClose} className="min-h-12 flex-1" />
+      {/* Zamyka nowe dotknięcie, nie „klik” z puszczenia palca po przytrzymaniu karty. */}
+      <button
+        type="button"
+        aria-label="anuluj"
+        onPointerDown={onClose}
+        onKeyDown={(e) => e.key === 'Enter' && onClose()}
+        className="min-h-12 flex-1"
+      />
       <section className="island sheet-in mx-px mb-px flex max-h-[70dvh] flex-col overflow-hidden">
         <h2 className="truncate border-b border-line px-4 py-3 text-sm font-bold">
           przenieś: {card.title || 'bez tytułu'}
@@ -473,19 +557,19 @@ function MoveSheet({
               type="button"
               disabled={date === card.date}
               onClick={() => onPick(date)}
-              className="flex min-h-11 items-center rounded-[9px] px-3 text-left text-sm hover:bg-raised disabled:text-accent"
+              className="flex min-h-11 items-center rounded-inner px-3 text-left text-sm hover:bg-raised disabled:text-accent"
             >
               {formatDayHeader(date)}
-              {date === card.date && ' · teraz'}
+              {date === card.date && ' · obecny'}
             </button>
           ))}
           <button
             type="button"
-            disabled={!card.date}
             onClick={() => onPick(undefined)}
-            className="flex min-h-11 items-center rounded-[9px] px-3 text-left text-sm text-muted hover:bg-raised"
+            className="flex min-h-11 items-center gap-2 rounded-inner border-t border-line px-3 text-left text-sm text-accent hover:bg-raised"
           >
-            bez daty
+            <Lightbulb className="size-4" aria-hidden="true" />
+            do pomysłów
           </button>
         </div>
       </section>

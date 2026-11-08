@@ -4,6 +4,7 @@ import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'
 import { Heading2, Link2, List, ListChecks, Redo2, Undo2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { askText } from '@/components/confirm-dialog'
 import { cx } from '@/components/ui'
 
 /** Odległość dolnej krawędzi widocznego obszaru od dołu okna — wysokość klawiatury na Androidzie. */
@@ -45,13 +46,21 @@ export function FormatToolbar({ editor }: { editor: Editor }) {
   }
   const chain = () => editor.chain().focus()
 
-  const setLink = () => {
+  const setLink = async () => {
     if (editor.isActive('link')) {
       chain().unsetLink().run()
       return
     }
-    const url = window.prompt('adres linku')?.trim()
-    if (url) chain().extendMarkRange('link').setLink({ href: url }).run()
+    const url = await askText({
+      title: 'link',
+      label: 'adres linku',
+      placeholder: 'https://',
+      inputMode: 'url',
+    })
+    if (!url) return
+    // Bez schematu przeglądarka potraktowałaby adres jako ścieżkę w aplikacji.
+    const href = /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`
+    chain().extendMarkRange('link').setLink({ href }).run()
   }
 
   const buttons = [
@@ -78,7 +87,7 @@ export function FormatToolbar({ editor }: { editor: Editor }) {
 
   return (
     <div
-      className="fixed inset-x-0 z-50 flex items-center gap-1 border-t border-line bg-bg px-1 py-1"
+      className="fixed inset-x-0 z-(--z-dialog) flex items-center gap-1 border-t border-line bg-bg px-1 py-1"
       style={{ bottom: inset }}
     >
       {buttons.map(({ label, icon: Icon, active, fn }) => (
@@ -90,7 +99,7 @@ export function FormatToolbar({ editor }: { editor: Editor }) {
           onPointerDown={run(fn)}
           className={cx(
             'flex size-11 items-center justify-center rounded-small transition-colors',
-            active ? 'bg-accent/20 text-accent' : 'text-muted',
+            active ? 'bg-active text-accent' : 'text-muted',
           )}
         >
           <Icon className="size-5" strokeWidth={1.8} aria-hidden="true" />

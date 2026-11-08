@@ -24,7 +24,7 @@ import {
 } from '@planer/core'
 import { LocateFixed, Navigation } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { PlanResponse } from '@/app/api/route/plan/route'
 import type { Route } from '@/app/api/route/route'
 import { ChatButton } from '@/components/ai/chat-panel'
@@ -33,7 +33,6 @@ import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
 import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { TYPE_STYLE } from '@/components/card/type-style'
-import { InboxButton } from '@/components/inbox/inbox-button'
 import { CountdownRing } from '@/components/today/countdown-ring'
 import { DayAxis } from '@/components/today/day-axis'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
@@ -60,7 +59,8 @@ function daysLabel(n: number) {
  */
 export function TodayDashboard({ userName }: { userName: string }) {
   const { trip } = useTrip()
-  const cards = useCards()
+  // Pisanie w otwartej karcie ma pierwszeństwo; widok pod nią nadąża chwilę później.
+  const cards = useDeferredValue(useCards())
   const sheet = useCardSheet()
   const today = todayLocal()
   const [now, setNow] = useState(nowHHMM())
@@ -142,11 +142,6 @@ export function TodayDashboard({ userName }: { userName: string }) {
         actions={
           <>
             <ChatButton onOpenCard={(id) => sheet.open(id)} />
-            <InboxButton />
-          </>
-        }
-        more={
-          <>
             <TripStatus />
           </>
         }
@@ -268,7 +263,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
               <li key={card.id}>
                 {nowLine && (
                   <div
-                    className="my-1 flex items-center gap-2 px-2 text-[11px] font-bold text-accent"
+                    className="my-1 flex items-center gap-2 px-2 text-2xs font-bold text-accent"
                     aria-label={`teraz ${now}`}
                   >
                     <span className="h-0.5 flex-1 bg-accent" />
@@ -279,8 +274,9 @@ export function TodayDashboard({ userName }: { userName: string }) {
                   type="button"
                   onClick={() => sheet.open(card.id)}
                   className={cx(
-                    'flex w-full items-start gap-3 rounded-[9px] px-2 py-2 text-left hover:bg-raised',
+                    'flex w-full items-start gap-3 rounded-inner px-2 py-2 text-left hover:bg-raised',
                     during && card.time && card.time < now && 'opacity-60',
+                    card.skipped && 'line-through opacity-50',
                   )}
                 >
                   <span className="w-12 shrink-0 pt-0.5 text-right text-xs font-bold text-subtle">

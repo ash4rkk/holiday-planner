@@ -66,6 +66,11 @@ export type CardFields = {
   variantOf?: string
   /** Karta główna: wybrana świadomie spośród wariantów, a nie tylko pierwsza z nich. */
   variantChosen?: boolean
+  /**
+   * Pominięta („pomiń”): zostaje w dniu, ale przekreślona — bez dojazdów, przypomnień i w sumach
+   * wydatków jej nie liczymy.
+   */
+  skipped?: boolean
 }
 
 /** Pola, które użytkownik zmienia w edytorze karty. */
@@ -84,6 +89,7 @@ export type EditableCardFields = Pick<
   | 'templateId'
   | 'aiDraft'
   | 'pinned'
+  | 'skipped'
 >
 
 export type CardSnapshot = CardFields & {
@@ -102,6 +108,16 @@ export const GRID = 20
 
 export function snapToGrid(value: number): number {
   return Math.round(value / GRID) * GRID
+}
+
+/**
+ * Nocleg z datą na Tablicy: nie stoi w kolumnie dnia, tylko jako belka nad dniami, które obejmuje
+ * (od zameldowania do ostatniej nocy).
+ */
+export function isBandStay(
+  c: Pick<CardSnapshot, 'type' | 'date' | 'variantOf' | 'deletedAt'>,
+): boolean {
+  return c.type === 'stay' && Boolean(c.date) && !c.variantOf && !c.deletedAt
 }
 
 /** Pomysł: karta bez dnia, która czeka w drawerze. Przypięte, ramki i szkice AI zostają na Tablicy. */

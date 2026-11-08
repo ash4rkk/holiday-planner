@@ -29,7 +29,7 @@ export function RemotePointers() {
               />
             </svg>
             <span
-              className="ml-3 rounded-small px-1.5 py-0.5 text-[11px] font-bold"
+              className="ml-3 rounded-small px-1.5 py-0.5 text-2xs font-bold"
               style={{ backgroundColor: user.color, color: 'var(--on-accent)' }}
             >
               {user.name}

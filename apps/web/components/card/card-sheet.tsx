@@ -2,15 +2,15 @@
 
 import {
   CARD_STATUS_LABELS,
+  CARD_STATUSES,
   CARD_TYPE_LABELS,
   CARD_TYPES,
   type CardSnapshot,
   cardsOf,
   contentOf,
-  detachVariant,
   type EditableCardFields,
   fragmentLines,
-  moveCardToDay,
+  moveToIdeas,
   trashCard,
   updateCard,
 } from '@planer/core'
@@ -19,8 +19,9 @@ import { Calendar, ChevronDown, ChevronRight, Lightbulb, Pin, Trash2 } from 'luc
 import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { CardAttachments } from '@/components/attachments/card-attachments'
-import { ConfirmDialog } from '@/components/confirm-dialog'
+import { askText } from '@/components/confirm-dialog'
 import { cx } from '@/components/ui'
+import { withUndo } from '@/lib/undo'
 import { useWide } from '@/lib/use-wide'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { CardEditor } from './card-editor'
@@ -66,8 +67,8 @@ export function CardSheet({
   const [expanded, setExpanded] = useState(false)
   const [typing, setTyping] = useState(isNew)
   const tall = expanded || typing
-  const [typesOpen, setTypesOpen] = useState(false)
-  const [asking, setAsking] = useState<'trash' | 'ideas' | null>(null)
+  // Pod nagłówkiem rozwija się jeden wybór naraz: typ albo status.
+  const [picker, setPicker] = useState<'type' | 'status' | null>(null)
   const [closing, setClosing] = useState(false)
   const [dragY, setDragY] = useState(0)
   const dragFrom = useRef<number | null>(null)
@@ -119,16 +120,13 @@ export function CardSheet({
   }
   dismissRef.current = dismiss
 
-  const remove = () => {
-    trashCard(doc, cardId)
+  // Kosz i pomysły od razu, bez pytania — pasek „cofnij” odwraca zmianę.
+  const remove = (label = 'karta w koszu') => {
+    withUndo(doc, label, () => trashCard(doc, cardId))
     onClose()
   }
 
-  const toIdeas = () => {
-    setAsking(null)
-    if (card.variantOf) detachVariant(doc, cardId)
-    else moveCardToDay(doc, cardId, undefined)
-  }
+  const toIdeas = () => withUndo(doc, 'karta w pomysłach', () => moveToIdeas(doc, cardId))
 
   const grip = {
     onPointerDown: (e: PointerEvent) => {
@@ -154,10 +152,7 @@ export function CardSheet({
     },
   }
 
-  const nextStatus = () => {
-    const order = [undefined, 'missing', 'booked'] as const
-    change({ status: order[(order.indexOf(card.status) + 1) % order.length] })
-  }
+  const toggle = (p: 'type' | 'status') => setPicker((v) => (v === p ? null : p))
   const style = TYPE_STYLE[card.type]
   const TypeIcon = style.icon
   const Close = wide ? ChevronRight : ChevronDown
@@ -169,7 +164,7 @@ export function CardSheet({
           type="button"
           aria-label="zamknij kartę"
           onClick={dismiss}
-          className="fade-in fixed inset-0 z-40 bg-bg/50"
+          className="fade-in fixed inset-0 z-(--z-sheet) bg-bg/50"
         />
       )}
       <div
@@ -177,7 +172,7 @@ export function CardSheet({
         aria-modal={!wide}
         aria-label="karta"
         className={cx(
-          'fixed z-40 flex flex-col bg-bg',
+          'fixed z-(--z-sheet) flex flex-col bg-bg',
           wide
             ? cx('inset-y-0 right-0 border-l border-line', closing ? 'panel-out' : 'panel-in')
             : cx(
@@ -212,21 +207,22 @@ export function CardSheet({
           </button>
           <button
             type="button"
-            onClick={() => setTypesOpen((v) => !v)}
-            aria-expanded={typesOpen}
+            onClick={() => toggle('type')}
+            aria-expanded={picker === 'type'}
             className={cx(
-              'flex h-11 items-center gap-2 rounded-island px-3 text-sm transition-colors',
+              'flex h-11 min-w-0 items-center gap-2 rounded-island px-3 text-sm transition-colors',
               style.chip,
             )}
           >
-            <TypeIcon className="size-5" aria-hidden="true" />
-            {CARD_TYPE_LABELS[card.type]}
+            <TypeIcon className="size-5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{CARD_TYPE_LABELS[card.type]}</span>
           </button>
           <span className="flex-1" />
           <button
             type="button"
-            onClick={nextStatus}
-            aria-label={`status: ${card.status ? CARD_STATUS_LABELS[card.status] : 'brak'}, zmień`}
+            onClick={() => toggle('status')}
+            aria-expanded={picker === 'status'}
+            aria-label={`status: ${card.status ? CARD_STATUS_LABELS[card.status] : 'bez statusu'}`}
             title={card.status ? CARD_STATUS_LABELS[card.status] : 'bez statusu'}
             className="flex size-11 items-center justify-center"
           >
@@ -243,34 +239,37 @@ export function CardSheet({
             onClick={() => change({ pinned: !card.pinned })}
             aria-pressed={card.pinned}
             aria-label={card.pinned ? 'odepnij' : 'przypnij'}
+            title={card.pinned ? 'odepnij' : 'przypnij'}
             className={cx(
-              'flex size-11 items-center justify-center transition-colors',
+              'flex size-11 items-center justify-center transition-colors hover:text-accent',
               card.pinned ? 'text-accent' : 'text-muted',
             )}
           >
             <Pin className="size-5" aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            onClick={() => setAsking('trash')}
-            aria-label="przenieś do kosza"
-            className="flex size-11 items-center justify-center text-muted hover:text-red"
-          >
-            <Trash2 className="size-5" aria-hidden="true" />
-          </button>
           {(card.date || card.variantOf) && (
             <button
               type="button"
-              onClick={() => setAsking('ideas')}
-              aria-label="przenieś do pomysłów"
+              onClick={toIdeas}
+              aria-label="do pomysłów"
               title="do pomysłów"
               className="flex size-11 items-center justify-center text-muted hover:text-accent"
             >
               <Lightbulb className="size-5" aria-hidden="true" />
             </button>
           )}
+          {/* Kosz zawsze ostatni: inne przyciski mogą znikać, a ten nie zmienia miejsca. */}
+          <button
+            type="button"
+            onClick={() => remove()}
+            aria-label="do kosza"
+            title="do kosza"
+            className="flex size-11 items-center justify-center text-muted hover:text-red"
+          >
+            <Trash2 className="size-5" aria-hidden="true" />
+          </button>
         </div>
-        {typesOpen && (
+        {picker === 'type' && (
           <div className="fade-in flex shrink-0 gap-1 overflow-x-auto px-1 pb-1">
             {CARD_TYPES.map((t) => {
               const { icon: Icon, chip } = TYPE_STYLE[t]
@@ -281,10 +280,10 @@ export function CardSheet({
                   aria-pressed={card.type === t}
                   onClick={() => {
                     change({ type: t })
-                    setTypesOpen(false)
+                    setPicker(null)
                   }}
                   className={cx(
-                    'flex h-9 shrink-0 items-center gap-1 rounded-small px-2 text-xs',
+                    'flex h-11 shrink-0 items-center gap-1 rounded-small px-3 text-xs',
                     card.type === t ? chip : 'text-muted',
                   )}
                 >
@@ -293,6 +292,32 @@ export function CardSheet({
                 </button>
               )
             })}
+          </div>
+        )}
+        {picker === 'status' && (
+          <div className="fade-in flex shrink-0 justify-end gap-1 overflow-x-auto px-1 pb-1">
+            {[undefined, ...CARD_STATUSES].map((st) => (
+              <button
+                key={st ?? 'none'}
+                type="button"
+                aria-pressed={card.status === st}
+                onClick={() => {
+                  change({ status: st })
+                  setPicker(null)
+                }}
+                className={cx(
+                  'flex h-11 shrink-0 items-center gap-2 rounded-small px-3 text-xs',
+                  card.status === st ? 'bg-active font-bold text-accent' : 'text-muted',
+                )}
+              >
+                {st ? (
+                  <StatusMark status={st} />
+                ) : (
+                  <Calendar className="size-4" aria-hidden="true" />
+                )}
+                {st ? CARD_STATUS_LABELS[st] : 'bez statusu'}
+              </button>
+            ))}
           </div>
         )}
 
@@ -313,17 +338,17 @@ export function CardSheet({
                 <span className="flex-1 text-accent">● szkic z AI — sprawdź dane z dokumentu</span>
                 <button
                   type="button"
-                  onClick={() => change({ aiDraft: undefined })}
-                  className="min-h-9 rounded-small bg-accent px-3 font-bold text-on-accent"
+                  onClick={() => remove('szkic odrzucony')}
+                  className="min-h-11 rounded-small border border-line px-3 text-muted"
                 >
-                  zatwierdź
+                  odrzuć
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAsking('trash')}
-                  className="min-h-9 rounded-small border border-line px-3 text-muted"
+                  onClick={() => change({ aiDraft: undefined })}
+                  className="min-h-11 rounded-small bg-accent px-3 font-bold text-on-accent"
                 >
-                  odrzuć
+                  zatwierdź
                 </button>
               </div>
             )}
@@ -357,28 +382,6 @@ export function CardSheet({
 
         {editor && <FormatToolbar editor={editor} />}
       </div>
-      {asking === 'trash' && (
-        <ConfirmDialog
-          title="Przenieść do kosza?"
-          body="Karta zniknie z planu. Można ją przywrócić z kosza na Liście przez 30 dni."
-          confirm="do kosza"
-          onConfirm={remove}
-          onCancel={() => setAsking(null)}
-        />
-      )}
-      {asking === 'ideas' && (
-        <ConfirmDialog
-          title="Przenieść do pomysłów?"
-          body={
-            card.variantOf
-              ? 'Wariant wyjdzie ze stosu i stanie się zwykłym pomysłem.'
-              : 'Karta straci dzień w planie.'
-          }
-          confirm="do pomysłów"
-          onConfirm={toIdeas}
-          onCancel={() => setAsking(null)}
-        />
-      )}
     </>
   )
 }
@@ -390,7 +393,11 @@ function SaveAsTemplate({ card, editor }: { card: CardSnapshot; editor: Editor |
   if (!editor) return null
 
   const save = async () => {
-    const name = window.prompt('nazwa szablonu', card.title || 'szablon')?.trim()
+    const name = await askText({
+      title: 'zapisz jako szablon',
+      label: 'nazwa szablonu',
+      value: card.title || 'szablon',
+    })
     if (!name) return
     setState('saving')
     const res = await fetch('/api/templates', {

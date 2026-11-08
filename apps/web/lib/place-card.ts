@@ -10,7 +10,7 @@ export type Place = {
   note?: string | null
 }
 
-/** Karta z miejsca (skrzynka, wklejony link): nazwa jako tytuł, adres i notatka w treści. */
+/** Karta z miejsca (udostępnione, wklejony link): nazwa jako tytuł, adres i notatka w treści. */
 export function createPlaceCard(
   doc: Y.Doc,
   place: Place,

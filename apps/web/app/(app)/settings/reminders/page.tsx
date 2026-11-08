@@ -1,16 +1,16 @@
 import { CARD_TYPE_LABELS, CARD_TYPES, type CardType } from '@planer/core'
 import { getReminderDefaults } from '@planer/core/settings'
+import { connection } from 'next/server'
 import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 import { buttonClass, inputClass } from '@/components/ui'
 import { formatLead } from '@/lib/format-remind'
 import { saveReminderDefaults } from '../actions'
 
-export const dynamic = 'force-dynamic'
-
 const OPTIONS = [0, 15, 30, 60, 120, 180, 360, 720, 1440]
 
 export default async function RemindersPage() {
+  await connection()
   const defaults = await getReminderDefaults()
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">

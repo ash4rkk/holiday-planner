@@ -6,6 +6,7 @@ import {
   createFamilyLink,
   revokeFamilyLink,
 } from '@/app/(app)/trips/[tripId]/settings/share-actions'
+import { askConfirm } from '@/components/confirm-dialog'
 import { buttonClass } from '@/components/ui'
 
 /** Link tylko do odczytu (plan dni, mapa, kwoty — bez plików) dla rodziny; nowy unieważnia stary. */
@@ -70,8 +71,14 @@ export function FamilyLink({
             <button
               type="button"
               disabled={pending}
-              onClick={() => {
-                if (!window.confirm('Unieważnić link? Kto go ma, przestanie widzieć plan.')) return
+              onClick={async () => {
+                const ok = await askConfirm({
+                  title: 'unieważnić link?',
+                  body: 'Kto go ma, przestanie widzieć plan.',
+                  confirm: 'unieważnij',
+                  danger: true,
+                })
+                if (!ok) return
                 start(async () => {
                   await revokeFamilyLink(tripId)
                   setToken(undefined)

@@ -1,15 +1,15 @@
 import { formatDateSpan } from '@planer/core'
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 import { activeFamilyLinks } from '@/lib/settings-data'
 import { revokeLink } from '../actions'
 
-export const dynamic = 'force-dynamic'
-
 const created = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'short' })
 
 export default async function LinksPage() {
+  await connection()
   const links = await activeFamilyLinks()
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">

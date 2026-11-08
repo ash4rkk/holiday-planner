@@ -9,6 +9,7 @@ import {
 } from '@planer/core'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { connection } from 'next/server'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { PublicMap, type PublicPin } from '@/components/public/public-map'
 import { cx } from '@/components/ui'
@@ -18,7 +19,6 @@ import { tripForToken } from '@/lib/share-links'
 // Link tylko do odczytu dla rodziny: Lista dni, Mapa i kwoty; bez załączników i bez edycji.
 // Poza logowaniem (proxy.ts pomija /p/*, w Cloudflare Access reguła Bypass — docs/deploy.md).
 
-export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Plan wyjazdu', robots: { index: false, follow: false } }
 
 const TYPE_VAR: Record<CardType, string> = {
@@ -30,6 +30,7 @@ const TYPE_VAR: Record<CardType, string> = {
 }
 
 export default async function PublicTripPage({ params }: PageProps<'/p/[token]'>) {
+  await connection()
   const trip = await tripForToken((await params).token)
   if (!trip) notFound()
   const { model, rate, today } = await buildExport(trip, { files: false })
@@ -51,7 +52,7 @@ export default async function PublicTripPage({ params }: PageProps<'/p/[token]'>
           {formatDateSpan(trip.startDate, trip.endDate)}
           {total && ` · wydatki: ${total}`}
         </p>
-        <p className="mt-1 text-[11px] text-dim">podgląd planu tylko do odczytu</p>
+        <p className="mt-1 text-2xs text-dim">podgląd planu tylko do odczytu</p>
       </header>
 
       <PublicMap pins={pins} />
@@ -95,7 +96,7 @@ export default async function PublicTripPage({ params }: PageProps<'/p/[token]'>
                   {blocks.length > 0 && (
                     // Treść kart po konwersji z ucieczką znaków (blocksToHtml) — bez HTML od użytkownika.
                     <div
-                      className="public-content mt-2 text-[13px] text-muted"
+                      className="public-content mt-2 text-sm text-muted"
                       dangerouslySetInnerHTML={{ __html: blocksToHtml(blocks) }}
                     />
                   )}

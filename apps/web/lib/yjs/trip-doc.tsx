@@ -25,6 +25,7 @@ import { IndexeddbPersistence } from 'y-indexeddb'
 import * as Y from 'yjs'
 import { OfflinePrefetch } from '@/components/offline-prefetch'
 import type { Template } from '@/lib/card-templates'
+import { useInboxIdeas } from '@/lib/use-inbox-ideas'
 
 // Jeden dokument Yjs na wyjazd: kopia w IndexedDB urządzenia (pełna praca offline) i sync na żywo
 // przez WebSocket z serwerem Hocuspocus (apps/sync). Dokumenty i połączenia żyją przez całą sesję,
@@ -47,8 +48,13 @@ const entries = new Map<string, Entry>()
 /** Adres serwera sync: w dev osobny port (NEXT_PUBLIC_SYNC_URL), na serwerze ta sama domena /sync. */
 export function syncUrl(): string {
   const configured = process.env.NEXT_PUBLIC_SYNC_URL
-  if (configured) return configured
-  const { protocol, host } = window.location
+  const { protocol, host, hostname } = window.location
+  if (configured) {
+    // Telefon w sieci lokalnej: „localhost” to sam telefon, więc bierzemy host, z którego wczytano stronę.
+    const url = new URL(configured)
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') url.hostname = hostname
+    return url.toString().replace(/\/$/, '')
+  }
   return `${protocol === 'https:' ? 'wss' : 'ws'}://${host}/sync`
 }
 
@@ -141,8 +147,6 @@ export type TripMeta = {
   endDate: string | null
   currencies: string[]
   archived: boolean
-  /** Miejsca w skrzynce do rozdzielenia (z serwera przy renderze). */
-  inboxCount: number
   /** Szablony kart (z serwera; w zapisanej stronie działają też offline). */
   templates: Template[]
   travelMode: TravelMode
@@ -191,6 +195,8 @@ export function TripProvider({
 
   // Na serwerze (SSR) pusty dokument; prawdziwy powstaje dopiero w przeglądarce.
   const [ssrDoc] = useState(() => new Y.Doc())
+  // Udostępnione miejsca → pomysły (dopiero po wczytaniu dokumentu z IndexedDB).
+  useInboxIdeas(trip.id, entry?.doc ?? ssrDoc, ready && !!entry)
   return (
     <TripContext.Provider
       value={{
@@ -294,9 +300,38 @@ export function getSnapshot<K extends Key>(doc: Y.Doc, key: K): ReturnType<(type
   }
   const hit = cache[key]
   if (hit && hit.version === version) return hit.value as ReturnType<(typeof READERS)[K]>
-  const value = READERS[key](doc)
+  const value = share(hit?.value as Identified[] | undefined, READERS[key](doc) as Identified[])
   cache[key] = { version, value }
   return value as ReturnType<(typeof READERS)[K]>
+}
+
+type Identified = { id: string }
+const shapes = new WeakMap<object, string>()
+const shape = (item: object) => {
+  let s = shapes.get(item)
+  if (s === undefined) {
+    s = JSON.stringify(item)
+    shapes.set(item, s)
+  }
+  return s
+}
+
+/**
+ * Współdzielenie niezmienionych elementów z poprzednią migawką: pisanie w jednej karcie zmienia
+ * tylko jej obiekt, więc kafelki pozostałych (memo) się nie przerysowują. Gdy nic się nie zmieniło
+ * (np. zmiana w innej części dokumentu), wraca ta sama tablica.
+ */
+export function share<T extends Identified>(prev: T[] | undefined, next: T[]): T[] {
+  if (!prev?.length) return next
+  const old = new Map(prev.map((item) => [item.id, item]))
+  let same = prev.length === next.length
+  const out = next.map((item, i) => {
+    const before = old.get(item.id)
+    const reused = before && shape(before) === shape(item) ? before : item
+    if (reused !== prev[i]) same = false
+    return reused
+  })
+  return same ? prev : out
 }
 
 function useDocMap<K extends Key>(key: K): ReturnType<(typeof READERS)[K]> {

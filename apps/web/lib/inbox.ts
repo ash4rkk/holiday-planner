@@ -1,22 +1,6 @@
 import 'server-only'
-import { and, count, desc, eq, getDb, type InboxItem, inboxItems, isNull } from '@planer/core/db'
+import { and, eq, getDb, type InboxItem, inboxItems, isNull } from '@planer/core/db'
 import type { ResolvedPlace } from './maps-resolve'
-
-export async function listInbox(tripId: string): Promise<InboxItem[]> {
-  return getDb()
-    .select()
-    .from(inboxItems)
-    .where(and(eq(inboxItems.tripId, tripId), isNull(inboxItems.usedAt)))
-    .orderBy(desc(inboxItems.createdAt))
-}
-
-export async function countInbox(tripId: string): Promise<number> {
-  const [row] = await getDb()
-    .select({ n: count() })
-    .from(inboxItems)
-    .where(and(eq(inboxItems.tripId, tripId), isNull(inboxItems.usedAt)))
-  return row?.n ?? 0
-}
 
 /** Dodaje miejsce; ten sam clientKey (ponowienie z kolejki offline) zwraca istniejący wpis. */
 export async function addToInbox(values: {
@@ -51,9 +35,14 @@ export async function addToInbox(values: {
   return existing
 }
 
-export async function markInboxUsed(id: string, tripId: string) {
-  await getDb()
+/**
+ * Odbiór udostępnionych miejsc wyjazdu: oznacza je jako użyte i zwraca w jednym zapytaniu, więc
+ * przy dwóch otwartych telefonach każde miejsce dostaje tylko jeden (bez podwójnych kart).
+ */
+export async function claimInbox(tripId: string): Promise<InboxItem[]> {
+  return getDb()
     .update(inboxItems)
     .set({ usedAt: new Date() })
-    .where(and(eq(inboxItems.id, id), eq(inboxItems.tripId, tripId)))
+    .where(and(eq(inboxItems.tripId, tripId), isNull(inboxItems.usedAt)))
+    .returning()
 }

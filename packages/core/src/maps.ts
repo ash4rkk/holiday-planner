@@ -199,16 +199,25 @@ export function hasCoords(card: CardSnapshot): card is MappedCard {
 }
 
 export type DayRoute = {
-  /** Nocleg, z którego zaczyna się dzień (spaliście tam poprzedniej nocy, a w pierwszy dzień — tej nocy). */
+  /**
+   * Nocleg, w którym zaczyna się dzień — ten, w którym spaliście poprzedniej nocy. Pierwszy dzień
+   * wyjazdu (przylot) nie ma startu: zaczyna się od pierwszej karty, a hotel jest zwykłym przystankiem.
+   */
   start?: MappedCard
   /** Miejsca dnia z mapy w kolejności godzin (bez godziny na końcu). */
   stops: MappedCard[]
+  /**
+   * Nocleg na tę noc, gdy różni się od startu i nie jest już przystankiem (zmiana hotelu) — tam kończy
+   * się dzień. Ostatni dzień (wylot) go nie ma.
+   */
+  end?: MappedCard
   /** Karty dnia bez współrzędnych — „poza mapą”. */
   offMap: CardSnapshot[]
 }
 
 export function dayRoute(cards: CardSnapshot[], date: string): DayRoute {
-  const live = cards.filter((c) => !c.deletedAt)
+  // Pominięte karty nie są na trasie dnia.
+  const live = cards.filter((c) => !c.deletedAt && !c.skipped)
   const day = live
     .filter((c) => c.date === date)
     .sort((a, b) => {
@@ -217,11 +226,16 @@ export function dayRoute(cards: CardSnapshot[], date: string): DayRoute {
       return a.createdAt.localeCompare(b.createdAt)
     })
   const stays = live.filter(hasCoords).filter((c) => c.type === 'stay')
-  const start =
-    stays.find((s) => staysOver(s, addDays(date, -1))) ?? stays.find((s) => staysOver(s, date))
+  // Tak jak dojazdy na Liście (dayLegs): start w noclegu z poprzedniej nocy, koniec w noclegu tej nocy.
+  const start = stays.find((s) => staysOver(s, addDays(date, -1)))
+  const night = stays.find((s) => staysOver(s, date))
+  const stops = day.filter(hasCoords).filter((c) => c.id !== start?.id)
+  const end =
+    night && night.id !== start?.id && !stops.some((c) => c.id === night.id) ? night : undefined
   return {
     start,
-    stops: day.filter(hasCoords).filter((c) => c.id !== start?.id),
+    stops,
+    end,
     offMap: day.filter((c) => !hasCoords(c)),
   }
 }

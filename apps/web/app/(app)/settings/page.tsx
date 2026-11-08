@@ -4,6 +4,7 @@ import type { ReminderDefaults } from '@planer/core/reminders'
 import { routesLimit, routesUsedThisMonth } from '@planer/core/routes'
 import { getReminderDefaults } from '@planer/core/settings'
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { ProfilePhoto } from '@/components/profile/profile-photo'
 import { PushValue } from '@/components/settings/push-value'
 import { SettingsGroup, SettingsRow } from '@/components/settings/settings-row'
@@ -13,12 +14,13 @@ import { TopBar } from '@/components/top-bar'
 import { MONTHLY_BUDGET_PLN, spentThisMonthPln } from '@/lib/ai/budget'
 import { aiConfigured } from '@/lib/ai/client'
 import { getCurrentUser } from '@/lib/auth/user'
+import { appSettingsBack } from '@/lib/back'
 import { formatLead } from '@/lib/format-remind'
 import { activeFamilyLinks } from '@/lib/settings-data'
 
-export const dynamic = 'force-dynamic'
-
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: PageProps<'/settings'>) {
+  await connection()
+  const { from } = await searchParams
   const routes = Boolean(process.env.GOOGLE_ROUTES_API_KEY)
   const [user, spent, checks, defaults, links, events] = await Promise.all([
     getCurrentUser(),
@@ -34,7 +36,7 @@ export default async function SettingsPage() {
 
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
-      <TopBar title="ustawienia" back={{ href: '/trips', label: 'wróć do wyjazdów' }} />
+      <TopBar title="ustawienia" back={appSettingsBack(from)} />
 
       <section className="island flex items-center gap-3 p-3" aria-label="profil">
         <ProfilePhoto

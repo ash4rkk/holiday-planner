@@ -25,7 +25,19 @@
 
 :root {
   --radius-island: 12px;
+  /* Element w wysepce z p-1: 12 − 3 px, żeby łuki szły równo z brzegiem wysepki. */
+  --radius-inner: 9px;
   --radius-small: 6px;
+  /* Warstwy: nakładki Tablicy/Mapy < wysuwane menu < menu dolne i komunikaty < arkusz karty
+     < czat < okna dialogowe < komunikat nad oknem. Klasy: z-(--z-nav) itd. */
+  --z-overlay: 10;
+  --z-popover: 20;
+  --z-nav: 30;
+  --z-drawer: 35;
+  --z-sheet: 40;
+  --z-panel: 45;
+  --z-dialog: 50;
+  --z-toast: 55;
 }
 
 /* Komponenty używają wyłącznie tych kolorów (bg-panel, text-muted, border-line…). */
@@ -52,7 +64,13 @@
   --color-green: var(--green);
   --color-red: var(--red);
   --radius-island: var(--radius-island);
+  --radius-inner: var(--radius-inner);
   --radius-small: var(--radius-small);
+  /* Stan „wybrane / włączone”: jeden odcień akcentu dla menu, filtrów, chipów i zakładek. */
+  --color-active: color-mix(in srgb, var(--accent) 18%, transparent);
+  /* Najmniejszy tekst (podpisy osi, plakietki); mniejszego nie używamy — słońce, telefon. */
+  --text-2xs: 11px;
+  --text-2xs--line-height: 1.35;
   --font-sans: var(--font-atkinson), system-ui, sans-serif;
 }
 
@@ -70,16 +88,24 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Tło „mgła”: Pulpit, Lista i przestrzeń między wysepkami. */
+/* Tło „mgła”: Pulpit, Lista i przestrzeń między wysepkami. Osobna nieruchoma warstwa zamiast
+   background-attachment: fixed — ta na telefonie przerysowuje gradienty przy każdym przewinięciu. */
 .app {
   min-height: 100dvh;
+  isolation: isolate;
+}
+.app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-color: var(--bg);
   background-image:
     radial-gradient(circle at 12% 10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 42%),
     radial-gradient(circle at 92% 34%, color-mix(in srgb, var(--blue) 15%, transparent), transparent 45%),
     radial-gradient(circle at 20% 78%, color-mix(in srgb, var(--plum) 15%, transparent), transparent 45%),
     radial-gradient(circle at 88% 94%, color-mix(in srgb, var(--amber) 11%, transparent), transparent 40%);
-  background-attachment: fixed;
 }
 
 /* W warstwie, żeby klasy Tailwind (obramowanie, tło) mogły to nadpisać. */
@@ -92,6 +118,19 @@ body {
   .more-panel {
     right: 0;
     width: max-content;
+  }
+  /* Gęste przyciski (dojazdy, zakładki dni): wyglądają nisko, ale łapią dotyk na 44 × 44 px. */
+  .hit {
+    position: relative;
+  }
+  .hit::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
   }
   /* Akcje paska leżą w jednej wysepce, więc same nie mają już ramki. */
   .top-actions .island:not(.more-panel) {
@@ -122,6 +161,15 @@ body {
 .bottom-nav {
   view-transition-name: bottom-nav;
 }
+/* Zmiana widoku wyjazdu: krótkie przesunięcie w stronę ruchu z przenikaniem (nie cały ekran). */
+::view-transition-old(.slide-forward) { animation: 160ms ease-in both vt-out-left; }
+::view-transition-new(.slide-forward) { animation: 240ms cubic-bezier(0.23, 1, 0.32, 1) both vt-in-right; }
+::view-transition-old(.slide-back) { animation: 160ms ease-in both vt-out-right; }
+::view-transition-new(.slide-back) { animation: 240ms cubic-bezier(0.23, 1, 0.32, 1) both vt-in-left; }
+@keyframes vt-out-left { to { opacity: 0; transform: translateX(-28px); } }
+@keyframes vt-out-right { to { opacity: 0; transform: translateX(28px); } }
+@keyframes vt-in-right { from { opacity: 0; transform: translateX(28px); } }
+@keyframes vt-in-left { from { opacity: 0; transform: translateX(-28px); } }
 
 @keyframes sheet-in {
   from { transform: translateY(100%); }
@@ -143,6 +191,9 @@ body {
   to { stroke-dashoffset: 0; }
 }
 .panel-in { animation: panel-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+/* Panel z lewej (czat na szerokim ekranie). */
+.panel-left-in { animation: panel-left-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+@keyframes panel-left-in { from { transform: translateX(-100%); } }
 .panel-out { animation: panel-out 190ms ease-in both; }
 @keyframes panel-in { from { transform: translateX(100%); } }
 @keyframes panel-out { to { transform: translateX(100%); } }

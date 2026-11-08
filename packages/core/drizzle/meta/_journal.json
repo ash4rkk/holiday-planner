@@ -85,6 +85,20 @@
       "when": 1794081519289,
       "tag": "0011_curvy_dexter_bennett",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794157657915,
+      "tag": "0012_demonic_pyro",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794159932980,
+      "tag": "0013_boring_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

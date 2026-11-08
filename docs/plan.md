@@ -430,8 +430,54 @@ Bez terminu, więc plan to 9 etapów, z których każdy daje używalną aplikacj
 | 6. Pulpit, koszty, push | Parser `/+`, kursy NBP, Pulpit dnia (oś, dojazd, pogoda, wydatki), przypomnienia i powiadomienia o zmianach | Rano Pulpit pokazuje plan dnia, a 3 h przed lotem przychodzi push |
 | 7. AI | Czat z kontekstem wyjazdu i wyszukiwaniem, import zdjęć i PDF-ów do szkiców kart | Zdjęcie paragonu tworzy szkic karty z kwotą |
 | 8. Eksport i kopie | Eksport .md, PDF z widoku druku, codzienny backup bazy i plików | PDF wyjazdu dzień po dniu do druku; kopia z ostatniej nocy na dysku |
+| 10. W podróży | Wyszukiwarka kart, bilety dnia, lista pakowania, wieczorne podsumowanie, mapa offline, „ułóż mi dzień”, plan B na deszcz | W trybie samolotowym widać bilet z QR i mapę okolicy, a wieczorem przychodzi push z planem na jutro |
 
 Praca z Claude Code: jeden etap = jedna gałąź; na początku etapu plan (tryb planowania), potem realizacja małymi krokami z testem na telefonie po każdym.
+
+## Etap 10: w podróży
+
+Gałąź `etap-10`. Kolejność od małych do większych; każdy punkt to osobny krok z testem na telefonie.
+
+### 1. Wyszukiwarka kart (S)
+
+- Lupa w górnym pasku widoków wyjazdu; pole od razu z klawiaturą, wyniki pod spodem w wysepce.
+- Szuka w tytule, treści (`preview` i pełny tekst z `fragmentLines`), nazwie i adresie miejsca, kwotach i nazwach załączników; bez ogonków i wielkości liter (jak `matchingCard`).
+- Działa offline: przeszukuje dokument Yjs na telefonie, bez API.
+- Wynik pokazuje dzień, godzinę i dopasowany fragment z wyróżnieniem; tap otwiera kartę (`?card=`), kosz na końcu i przygaszony.
+
+### 2. Bilety dnia (S–M)
+
+- Przycisk „bilety” w „dziś” (i skrót w nagłówku dnia na Liście): pliki z kart dnia typu transport i atrakcja, w kolejności godzin; jutro i pojutrze pod spodem.
+- Pełny ekran pliku: obraz albo pierwsza strona PDF-a (PDF.js już jest), przesuwanie palcem między biletami, ekran nie gaśnie (Wake Lock) i jasne tło niezależnie od motywu, żeby skaner odczytał kod.
+- Z pamięci `attachments` (SW), więc działa offline; plik spoza pamięci ma znacznik „pobierz, póki jest zasięg”.
+
+### 3. Lista pakowania (S–M)
+
+- Osobny ekran w menu wyjazdu („lista pakowania”), wspólny dla obu osób: nowa mapa `packing` w dokumencie Yjs (pozycja, kategoria, kto bierze: ja / druga osoba / wspólne, spakowane).
+- Szablony list w Postgresie (`packing_templates`), „z poprzedniego wyjazdu” kopiuje pozycje bez zaznaczeń.
+- Postęp „spakowane 34 z 52” w „dziś” przed wyjazdem; w trakcie wyjazdu lista schowana w menu.
+
+### 4. Wieczorne podsumowanie (S)
+
+- Worker raz dziennie o 21:00 w strefie wyjazdu (do zmiany w ustawieniach, można wyłączyć) wysyła push każdej osobie: pierwsza karta i godzina wyjścia (plany dojazdów z `route_cache`), pogoda, bilety na jutro, „do rezerwacji” na jutro.
+- Tylko w dniach wyjazdu i dzień przed pierwszym; bez kart na jutro — bez pusha.
+- Tap otwiera „dziś” ustawione na jutro.
+
+### 5. Mapa offline (M)
+
+- W ustawieniach wyjazdu „mapa offline”: obszar z miejsc kart plus margines, zoom do 15; przed pobraniem liczba kafelków i rozmiar (limit np. 150 MB), postęp, „usuń”.
+- Kafelki wektorowe OpenFreeMap, styl, fonty i sprite w osobnym cache SW (`map-tiles`), cache-first; nowe miejsca dociągają brakujące kafelki przy zasięgu.
+- Pobieranie kolejką z przerwami (bez zalewania serwera OpenFreeMap), wznawiane po utracie sieci.
+
+### 6. „Ułóż mi dzień” (M)
+
+- W nagłówku pustego albo prawie pustego dnia: „ułóż z pomysłów”. Czat dostaje dzień, pomysły z miejscami i godziny otwarcia z sieci, a odpowiada zmianami `propose_changes` (dzień, godzina, czas trwania) dla wybranych pomysłów.
+- Kolejność liczona z odległości (`dayLegs` / OSRM), z zapasem `travelBufferMin`; wynik to zwykłe zmiany do zatwierdzenia z „cofnij”.
+
+### 7. Plan B na deszcz (M, po 4 i 6)
+
+- Bez nowego pola w karcie: gdy prognoza na jutro (albo dziś) ma deszcz, przy dniu pojawia się „plan B na deszcz?”, a we wieczornym podsumowaniu wzmianka o deszczu.
+- Dopiero dotknięcie pyta AI (na życzenie, więc bez kosztu przy każdej prognozie): czat dostaje karty dnia z godzinami deszczu, sam ocenia, które są pod gołym niebem, i proponuje zamienniki pod dachem — z pomysłów albo z sieci — jako warianty tych kart (`variantOf`) do zatwierdzenia.
 
 ## Ryzyka i otwarte pytania
 

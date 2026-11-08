@@ -1,6 +1,6 @@
 import { CARD_TYPE_LABELS, type CardSnapshot } from '@planer/core'
 import { Paperclip } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { cx } from '@/components/ui'
 import { fieldsSummary } from './card-fields'
@@ -11,7 +11,23 @@ import { VariantBadge } from './variant-badge'
 const HOLD_MS = 450
 const FRESH_MS = 2500
 
-export function CardTile({
+/**
+ * Kafelek karty. `memo` z porównaniem bez funkcji: rodzic tworzy `onOpen`/`onHold` przy każdym
+ * renderze, a znaczenie mają tylko dane karty — dzięki współdzielonym migawkom pisanie w jednej
+ * karcie przerysowuje tylko jej kafelek.
+ */
+export const CardTile = memo(
+  CardTileView,
+  (a, b) =>
+    a.card === b.card &&
+    a.files === b.files &&
+    a.variants === b.variants &&
+    a.stayUntil === b.stayUntil &&
+    a.inDay === b.inDay &&
+    Boolean(a.onHold) === Boolean(b.onHold),
+)
+
+function CardTileView({
   card,
   files = 0,
   variants = 0,
@@ -72,6 +88,7 @@ export function CardTile({
         'island relative flex w-full gap-3 overflow-hidden py-3 pr-3 pl-4 text-left transition-colors select-none hover:border-sel',
         card.aiDraft && 'border-dashed border-accent',
         fresh && 'pop-in',
+        card.skipped && 'opacity-50',
       )}
     >
       <span className={cx('absolute inset-y-0 left-0 w-1', style.bar)} aria-hidden="true" />
@@ -91,9 +108,16 @@ export function CardTile({
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-baseline gap-2">
-          <span className={cx('truncate font-bold', !card.title && 'font-normal text-dim italic')}>
+          <span
+            className={cx(
+              'truncate font-bold',
+              !card.title && 'font-normal text-dim italic',
+              card.skipped && 'line-through',
+            )}
+          >
             {card.title || 'bez tytułu'}
           </span>
+          {card.skipped && <span className="shrink-0 text-xs text-subtle italic">pominięta</span>}
           <AmountBadge amounts={card.amounts ?? []} className="ml-auto" />
           {card.pinned && (
             <span className="text-accent" title="przypięta">
@@ -103,9 +127,7 @@ export function CardTile({
         </span>
         <CardMetaLine card={card} summary={summary} files={files} />
         {stayUntil && <span className="text-xs text-teal">możesz zostać do {stayUntil}</span>}
-        {card.preview && (
-          <span className="line-clamp-2 text-[13px] text-muted">{card.preview}</span>
-        )}
+        {card.preview && <span className="line-clamp-2 text-sm text-muted">{card.preview}</span>}
       </span>
       {card.status && <StatusMark status={card.status} />}
     </button>

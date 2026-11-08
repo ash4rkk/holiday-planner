@@ -8,8 +8,6 @@ const ICONS = {
   'apple-180.png': { size: 180, maskable: true },
 } as const
 
-export const dynamic = 'force-static'
-
 export function generateStaticParams() {
   return Object.keys(ICONS).map((name) => ({ name }))
 }

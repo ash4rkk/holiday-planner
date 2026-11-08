@@ -3,6 +3,7 @@
 import { type AttachmentMeta, attachmentUrl, formatSize, isPdf } from '@planer/core'
 import { ExternalLink, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { askConfirm } from '@/components/confirm-dialog'
 import { loadPdfJs } from './pdf'
 
 /**
@@ -31,7 +32,7 @@ export function AttachmentViewer({
       role="dialog"
       aria-modal="true"
       aria-label={attachment.name}
-      className="fixed inset-0 z-50 flex flex-col bg-bg"
+      className="fixed inset-0 z-(--z-dialog) flex flex-col bg-bg"
     >
       <div className="flex shrink-0 items-center gap-1 px-px pt-1">
         <button
@@ -44,7 +45,7 @@ export function AttachmentViewer({
         </button>
         <div className="island flex min-h-11 min-w-0 flex-1 flex-col justify-center px-3">
           <span className="truncate text-sm font-bold text-teal">{attachment.name}</span>
-          <span className="text-[11px] text-subtle italic">{formatSize(attachment.size)}</span>
+          <span className="text-2xs text-subtle italic">{formatSize(attachment.size)}</span>
         </div>
         <a
           href={url}
@@ -57,8 +58,14 @@ export function AttachmentViewer({
         </a>
         <button
           type="button"
-          onClick={() => {
-            if (window.confirm('Odłączyć plik od karty?')) onDelete()
+          onClick={async () => {
+            const ok = await askConfirm({
+              title: 'odłączyć plik?',
+              body: 'Plik zniknie z karty i z serwera.',
+              confirm: 'odłącz',
+              danger: true,
+            })
+            if (ok) onDelete()
           }}
           aria-label="odłącz plik"
           className="island flex size-11 items-center justify-center text-muted hover:text-red"

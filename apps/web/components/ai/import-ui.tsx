@@ -12,8 +12,11 @@ import {
 import { Sparkles, X } from 'lucide-react'
 import { useEffect, useSyncExternalStore } from 'react'
 import { TYPE_STYLE } from '@/components/card/type-style'
+import { Toast } from '@/components/toast-stack'
 import { buttonClass, cx } from '@/components/ui'
 import { importStore, runImports } from '@/lib/ai-import'
+import { withUndo } from '@/lib/undo'
+import { useDismiss } from '@/lib/use-dismiss'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function useImportState() {
@@ -38,7 +41,7 @@ export function ImportStatus() {
   const { busy, queued, error } = useImportState()
   if (!busy && !queued && !error) return null
   return (
-    <div className="fixed inset-x-1 bottom-[calc(140px+env(safe-area-inset-bottom))] z-30 flex justify-center">
+    <Toast>
       <div role="status" className="island flex min-h-11 max-w-md items-center gap-2 px-3 text-sm">
         <Sparkles
           className={cx(
@@ -54,7 +57,7 @@ export function ImportStatus() {
               type="button"
               onClick={importStore.dismissError}
               aria-label="zamknij"
-              className="flex size-9 items-center justify-center text-muted"
+              className="-mr-2 flex size-11 items-center justify-center text-muted"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -65,7 +68,7 @@ export function ImportStatus() {
           <span className="truncate text-muted">w kolejce: {queued} · wyślę, gdy wróci zasięg</span>
         )}
       </div>
-    </div>
+    </Toast>
   )
 }
 
@@ -75,6 +78,8 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
   const cards = useCards()
   const { fresh } = useImportState()
   const card = cards.find((c) => fresh.includes(c.id) && c.aiDraft && !c.deletedAt)
+  // Esc odkłada decyzję: szkic zostaje w planie z ramką „szkic z AI”, można go zatwierdzić w karcie.
+  useDismiss(!!card, () => card && importStore.reviewed(card.id))
   useEffect(() => {
     // Szkic zatwierdzony albo usunięty gdzie indziej (np. przez drugą osobę) — z kolejki przeglądu.
     for (const id of fresh) {
@@ -107,7 +112,7 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
       role="dialog"
       aria-modal="true"
       aria-label="szkic karty z AI"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-bg/60 p-1 sm:items-center"
+      className="fixed inset-0 z-(--z-dialog) flex items-end justify-center bg-bg/60 p-1 sm:items-center"
     >
       <section className="island w-full max-w-md border-dashed border-accent p-4">
         <p className="flex items-center gap-1 text-xs text-accent">
@@ -139,7 +144,7 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
         <div className="mt-4 grid grid-cols-3 gap-1">
           <button
             type="button"
-            onClick={done(() => trashCard(doc, card.id))}
+            onClick={done(() => withUndo(doc, 'szkic odrzucony', () => trashCard(doc, card.id)))}
             className={buttonClass('island', 'px-2')}
           >
             odrzuć

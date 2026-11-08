@@ -4,15 +4,16 @@ import { useEffect, useState } from 'react'
 
 const THRESHOLD = 6
 
-/** true = menu schowane (przewijanie w dół). Pasywny nasłuch na oknie, rAF, próg ok. 6 px. */
-export function useScrollHidden(enabled: boolean): boolean {
+/**
+ * true = menu schowane (przewijanie w dół). Pasywny nasłuch na oknie, rAF, próg ok. 6 px.
+ * Zmiana `resetKey` (ścieżka) pokazuje menu od nowa.
+ */
+export function useScrollHidden(enabled: boolean, resetKey?: string): boolean {
   const [hidden, setHidden] = useState(false)
 
   useEffect(() => {
-    if (!enabled) {
-      setHidden(false)
-      return
-    }
+    setHidden(false)
+    if (!enabled) return
     let last = window.scrollY
     let frame = 0
     const update = () => {
@@ -36,7 +37,7 @@ export function useScrollHidden(enabled: boolean): boolean {
       window.visualViewport?.removeEventListener('resize', onResize)
       if (frame) cancelAnimationFrame(frame)
     }
-  }, [enabled])
+  }, [enabled, resetKey])
 
   return hidden
 }

@@ -18,7 +18,7 @@ export function AmountBadge({ amounts, className }: { amounts: Amount[]; classNa
   return (
     <span
       className={cx(
-        'shrink-0 rounded-small bg-orange/15 px-1.5 py-0.5 text-[11px] font-bold text-orange',
+        'shrink-0 rounded-small bg-orange/15 px-1.5 py-0.5 text-2xs font-bold text-orange',
         className,
       )}
     >

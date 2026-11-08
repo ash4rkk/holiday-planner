@@ -6,7 +6,7 @@ import { cx } from '@/components/ui'
 export function TripSettingsLink({ tripId, className }: { tripId: string; className?: string }) {
   return (
     <Link
-      href={`/trips/${tripId}/settings`}
+      href={`/trips/${tripId}/settings?from=trips`}
       aria-label="ustawienia wyjazdu"
       title="ustawienia wyjazdu"
       className={cx(

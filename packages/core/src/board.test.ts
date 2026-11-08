@@ -7,8 +7,10 @@ import {
   dayOrder,
   deleteFrame,
   dropColumns,
+  dropSlots,
   dropTarget,
   moveItems,
+  nowLineAt,
   nowLineY,
   readEdges,
   readFrames,
@@ -99,7 +101,9 @@ describe('ułóż wg dni', () => {
       x: 100,
       y: 500,
     })
-    const first = createCard(doc, { type: 'stay', date: '2027-07-14', x: 300, y: 300 })
+    const first = createCard(doc, { type: 'sight', date: '2027-07-14', x: 300, y: 300 })
+    // Nocleg to belka nad dniami: układanie kolumn go nie rusza.
+    const stay = createCard(doc, { type: 'stay', date: '2027-07-14', x: 2000, y: 2000 })
     const loose = createCard(doc, { type: 'note', x: 5, y: 5 })
 
     const prev = arrangeByDays(doc, readCards(doc), {
@@ -111,6 +115,7 @@ describe('ułóż wg dni', () => {
     expect(byId(doc, late)?.x).toBe(480)
     expect(byId(doc, late)?.y).toBeGreaterThan(300)
     expect(byId(doc, loose)).toMatchObject({ x: 5, y: 5 })
+    expect(byId(doc, stay)).toMatchObject({ x: 2000, y: 2000 })
 
     restorePositions(doc, prev)
     expect(byId(doc, late)).toMatchObject({ x: 900, y: 900 })
@@ -346,5 +351,48 @@ describe('warianty', () => {
     const { doc, main, other } = plan()
     cardsOf(doc).delete(main)
     expect(isIdea(byId(doc, other) as CardSnapshot)).toBe(true)
+  })
+})
+
+describe('linia teraz wg godziny', () => {
+  const column = [
+    { time: '09:00', durationMin: 60, top: 0, bottom: 100 },
+    { time: '12:00', top: 200, bottom: 300 },
+    { time: '18:00', durationMin: 120, top: 400, bottom: 500 },
+  ]
+  it('w trakcie karty z czasem trwania przecina ją proporcjonalnie', () => {
+    expect(nowLineAt(column, '09:30')).toBe(50)
+  })
+  it('w przerwie proporcjonalnie do czasu, który z niej minął', () => {
+    // przerwa 10:00–12:00 → piksele 106–194, w połowie czasu = w połowie
+    expect(nowLineAt(column, '11:00')).toBe(150)
+  })
+  it('karta bez czasu trwania trwa do następnej: linia pod nią', () => {
+    expect(nowLineAt(column, '15:00')).toBe(306)
+  })
+  it('przed pierwszą i po ostatniej', () => {
+    expect(nowLineAt(column, '07:00')).toBe(-16)
+    expect(nowLineAt(column, '22:00')).toBe(516)
+  })
+})
+
+describe('miejsca do upuszczenia', () => {
+  it('przed, między i za kartami, z godziną; ostatnie po poprzedniej z zapasem', () => {
+    const slots = dropSlots(
+      {
+        date: '2027-07-14',
+        x: 0,
+        w: 260,
+        cards: [
+          { id: 'a', top: 0, bottom: 160, left: 0, right: 260, time: '10:00', durationMin: 60 },
+          { id: 'b', top: 220, bottom: 380, left: 0, right: 260, time: '14:00', durationMin: 120 },
+        ],
+      },
+      { id: 'new' },
+      10,
+    )
+    expect(slots).toHaveLength(3)
+    expect(slots[1]?.time).toBe('11:10')
+    expect(slots[2]?.time).toBe('16:10')
   })
 })

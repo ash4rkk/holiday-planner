@@ -39,7 +39,7 @@ export function AddVariantChip({ card }: { card: CardSnapshot }) {
     <button
       type="button"
       onClick={addOption}
-      className="min-h-9 rounded-small border border-dashed border-line px-3 text-xs text-muted transition-colors hover:text-accent"
+      className="min-h-11 rounded-small border border-dashed border-line px-3 text-xs text-muted transition-colors hover:text-accent"
     >
       + wariant
     </button>
@@ -62,8 +62,8 @@ export function VariantBar({ card }: { card: CardSnapshot }) {
             aria-pressed={c.id === card.id}
             onClick={() => show(c.id)}
             className={cx(
-              'min-h-9 max-w-36 shrink-0 truncate rounded-small px-2 text-xs',
-              c.id === card.id ? 'bg-accent/20 font-bold text-accent' : 'text-muted',
+              'min-h-11 max-w-36 shrink-0 truncate rounded-small px-2 text-xs',
+              c.id === card.id ? 'bg-active font-bold text-accent' : 'text-muted',
             )}
           >
             {c.id === mainId && main.variantChosen && '• '}
@@ -75,7 +75,7 @@ export function VariantBar({ card }: { card: CardSnapshot }) {
         <button
           type="button"
           onClick={() => chooseVariant(doc, card.id)}
-          className="min-h-9 shrink-0 rounded-small bg-accent px-2 text-xs font-bold text-on-accent"
+          className="min-h-11 shrink-0 rounded-small bg-accent px-2 text-xs font-bold text-on-accent"
         >
           wybierz
         </button>
@@ -84,7 +84,7 @@ export function VariantBar({ card }: { card: CardSnapshot }) {
         type="button"
         onClick={addOption}
         aria-label="dodaj wariant"
-        className="flex size-9 shrink-0 items-center justify-center text-muted hover:text-accent"
+        className="flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
       >
         <Plus className="size-4" aria-hidden="true" />
       </button>

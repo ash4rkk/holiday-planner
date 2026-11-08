@@ -1,8 +1,6 @@
 import Link from 'next/link'
 
 // Strona zapasowa SW, gdy ekranu nie ma w pamięci podręcznej i nie ma sieci.
-export const dynamic = 'force-static'
-
 export default function OfflinePage() {
   return (
     <main className="app mx-auto flex max-w-xl flex-col gap-1 px-px pt-1">

@@ -17,7 +17,7 @@ export function nextPlace(
   now: string,
 ): MappedCard | undefined {
   const day = cards
-    .filter((c) => !c.deletedAt && c.date === today && c.type !== 'stay')
+    .filter((c) => !c.deletedAt && !c.skipped && c.date === today && c.type !== 'stay')
     .filter(hasCoords)
   const timed = day
     .filter((c) => c.time && minutes(c.time) >= minutes(now) - 15)

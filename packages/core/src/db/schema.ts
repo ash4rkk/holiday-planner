@@ -14,7 +14,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core'
-import type { CardProposal } from '../proposals'
+import type { CardChange, CardProposal, ProposalDecision } from '../proposals'
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
   dataType: () => 'bytea',
@@ -180,6 +180,10 @@ export const aiMessages = pgTable(
     sources: jsonb('sources').$type<{ title: string; url: string }[]>().notNull().default([]),
     // Karty zaproponowane w odpowiedzi; wracają po ponownym otwarciu czatu.
     proposals: jsonb('proposals').$type<CardProposal[]>().notNull().default([]),
+    // Zmiany istniejących kart zaproponowane w tej odpowiedzi (stosuje je dopiero osoba).
+    changes: jsonb('changes').$type<CardChange[]>().notNull().default([]),
+    // Decyzje osób przy propozycjach i zmianach (`p0` = karta 0, `c1` = zmiana 1), wspólne dla obu.
+    decisions: jsonb('decisions').$type<Record<string, ProposalDecision>>().notNull().default({}),
     // „Nowa rozmowa” — starsze wiadomości zostają w bazie, ale nie idą już do modelu.
     archived: boolean('archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

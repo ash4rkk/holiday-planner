@@ -1,7 +1,9 @@
 'use client'
 
 import '@xyflow/react/dist/base.css'
+import type { DropColumn } from '@planer/core'
 import {
+  addDays,
   addVariant,
   arrangeByDays,
   CARD_SIZE,
@@ -11,33 +13,40 @@ import {
   createCard,
   createFrame,
   type DropTarget,
+  dateRange,
   dayGaps,
   dayIndexOf,
   dayOrder,
+  daysBetween,
   deleteEdge,
   deleteFrame,
   detachVariant,
   dropColumns,
+  dropSlots,
   dropTarget,
   edgesOf,
   formatDayHeader,
   formatShortDate,
   framesOf,
   GRID,
+  isBandStay,
   isIdea,
   type LegPlan,
   legIsPast,
   legShortfall,
   moveCardToDay,
   moveItems,
+  moveToIdeas,
   nextStart,
-  nowLineY,
+  nowLineAt,
   type Positions,
   renameFrame,
   resizeFrame,
   restorePositions,
+  roundClock,
   segmentHitsRect,
   setEdgeLabel,
+  shiftClock,
   snapToGrid,
   stayTimes,
   TRAVEL_MODE_LABELS,
@@ -59,36 +68,50 @@ import {
   useReactFlow,
   type Viewport,
 } from '@xyflow/react'
-import { ChevronLeft, ChevronRight, Columns3, Plus, Undo2 } from 'lucide-react'
+import {
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardPaste,
+  Columns3,
+  Plus,
+  SquareDashed,
+  SquarePlus,
+  Undo2,
+} from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { extendTrip } from '@/app/(app)/trips/actions'
 import { AddButton } from '@/components/add-button'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { InboxButton } from '@/components/inbox/inbox-button'
+import { askText, ConfirmDialog, DialogFrame } from '@/components/confirm-dialog'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
-import { cx } from '@/components/ui'
+import { buttonClass, cx } from '@/components/ui'
 import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
 import { pasteAsCard } from '@/lib/place-card'
-import { offerUndo } from '@/lib/undo'
+import { offerUndo, withUndo } from '@/lib/undo'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
+import { useDismiss } from '@/lib/use-dismiss'
 import { useTripNow } from '@/lib/use-trip-now'
 import { useWide } from '@/lib/use-wide'
 import { useAttachments, useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
 import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
+import { CardMenu } from './card-menu'
 import { CardNode } from './card-node'
 import { DayNode } from './day-node'
 import { FrameNode } from './frame-node'
 import { controlsBottom, type IdeaDrag, IdeasDrawer, PANEL_WIDTH } from './ideas-drawer'
-import { DropNode, NowNode } from './now-node'
+import { DropNode, NowNode, SlotNode } from './now-node'
 import { RemotePointers } from './remote-pointers'
 import { OrderEdge, SketchEdge } from './sketch-edge'
+import { StayNode } from './stay-node'
 import { VariantNode } from './variant-node'
 
 const nodeTypes = {
@@ -98,12 +121,17 @@ const nodeTypes = {
   now: NowNode,
   drop: DropNode,
   variant: VariantNode,
+  stay: StayNode,
+  slot: SlotNode,
 }
 const edgeTypes = { sketch: SketchEdge, order: OrderEdge }
 // Margines wysepki dnia wokół kart: z lewej kolumna godzin, u góry nagłówek dnia.
 const DAY_PAD = { left: 64, right: 28, top: 44, bottom: 20 }
 // Najmniejszy odstęp między ramkami dni.
 const DAY_SPACE = 28
+// Belki noclegów nad dniami: wysokość i odstęp między rzędami.
+const STAY_H = 40
+const STAY_GAP = 8
 const HOLD_MENU_MS = 500
 // Rozgałęzienie: warianty w pełnym rozmiarze obok karty głównej; kolejne dni odsuwają się w bok.
 const BRANCH_GAP = GRID
@@ -161,6 +189,8 @@ function BoardCanvas() {
   const [menu, setMenu] = useState<{ x: number; y: number; flow: { x: number; y: number } } | null>(
     null,
   )
+  const menuRef = useRef<HTMLDivElement>(null)
+  useDismiss(!!menu, () => setMenu(null), menuRef)
   const [undo, setUndo] = useState<Positions | null>(null)
   const [arranging, setArranging] = useState(false)
   const [legPlans, setLegPlans] = useState<Record<string, LegPlan | null>>({})
@@ -186,7 +216,11 @@ function BoardCanvas() {
     [live],
   )
   const variants = useMemo(() => variantsByMain(live), [live])
-  const onBoard = useMemo(() => live.filter((c) => !c.variantOf && !isIdea(c)), [live])
+  // Noclegi z datą nie stoją w kolumnach dni — są belkami nad dniami (stayNodes).
+  const onBoard = useMemo(
+    () => live.filter((c) => !c.variantOf && !isIdea(c) && !isBandStay(c)),
+    [live],
+  )
   const wide = useWide()
   // Szeroki ekran zawsze rozgałęzia; stos jest tylko na telefonie.
   const branches = useCallback((c: CardSnapshot) => wide && variants.has(c.id), [wide, variants])
@@ -254,7 +288,7 @@ function BoardCanvas() {
     })
   }, [onBoard, variants, frames, fileCounts])
 
-  const days = useMemo(() => dayOrder(live), [live])
+  const days = useMemo(() => dayOrder(live.filter((c) => !isBandStay(c))), [live])
   const now = useTripNow()
 
   // Stały odstęp między dniami, także w starych układach i przy rozgałęzieniach. Tylko przy
@@ -347,24 +381,84 @@ function BoardCanvas() {
     })
   }, [days, nodes, trip.startDate, trip.endDate, branchWidth, shiftAt, now?.date])
 
-  // Linia „teraz” w dzisiejszej kolumnie: w przerwie między ostatnią rozpoczętą a następną kartą.
+  // Noclegi jako belki nad dniami: od dnia zameldowania do ostatniej nocy. Nakładające się noclegi
+  // idą rząd wyżej i dostają czerwoną obwódkę.
+  const stayNodes = useMemo((): Node[] => {
+    const stays = live
+      .filter(isBandStay)
+      .sort((a, b) => (a.date as string).localeCompare(b.date as string))
+    if (!stays.length || !dayNodes.length) return []
+    const columns = dayNodes.map((n) => ({
+      date: (n.data as { date: string }).date,
+      x: n.position.x,
+      r: n.position.x + (n.width ?? 0),
+      y: n.position.y,
+    }))
+    const top = Math.min(...columns.map((c) => c.y))
+    const rows: string[] = []
+    return stays.flatMap((stay): Node[] => {
+      const from = stay.date as string
+      const to = stay.endDate && stay.endDate > from ? stay.endDate : addDays(from, 1)
+      const covered = columns.filter((c) => c.date >= from && c.date < to)
+      if (!covered.length) return []
+      let row = rows.findIndex((end) => end <= from)
+      if (row === -1) {
+        row = rows.length
+        rows.push(to)
+      } else rows[row] = to
+      const x = Math.min(...covered.map((c) => c.x))
+      const r = Math.max(...covered.map((c) => c.r))
+      return [
+        {
+          id: `stay:${stay.id}`,
+          type: 'stay',
+          position: { x, y: top - (row + 1) * (STAY_H + STAY_GAP) },
+          width: r - x,
+          height: STAY_H,
+          zIndex: 1,
+          selectable: false,
+          draggable: false,
+          focusable: false,
+          className: now && to <= now.date ? 'is-past' : undefined,
+          data: {
+            card: stay,
+            nights: daysBetween(from, to),
+            clash: row > 0,
+            cutStart: covered[0]?.date !== from,
+            cutEnd: covered.at(-1)?.date !== addDays(to, -1),
+          },
+        },
+      ]
+    })
+  }, [live, dayNodes, now])
+
+  // Linia „teraz” w dzisiejszej kolumnie wg godziny: w trakcie karty ją przecina, w przerwie stoi
+  // proporcjonalnie do czasu, który z przerwy minął.
   const nowNode = useMemo((): Node[] => {
     const today = now && days.find((d) => d.date === now.date)
     if (!now || !today) return []
     const byId = new Map(nodes.map((n) => [n.id, n]))
-    const column = today.ids.flatMap((id) => {
-      const n = byId.get(id)
-      const card = live.find((c) => c.id === id)
-      if (!n || !card?.time) return []
-      const h = n.measured?.height ?? n.height ?? CARD_SIZE.h
-      return [{ time: card.time, x: n.position.x, top: n.position.y, bottom: n.position.y + h, n }]
-    })
+    const column = today.ids
+      .flatMap((id) => {
+        const n = byId.get(id)
+        const card = live.find((c) => c.id === id)
+        if (!n || !card?.time || card.skipped) return []
+        const h = n.measured?.height ?? n.height ?? CARD_SIZE.h
+        return [
+          {
+            time: card.time,
+            durationMin: card.durationMin,
+            x: n.position.x,
+            top: n.position.y,
+            bottom: n.position.y + h,
+            n,
+          },
+        ]
+      })
+      .sort((a, b) => a.top - b.top)
     if (!column.length) return []
-    const next = column.findIndex((c) => c.time > now.time)
-    const before = column[(next === -1 ? column.length : next) - 1]
-    const after = next === -1 ? undefined : column[next]
-    const y = nowLineY(before, after)
-    const first = (before ?? after) as (typeof column)[number]
+    const y = nowLineAt(column, now.time)
+    const first = column[0] as (typeof column)[number]
     const w = first.n.measured?.width ?? first.n.width ?? CARD_SIZE.w
     return [
       {
@@ -417,29 +511,64 @@ function BoardCanvas() {
           ]
         }),
         trip,
-      ).map((column) => {
-        // Upuszczanie działa na tym, co widać; `baseX` to pozycja do zapisania w dokumencie.
-        const by = shiftAt(column.x)
-        const cards = column.cards.map((c) => {
-          const card = live.find((l) => l.id === c.id)
-          const inset = by + (insets.get(c.id) ?? 0)
-          return {
-            ...c,
-            left: c.left + inset,
-            right: c.right + inset + (card ? branchWidth(card) : 0),
-          }
+      )
+        .map((column) => {
+          // Upuszczanie działa na tym, co widać; `baseX` to pozycja do zapisania w dokumencie.
+          const by = shiftAt(column.x)
+          const cards = column.cards.map((c) => {
+            const card = live.find((l) => l.id === c.id)
+            const inset = by + (insets.get(c.id) ?? 0)
+            return {
+              ...c,
+              left: c.left + inset,
+              right: c.right + inset + (card ? branchWidth(card) : 0),
+            }
+          })
+          const right = Math.max(column.x + by + column.w, ...cards.map((c) => c.right))
+          return { ...column, baseX: column.x, x: column.x + by, w: right - column.x - by, cards }
         })
-        const right = Math.max(column.x + by + column.w, ...cards.map((c) => c.right))
-        return { ...column, baseX: column.x, x: column.x + by, w: right - column.x - by, cards }
-      }),
+        .concat(newDayColumn()),
     [nodes, trip, live, shiftAt, insets, branchWidth],
   )
+  /**
+   * Kolumna „+ nowy dzień” za ostatnim dniem wyjazdu: upuszczenie tam wydłuża wyjazd o dzień.
+   * Liczona z już policzonych kolumn, więc stoi obok ostatniej ramki.
+   */
+  function newDayColumn(): (DropColumn & { baseX: number; newDay?: boolean })[] {
+    if (!trip.startDate) return []
+    const next = addDays(trip.endDate ?? trip.startDate, 1)
+    const known = dropColumns(
+      nodes.flatMap((n) => {
+        const card = (n.data as { card?: CardSnapshot }).card
+        if (!card?.date) return []
+        const { x, y } = n.position
+        const w = n.width ?? CARD_SIZE.w
+        return [
+          { id: n.id, date: card.date, left: x, right: x + w, top: y, bottom: y + CARD_SIZE.h },
+        ]
+      }),
+      trip,
+    )
+    if (!known.length || known.some((c) => c.date === next)) return []
+    const baseRight = Math.max(...known.map((c) => c.x + c.w))
+    const baseX = baseRight + DAY_PAD.right + DAY_SPACE + DAY_PAD.left
+    return [
+      { date: next, x: baseX + shiftAt(baseX), w: CARD_SIZE.w, cards: [], baseX, newDay: true },
+    ]
+  }
   const [drop, setDropState] = useState<Drop>(null)
   const dropRef = useRef<Drop>(null)
   const setDrop = (next: Drop) => {
     dropRef.current = next
     setDropState(next)
   }
+  // Upuszczenie na dzień, który już minął (albo dziś przed „teraz”) — ostrzeżenie w podpowiedzi.
+  const dropPast = Boolean(
+    drop?.kind === 'day' &&
+      now &&
+      (drop.date < now.date || (drop.date === now.date && drop.time && drop.time < now.time)),
+  )
+  const dropNewDay = drop?.kind === 'day' && Boolean(trip.endDate && drop.date > trip.endDate)
   const dropNode = useMemo((): Node[] => {
     if (drop?.kind !== 'day') return []
     return [
@@ -455,11 +584,98 @@ function BoardCanvas() {
         focusable: false,
         style: { pointerEvents: 'none' },
         data: {
-          label: [formatShortDate(drop.date), drop.time].filter(Boolean).join(' · '),
+          label: [
+            dropNewDay && 'nowy dzień',
+            formatShortDate(drop.date),
+            drop.time,
+            dropPast && 'już minęło',
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          warn: dropPast,
         },
       },
     ]
-  }, [drop])
+  }, [drop, dropPast, dropNewDay])
+
+  // Podczas przeciągania: miejsca „+ godzina” w kolumnach, puste dni i „+ nowy dzień”, żeby było
+  // widać, gdzie karta wyląduje — także za ostatnią kartą dnia.
+  const [dragCard, setDragCard] = useState<CardSnapshot | null>(null)
+  const frameTop = useMemo(
+    () => (dayNodes.length ? Math.min(...dayNodes.map((n) => n.position.y)) : 0),
+    [dayNodes],
+  )
+  // Puste dni wyjazdu (np. po „dodaj dzień”) jako ramki bez kart, żeby było je widać i dało się na nie
+  // upuścić kartę.
+  const emptyDayNodes = useMemo(
+    (): Node[] =>
+      columns
+        .filter((c) => !c.cards.length && !(c as { newDay?: boolean }).newDay)
+        .map((c): Node => {
+          const index = dayIndexOf(c.date, trip.startDate, trip.endDate)
+          return {
+            id: `day:${c.date}`,
+            type: 'day',
+            position: { x: c.x - DAY_PAD.left, y: frameTop },
+            width: c.w + DAY_PAD.left + DAY_PAD.right,
+            height: DAY_PAD.top + CARD_SIZE.h + DAY_PAD.bottom,
+            zIndex: 0,
+            selectable: false,
+            draggable: false,
+            focusable: false,
+            className: now && c.date < now.date ? 'is-past' : undefined,
+            style: { pointerEvents: 'none' },
+            data: {
+              date: c.date,
+              label: formatDayHeader(c.date),
+              sub: index ? `dzień ${index} · pusty` : 'pusty',
+              today: c.date === now?.date,
+            },
+          }
+        }),
+    [columns, frameTop, trip.startDate, trip.endDate, now],
+  )
+  const slotNodes = useMemo((): Node[] => {
+    if (!dragCard) return []
+    return columns.flatMap((column): Node[] => {
+      const { newDay } = column as { newDay?: boolean }
+      if (!column.cards.length) {
+        const label = newDay
+          ? `+ nowy dzień · ${formatShortDate(column.date)}`
+          : `+ ${formatShortDate(column.date)}`
+        return [
+          {
+            id: `slot-day:${column.date}`,
+            type: 'slot',
+            position: { x: column.x, y: frameTop + DAY_PAD.top },
+            width: column.w,
+            height: CARD_SIZE.h,
+            zIndex: 0,
+            selectable: false,
+            draggable: false,
+            focusable: false,
+            style: { pointerEvents: 'none' },
+            data: { label, day: true, active: drop?.kind === 'day' && drop.date === column.date },
+          },
+        ]
+      }
+      return dropSlots(column, dragCard, trip.travelBufferMin).map(
+        (slot, i): Node => ({
+          id: `slot:${column.date}:${i}`,
+          type: 'slot',
+          position: { x: column.x, y: slot.y - 9 },
+          width: column.w,
+          height: 18,
+          zIndex: 2,
+          selectable: false,
+          draggable: false,
+          focusable: false,
+          style: { pointerEvents: 'none' },
+          data: { label: `+ ${slot.time ?? ''}`.trim(), day: false, active: false },
+        }),
+      )
+    })
+  }, [dragCard, columns, frameTop, trip.travelBufferMin, drop])
 
   const shownNodes = useMemo(
     () => [
@@ -467,6 +683,9 @@ function BoardCanvas() {
         const { date } = n.data as { date: string }
         return now && date < now.date ? { ...n, className: 'is-past' } : n
       }),
+      ...emptyDayNodes,
+      ...stayNodes,
+      ...slotNodes,
       ...nowNode,
       ...dropNode,
       ...nodes.flatMap((n): Node[] => {
@@ -526,6 +745,9 @@ function BoardCanvas() {
     ],
     [
       dayNodes,
+      stayNodes,
+      slotNodes,
+      emptyDayNodes,
       nowNode,
       dropNode,
       nodes,
@@ -681,7 +903,8 @@ function BoardCanvas() {
 
   // ---------- pomysły: drawer i przeciąganie na dzień ----------
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [trashing, setTrashing] = useState<string | null>(null)
+  // Menu karty (prawy klik, przytrzymanie) w punkcie ekranu.
+  const [cardMenu, setCardMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const [boardDragging, setBoardDragging] = useState(false)
   const [ghost, setGhost] = useState<{ card: CardSnapshot; x: number; y: number } | null>(null)
   const [placed, setPlaced] = useState<Placed | null>(null)
@@ -692,7 +915,9 @@ function BoardCanvas() {
     try {
       stored = localStorage.getItem(PANEL_KEY)
     } catch {}
-    setDrawerOpen(wide && stored !== 'closed')
+    // Po udostępnieniu miejsca (`?ideas=1`) pomysły otwarte także na telefonie.
+    const fromShare = new URLSearchParams(window.location.search).get('ideas') === '1'
+    setDrawerOpen(fromShare || (wide && stored !== 'closed'))
   }, [wide])
   const toggleDrawer = () => {
     setDrawerOpen(!drawerOpen)
@@ -712,6 +937,13 @@ function BoardCanvas() {
       ? { kind: 'ideas' }
       : dropTarget(rf.screenToFlowPosition(screen), columns, card, trip.travelBufferMin)
 
+  const router = useRouter()
+  const [pendingVariant, setPendingVariant] = useState<{
+    card: CardSnapshot
+    targetId: string
+    undo: () => void
+  } | null>(null)
+  const [addingDay, setAddingDay] = useState(false)
   /** Zapisuje upuszczenie: pomysł, wariant albo miejsce w dniu, z godziną do poprawienia. */
   const place = (card: CardSnapshot, target: NonNullable<Drop>) => {
     const { date, endDate, time, x, y } = card
@@ -724,10 +956,12 @@ function BoardCanvas() {
       moveCardToDay(doc, card.id, undefined)
       offerUndo('karta w pomysłach', undoPlace)
     } else if (target.kind === 'variant') {
-      animate()
-      addVariant(doc, card.id, target.id)
-      offerUndo('dodano wariant', undoPlace)
+      // Wariant tylko po potwierdzeniu: upuszczenie na kartę łatwo zrobić przez przypadek.
+      setPendingVariant({ card, targetId: target.id, undo: undoPlace })
     } else {
+      // Upuszczenie za ostatnim dniem wydłuża wyjazd o ten dzień.
+      if (trip.endDate && target.date > trip.endDate)
+        void extendTrip(trip.id, target.date).then((ok) => ok && router.refresh())
       moveCardToDay(doc, card.id, target.date)
       updateCard(doc, card.id, { time: target.time })
       if (target.empty) {
@@ -743,6 +977,7 @@ function BoardCanvas() {
   const ideaDrag: IdeaDrag = {
     start: (card, x, y) => {
       setGhost({ card, x, y })
+      setDragCard(card)
       setPlaced(null)
       if (!wide) setDrawerOpen(false)
       edgePan.current = setInterval(() => ideaMove.current(), 16)
@@ -766,6 +1001,7 @@ function BoardCanvas() {
       const target = dropRef.current
       setDrop(null)
       setGhost(null)
+      setDragCard(null)
       if (target) place(card, target)
     },
   }
@@ -795,6 +1031,7 @@ function BoardCanvas() {
     },
     dragStart: (kind, id) => {
       setMenu(null)
+      setCardMenu(null)
       const many = kind === 'card' && group.size > 1 && group.has(id)
       if (!many) {
         setGroup(new Set())
@@ -811,6 +1048,7 @@ function BoardCanvas() {
       const card = kind === 'card' && !many ? live.find((c) => c.id === id) : undefined
       drag.current = { start, dx: 0, dy: 0, lead: kind === 'card' ? id : frameNodeId(id), card }
       setBoardDragging(Boolean(card))
+      setDragCard(card ?? null)
     },
     dragMove: (dx, dy) => {
       const d = drag.current
@@ -843,6 +1081,7 @@ function BoardCanvas() {
       const target = dropRef.current
       setDrop(null)
       setBoardDragging(false)
+      setDragCard(null)
       if (!d || (!d.dx && !d.dy)) return
       if (d.card && target) {
         setUndo(null)
@@ -868,16 +1107,21 @@ function BoardCanvas() {
     },
     trash: (id) => {
       setSelection(null)
-      setTrashing(id)
+      withUndo(doc, 'karta w koszu', () => trashCard(doc, id))
+    },
+    openMenu: (id, x, y) => {
+      setSelection({ kind: 'card', id })
+      setCardMenu({ id, x, y })
     },
     renameFrame: (id) => {
       const current = framesOf(doc).get(id)?.get('title') as string | undefined
-      const title = window.prompt('nazwa ramki', current ?? '')?.trim()
-      if (title) renameFrame(doc, id, title)
+      void askText({ title: 'nazwa ramki', value: current ?? '' }).then(
+        (title) => title && renameFrame(doc, id, title),
+      )
     },
     deleteFrame: (id) => {
       setSelection(null)
-      deleteFrame(doc, id)
+      withUndo(doc, 'ramka usunięta', () => deleteFrame(doc, id))
     },
     resizeFrame: (id, { x, y, w, h }) =>
       resizeFrame(doc, id, {
@@ -888,12 +1132,16 @@ function BoardCanvas() {
       }),
     labelEdge: (id) => {
       const current = edgesOf(doc).get(id)?.get('label') as string | undefined
-      const label = window.prompt('etykieta strzałki, np. „pociąg 2 h”', current ?? '')
-      if (label !== null && label !== undefined) setEdgeLabel(doc, id, label)
+      void askText({
+        title: 'etykieta strzałki',
+        placeholder: 'np. pociąg 2 h',
+        value: current ?? '',
+        allowEmpty: true,
+      }).then((label) => label !== null && setEdgeLabel(doc, id, label))
     },
     deleteEdge: (id) => {
       setSelection(null)
-      deleteEdge(doc, id)
+      withUndo(doc, 'strzałka usunięta', () => deleteEdge(doc, id))
     },
   }
 
@@ -938,9 +1186,10 @@ function BoardCanvas() {
     rf.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
 
   const menuItems = menu && [
-    { label: 'nowa karta', run: () => addCard(menu.flow) },
+    { label: 'nowa karta', icon: SquarePlus, run: () => addCard(menu.flow) },
     {
       label: 'ramka',
+      icon: SquareDashed,
       run: () => {
         const id = createFrame(doc, { x: snapToGrid(menu.flow.x), y: snapToGrid(menu.flow.y) })
         setMenu(null)
@@ -948,13 +1197,26 @@ function BoardCanvas() {
       },
     },
     {
-      label: 'wklej',
+      label: 'wklej link',
+      icon: ClipboardPaste,
       run: async () => {
         const id = await pasteAsCard(doc, centered(menu.flow))
         setMenu(null)
         if (id) setSelection({ kind: 'card', id })
       },
     },
+    ...(trip.startDate
+      ? [
+          {
+            label: 'dodaj dzień',
+            icon: CalendarPlus,
+            run: () => {
+              setMenu(null)
+              setAddingDay(true)
+            },
+          },
+        ]
+      : []),
   ]
 
   // Strzałki w rogu: kadr przeskakuje na poprzedni lub następny dzień.
@@ -1021,7 +1283,9 @@ function BoardCanvas() {
           pointers.current++
           cancelHold()
           if (pointers.current > 1 || e.pointerType === 'mouse') return
-          if (!(e.target as HTMLElement).closest('.react-flow__pane')) return
+          const target = e.target as HTMLElement
+          // Menu tła tylko na pustym miejscu — karta ma własne menu (przytrzymanie) i nie leży „pod” tłem.
+          if (!target.closest('.react-flow__pane') || target.closest('.react-flow__node')) return
           const { clientX: x, clientY: y } = e
           hold.current = { x, y, timer: setTimeout(() => openMenu(x, y), HOLD_MENU_MS) }
         }}
@@ -1075,7 +1339,7 @@ function BoardCanvas() {
           <Background variant={BackgroundVariant.Dots} gap={GRID} size={1.4} />
         </ReactFlow>
 
-        <div className="pointer-events-none absolute inset-x-px top-1 z-10 [&>*]:pointer-events-auto">
+        <div className="pointer-events-none absolute inset-x-px top-1 z-(--z-overlay) [&>*]:pointer-events-auto">
           <TopBar
             title={<TripTitle />}
             back={TRIPS_BACK}
@@ -1084,7 +1348,7 @@ function BoardCanvas() {
             actions={
               <>
                 <ChatButton onOpenCard={(id) => sheet.open(id)} />
-                <InboxButton />
+                <TripStatus />
                 {undo && (
                   <button
                     type="button"
@@ -1101,7 +1365,6 @@ function BoardCanvas() {
             }
             more={
               <>
-                <TripStatus />
                 <button
                   type="button"
                   onClick={arrange}
@@ -1118,7 +1381,7 @@ function BoardCanvas() {
 
         {days.length > 0 && (
           <div
-            className="island absolute right-1 z-10 flex items-center"
+            className="island absolute right-1 z-(--z-overlay) flex items-center"
             style={{ bottom: controlsBottom(wide) }}
           >
             <button
@@ -1129,11 +1392,9 @@ function BoardCanvas() {
             >
               <ChevronLeft className="size-5" aria-hidden="true" />
             </button>
-            {focused && (
-              <span className="px-1 text-xs whitespace-nowrap text-subtle">
-                {formatShortDate(focused)}
-              </span>
-            )}
+            <span className="px-1 text-xs whitespace-nowrap text-subtle">
+              {focused ? formatShortDate(focused) : 'dni'}
+            </span>
             <button
               type="button"
               onClick={() => jump(1)}
@@ -1158,7 +1419,7 @@ function BoardCanvas() {
 
         {placed && (
           <div
-            className="island absolute left-1 z-10 flex items-center gap-1 pl-3 text-sm"
+            className="island absolute left-1 z-(--z-overlay) flex items-center gap-1 pl-3 text-sm"
             style={{ bottom: `calc(${controlsBottom(wide)} + 52px)` }}
           >
             <span className="text-subtle">{formatShortDate(placed.date)}</span>
@@ -1194,10 +1455,35 @@ function BoardCanvas() {
 
         {ghost && (
           <div
-            className="island pointer-events-none fixed z-50 max-w-48 -translate-x-1/2 -translate-y-1/2 truncate border-accent px-3 py-2 text-sm font-bold"
+            className="island pointer-events-none fixed z-(--z-dialog) max-w-48 -translate-x-1/2 -translate-y-1/2 truncate border-accent px-3 py-2 text-sm font-bold"
             style={{ left: ghost.x, top: ghost.y }}
           >
             {ghost.card.title || 'bez tytułu'}
+          </div>
+        )}
+
+        {dragCard && (
+          <div
+            role="status"
+            className={cx(
+              'island pointer-events-none fixed top-16 left-1/2 z-(--z-dialog) -translate-x-1/2 px-3 py-2 text-sm whitespace-nowrap',
+              dropPast ? 'border-red text-red' : drop ? 'border-accent text-accent' : 'text-muted',
+            )}
+          >
+            {drop?.kind === 'day'
+              ? [
+                  dropNewDay ? '+ nowy dzień' : '→',
+                  formatShortDate(drop.date),
+                  drop.time,
+                  dropPast && '· już minęło',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+              : drop?.kind === 'variant'
+                ? `wariant karty „${live.find((c) => c.id === drop.id)?.title || 'bez tytułu'}”`
+                : drop?.kind === 'ideas'
+                  ? 'do pomysłów'
+                  : 'luzem na Tablicy'}
           </div>
         )}
 
@@ -1215,22 +1501,25 @@ function BoardCanvas() {
 
         {menu && menuItems && (
           <div
+            ref={menuRef}
             role="menu"
-            className="island absolute z-20 flex min-w-40 flex-col p-1"
+            className="island fade-in absolute z-(--z-popover) flex min-w-48 flex-col p-1"
+            // Cały na ekranie: szerokość min-w-48, wysokość z liczby pozycji (44 px + ramka).
             style={{
-              left: Math.min(menu.x, window.innerWidth - 176),
-              top: Math.min(menu.y, window.innerHeight - 180),
+              left: Math.min(menu.x, window.innerWidth - 192 - 8),
+              top: Math.min(menu.y, window.innerHeight - menuItems.length * 44 - 16),
             }}
           >
-            {menuItems.map((item) => (
+            {menuItems.map(({ label, icon: Icon, run }) => (
               <button
-                key={item.label}
+                key={label}
                 type="button"
                 role="menuitem"
-                onClick={item.run}
-                className="min-h-11 rounded-[9px] px-3 text-left text-sm hover:bg-raised"
+                onClick={run}
+                className="flex min-h-11 items-center gap-2 rounded-inner px-3 text-left text-sm hover:bg-raised"
               >
-                {item.label}
+                <Icon className="size-4 text-muted" aria-hidden="true" />
+                {label}
               </button>
             ))}
           </div>
@@ -1252,16 +1541,112 @@ function BoardCanvas() {
         />
       </div>
 
-      {trashing && (
+      {cardMenu &&
+        (() => {
+          const card = live.find((c) => c.id === cardMenu.id)
+          if (!card) return null
+          // Dni wyjazdu, a bez dat — dni, które już mają karty.
+          const menuDays = trip.startDate
+            ? dateRange(trip.startDate, trip.endDate ?? trip.startDate)
+            : days.map((d) => d.date)
+          return (
+            <CardMenu
+              card={card}
+              at={{ x: cardMenu.x, y: cardMenu.y }}
+              days={menuDays}
+              wide={wide}
+              onClose={() => setCardMenu(null)}
+              actions={{
+                togglePin: () => updateCard(doc, card.id, { pinned: !card.pinned }),
+                moveToDay: (date) => {
+                  animate()
+                  moveCardToDay(doc, card.id, date)
+                },
+                toIdeas: () => {
+                  setSelection(null)
+                  withUndo(doc, 'karta w pomysłach', () => moveToIdeas(doc, card.id))
+                },
+                toggleSkip: () =>
+                  withUndo(doc, card.skipped ? 'karta wróciła do planu' : 'karta pominięta', () =>
+                    updateCard(doc, card.id, { skipped: !card.skipped || undefined }),
+                  ),
+                trash: () => api.trash(card.id),
+              }}
+            />
+          )
+        })()}
+
+      {pendingVariant &&
+        (() => {
+          const { card, targetId, undo } = pendingVariant
+          const target = live.find((c) => c.id === targetId)
+          const close = () => setPendingVariant(null)
+          const cancel = () => {
+            // Karta przeciągana po Tablicy wraca na swoje miejsce.
+            moveItems(doc, { cards: { [card.id]: { x: card.x, y: card.y } } })
+            close()
+          }
+          const besideTime =
+            target?.time &&
+            roundClock(shiftClock(target.time, (target.durationMin ?? 60) + trip.travelBufferMin))
+          return (
+            <DialogFrame title="zrobić wariant?" onCancel={cancel}>
+              <p className="text-sm text-muted">
+                „{card.title || 'bez tytułu'}” jako wariant karty „{target?.title || 'bez tytułu'}”
+                — jedna z nich trafi do planu, druga zostanie w zapasie.
+              </p>
+              <div className="mt-1 flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    animate()
+                    addVariant(doc, card.id, targetId)
+                    offerUndo('dodano wariant', undo)
+                    close()
+                  }}
+                  className={buttonClass('primary')}
+                >
+                  zrób wariant
+                </button>
+                {target?.date && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      moveCardToDay(doc, card.id, target.date)
+                      updateCard(doc, card.id, { time: besideTime || undefined })
+                      setPlaced({
+                        id: card.id,
+                        date: target.date as string,
+                        time: besideTime ?? '',
+                        undo,
+                      })
+                      close()
+                    }}
+                    className={buttonClass('island', 'border-accent text-accent')}
+                  >
+                    wstaw za nią{besideTime ? ` · ${besideTime}` : ''}
+                  </button>
+                )}
+                <button type="button" onClick={cancel} className={buttonClass('island')}>
+                  anuluj
+                </button>
+              </div>
+            </DialogFrame>
+          )
+        })()}
+
+      {addingDay && trip.startDate && (
         <ConfirmDialog
-          title="Przenieść do kosza?"
-          body="Karta zniknie z planu. Można ją przywrócić z kosza na Liście przez 30 dni."
-          confirm="do kosza"
+          title="dodać dzień?"
+          body={`Wyjazd wydłuży się do ${formatDayHeader(addDays(trip.endDate ?? trip.startDate, 1))}. Pusty dzień pojawi się na Tablicy obok ostatniego.`}
+          confirm="dodaj dzień"
           onConfirm={() => {
-            trashCard(doc, trashing)
-            setTrashing(null)
+            setAddingDay(false)
+            void extendTrip(trip.id, addDays(trip.endDate ?? (trip.startDate as string), 1)).then(
+              (ok) => ok && router.refresh(),
+            )
           }}
-          onCancel={() => setTrashing(null)}
+          onCancel={() => setAddingDay(false)}
         />
       )}
 

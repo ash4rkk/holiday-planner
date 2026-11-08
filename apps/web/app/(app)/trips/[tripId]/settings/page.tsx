@@ -3,12 +3,16 @@ import { TopBar } from '@/components/top-bar'
 import { FamilyLink } from '@/components/trips/family-link'
 import { TripForm } from '@/components/trips/trip-form'
 import { buttonClass, Island } from '@/components/ui'
+import { tripSettingsBack } from '@/lib/back'
 import { activeShareLink } from '@/lib/share-links'
 import { getTrip } from '@/lib/trips'
 import { setTripArchived, updateTrip } from '../../actions'
 
-export default async function TripSettingsPage({ params }: PageProps<'/trips/[tripId]/settings'>) {
-  const { tripId } = await params
+export default async function TripSettingsPage({
+  params,
+  searchParams,
+}: PageProps<'/trips/[tripId]/settings'>) {
+  const [{ tripId }, { from }] = await Promise.all([params, searchParams])
   const trip = await getTrip(tripId)
   if (!trip) notFound()
   const token = await activeShareLink(trip.id)
@@ -16,10 +20,7 @@ export default async function TripSettingsPage({ params }: PageProps<'/trips/[tr
 
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
-      <TopBar
-        title="ustawienia wyjazdu"
-        back={{ href: `/trips/${trip.id}/list`, label: 'wróć do listy' }}
-      />
+      <TopBar title="ustawienia wyjazdu" back={tripSettingsBack(trip.id, from)} />
       <Island className="p-4">
         <TripForm action={updateTrip.bind(null, trip.id)} trip={trip} submitLabel="zapisz" />
       </Island>

@@ -1,12 +1,12 @@
 import { formatAmount } from '@planer/core'
 import { routesBudgetPln, routesLimit, routesUsedThisMonth } from '@planer/core/routes'
 import { Route } from 'lucide-react'
+import { connection } from 'next/server'
 import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 
-export const dynamic = 'force-dynamic'
-
 export default async function RoutesSettingsPage() {
+  await connection()
   const routes = Boolean(process.env.GOOGLE_ROUTES_API_KEY)
   const checks = routes ? await routesUsedThisMonth().catch(() => 0) : 0
   return (

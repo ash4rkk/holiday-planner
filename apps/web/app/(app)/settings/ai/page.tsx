@@ -1,13 +1,13 @@
 import { formatAmount } from '@planer/core'
 import { Sparkles } from 'lucide-react'
+import { connection } from 'next/server'
 import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 import { MONTHLY_BUDGET_PLN, spentThisMonthPln } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured } from '@/lib/ai/client'
 
-export const dynamic = 'force-dynamic'
-
 export default async function AiSettingsPage() {
+  await connection()
   const spent = await spentThisMonthPln().catch(() => 0)
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">

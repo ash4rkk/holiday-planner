@@ -68,7 +68,7 @@ export function CardAttachments({ cardId }: { cardId: string }) {
                   <FileText className="size-8" aria-hidden="true" />
                 </span>
               )}
-              <span className="truncate px-1.5 py-1 text-[11px] text-teal">{f.name}</span>
+              <span className="truncate px-1.5 py-1 text-2xs text-teal">{f.name}</span>
               <span className="sr-only">{formatSize(f.size)}</span>
             </button>
           ))}
@@ -86,7 +86,7 @@ export function CardAttachments({ cardId }: { cardId: string }) {
         type="button"
         disabled={state.busy}
         onClick={() => input.current?.click()}
-        className="flex min-h-9 items-center gap-1 self-start rounded-small border border-line px-3 text-xs text-muted transition-colors hover:text-accent disabled:opacity-50"
+        className="flex min-h-11 items-center gap-1 self-start rounded-small border border-line px-3 text-xs text-muted transition-colors hover:text-accent disabled:opacity-50"
       >
         <Paperclip className="size-3.5" aria-hidden="true" />
         {state.busy ? 'wysyłam…' : '+ plik (bilet, rezerwacja, paragon)'}

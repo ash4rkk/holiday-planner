@@ -44,6 +44,7 @@ export function CardFace({
           className={cx(
             'line-clamp-2 min-w-0 flex-1 font-bold leading-tight',
             !card.title && 'font-normal text-dim italic',
+            card.skipped && 'text-dim line-through',
           )}
         >
           {card.title || 'bez tytułu'}
@@ -60,7 +61,7 @@ export function CardFace({
       <CardMetaLine card={card} files={files} />
       {stayUntil && <span className="text-xs text-teal">możesz zostać do {stayUntil}</span>}
       {card.preview && (
-        <span className="line-clamp-3 text-[13px] leading-snug text-muted">{card.preview}</span>
+        <span className="line-clamp-3 text-sm leading-snug text-muted">{card.preview}</span>
       )}
     </>
   )

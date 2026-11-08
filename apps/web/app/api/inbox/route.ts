@@ -14,7 +14,7 @@ const body = z.object({
   clientKey: z.string().max(64).optional(),
 })
 
-/** Udostępnione miejsce do skrzynki wyjazdu (z ekranu /share lub z kolejki offline). */
+/** Udostępnione miejsce czeka tu na wyjazd (z ekranu /share lub z kolejki offline); otwarty wyjazd robi z niego pomysł. */
 export async function POST(request: Request) {
   const user = await getCurrentUser()
   const parsed = body.safeParse(await request.json().catch(() => null))

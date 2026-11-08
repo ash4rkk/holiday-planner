@@ -2,17 +2,19 @@ import { notFound } from 'next/navigation'
 import { Flag } from '@/components/trips/flag'
 import { UndoToast } from '@/components/undo-toast'
 import { getCurrentUser } from '@/lib/auth/user'
-import { countInbox } from '@/lib/inbox'
 import { listTemplates } from '@/lib/templates'
 import { getTrip } from '@/lib/trips'
 import { TripProvider } from '@/lib/yjs/trip-doc'
 
+// Wejście do wyjazdu czeka na dane (wyjazd, profil, szablony) — pokazuje wtedy szkielet z
+// /trips/loading.tsx. Przejścia między widokami wyjazdu tego layoutu nie przeładowują.
+export const instant = false
+
 export default async function TripLayout({ params, children }: LayoutProps<'/trips/[tripId]'>) {
   const { tripId } = await params
-  const [trip, user, inboxCount, templates] = await Promise.all([
+  const [trip, user, templates] = await Promise.all([
     getTrip(tripId),
     getCurrentUser(),
-    countInbox(tripId).catch(() => 0),
     listTemplates(),
   ])
   if (!trip) notFound()
@@ -27,7 +29,6 @@ export default async function TripLayout({ params, children }: LayoutProps<'/tri
         endDate,
         currencies,
         archived,
-        inboxCount,
         templates,
         travelMode,
         travelBufferMin,

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { ProfilePhoto } from '@/components/profile/profile-photo'
 import { cx } from '@/components/ui'
 import {
@@ -11,11 +12,16 @@ import {
   useTrip,
 } from '@/lib/yjs/trip-doc'
 
-const STATUS: Record<SyncStatus, { label: string; dot: string }> = {
+// `short` stoi przy kropce, gdy nie jest „na żywo” — podpowiedź (title) na telefonie nie działa.
+const STATUS: Record<SyncStatus, { label: string; short?: string; dot: string }> = {
   live: { label: 'na żywo', dot: 'bg-green' },
-  connecting: { label: 'łączenie…', dot: 'bg-dim' },
-  offline: { label: 'offline · zmiany zapisane na telefonie', dot: 'bg-dim' },
-  login: { label: 'sesja wygasła', dot: 'bg-red' },
+  connecting: {
+    label: 'łączenie…',
+    short: 'łączę…',
+    dot: 'bg-dim animate-pulse motion-reduce:animate-none',
+  },
+  offline: { label: 'offline · zmiany zapisane na telefonie', short: 'offline', dot: 'bg-amber' },
+  login: { label: 'sesja wygasła', short: 'zaloguj', dot: 'bg-red' },
 }
 
 /** Wysepka w nagłówku wyjazdu i przycisk ustawień aplikacji: Twoje zdjęcie, kto jeszcze jest, stan sync. */
@@ -24,12 +30,13 @@ export function TripStatus() {
   const { user } = useTrip()
   // Twoje drugie urządzenie to też Ty, więc zdjęcie się nie dubluje.
   const others = usePresence<{ user: PresenceUser }>().filter((o) => o.user.name !== user.name)
-  const { label, dot } = STATUS[status]
+  const { label, short, dot } = STATUS[status]
+  const from = usePathname()
 
   return (
     <Link
-      href="/settings"
-      aria-label="ustawienia aplikacji"
+      href={`/settings?from=${encodeURIComponent(from)}`}
+      aria-label={`ustawienia aplikacji · ${label}`}
       title={label}
       className="island flex h-11 shrink-0 items-center gap-1 px-2 hover:border-accent"
     >
@@ -44,8 +51,12 @@ export function TripStatus() {
           <ProfilePhoto name={user.name} className="size-full" />
         </span>
       ))}
-      <span className={cx('size-2.5 rounded-full', dot)} aria-hidden="true" />
-      <span className="sr-only">{label}</span>
+      <span className={cx('size-2.5 shrink-0 rounded-full', dot)} aria-hidden="true" />
+      {short && (
+        <span className="pr-1 text-xs text-subtle italic" aria-hidden="true">
+          {short}
+        </span>
+      )}
     </Link>
   )
 }
@@ -57,7 +68,7 @@ export function SessionBanner() {
   return (
     <a
       href={typeof window === 'undefined' ? '/' : window.location.pathname}
-      className="island fixed inset-x-1 top-14 z-40 flex min-h-11 items-center gap-2 border-red px-4 text-sm"
+      className="island fixed inset-x-1 top-[calc(env(safe-area-inset-top)+56px)] z-(--z-sheet) flex min-h-11 items-center gap-2 border-red px-4 text-sm"
     >
       <span className="text-red">●</span>
       <span className="flex-1">sesja wygasła — zmiany są bezpieczne na telefonie</span>

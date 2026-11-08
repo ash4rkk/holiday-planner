@@ -1,15 +1,18 @@
 'use client'
 
 import { MoreHorizontal } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
+import { useDismiss } from '@/lib/use-dismiss'
 
 /** „⋯” na wąskim ekranie: rzadsze akcje paska; na szerszym stoją w pasku, a przycisku nie ma. */
 export function MoreMenu({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useDismiss(open, () => setOpen(false), ref)
   return (
     <>
       <div className="hidden sm:contents">{children}</div>
-      <div className="relative sm:hidden">
+      <div ref={ref} className="relative sm:hidden">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -20,7 +23,11 @@ export function MoreMenu({ children }: { children: ReactNode }) {
           <MoreHorizontal className="size-5" aria-hidden="true" />
         </button>
         {open && (
-          <div className="more-panel island fade-in absolute top-full right-0 z-20 mt-1 flex items-center p-1">
+          // Wybór akcji zamyka menu (linki i przyciski w środku nie wiedzą o „⋯”).
+          <div
+            onClick={() => setOpen(false)}
+            className="more-panel island fade-in absolute top-full right-0 z-(--z-popover) mt-2 flex items-center p-1"
+          >
             {children}
           </div>
         )}

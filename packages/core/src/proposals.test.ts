@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import * as Y from 'yjs'
 import type { CardSnapshot } from './cards'
-import { matchingCard, normalizeProposals, proposalText } from './proposals'
+import {
+  applyCardChange,
+  type CardChange,
+  type CardProposal,
+  matchingCard,
+  normalizeChanges,
+  normalizeProposals,
+  proposalsSummary,
+  proposalText,
+} from './proposals'
+import { createCard, readCards } from './trip-doc'
 
 describe('normalizeProposals', () => {
   it('przepuszcza poprawne pola', () => {
@@ -59,7 +70,7 @@ describe('proposalText', () => {
         notes: 'bilety online',
         amount: { value: 15.5, currency: 'EUR' },
       }),
-    ).toBe('Zamek\nbilety online\n/+15,5 EUR')
+    ).toBe('Zamek\nuwagi: bilety online\n/+15,5 EUR')
     expect(
       proposalText({ type: 'food', title: 'Obiad', amount: { value: 60, currency: 'PLN' } }),
     ).toBe('Obiad\n/+60')
@@ -78,7 +89,7 @@ describe('kontrola propozycji', () => {
       currency: 'EUR',
     })
     expect(card).toMatchObject({ title: 'Obiad', notes: 'Drogo.' })
-    expect(proposalText(card as NonNullable<typeof card>)).toBe('Obiad\nDrogo.\n/+30 EUR')
+    expect(proposalText(card as NonNullable<typeof card>)).toBe('Obiad\nuwagi: Drogo.\n/+30 EUR')
   })
 
   it('data spoza wyjazdu robi z karty pomysł bez terminu', () => {
@@ -102,5 +113,89 @@ describe('kontrola propozycji', () => {
     expect(matchingCard({ type: 'food', title: 'x' }, [card])).toBeUndefined()
     const gone = { ...card, deletedAt: '2027-01-01' }
     expect(matchingCard({ type: 'food', title: 'pastéis de belém' }, [gone])).toBeUndefined()
+  })
+})
+
+describe('propozycje: adres, opis, uwagi, bilety', () => {
+  it('osobne pola i treść karty z uwagami i linkiem', () => {
+    const [p] = normalizeProposals({
+      cards: [
+        {
+          type: 'sight',
+          title: 'Torre de Belém',
+          place: 'Torre de Belém, Lizbona',
+          address: 'Av. Brasília, 1400-038 Lisboa',
+          description: 'Wieża obronna z XVI wieku nad Tagiem.',
+          notes: 'kolejka rano krótsza',
+          tickets_url: 'https://www.museusemonumentos.pt/bilhetes',
+          needs_booking: true,
+        },
+      ],
+    })
+    expect(p?.address).toBe('Av. Brasília, 1400-038 Lisboa')
+    expect(p?.booking).toBe(true)
+    expect(proposalText(p as CardProposal).split('\n')).toEqual([
+      'Torre de Belém',
+      'Wieża obronna z XVI wieku nad Tagiem.',
+      'uwagi: kolejka rano krótsza',
+      'bilety: https://www.museusemonumentos.pt/bilhetes',
+    ])
+  })
+
+  it('link tylko http(s)', () => {
+    const [p] = normalizeProposals({
+      cards: [{ type: 'sight', title: 'x', tickets_url: 'javascript:alert(1)' }],
+    })
+    expect(p?.ticketsUrl).toBeUndefined()
+  })
+})
+
+describe('zmiany kart od AI', () => {
+  it('tylko istniejące karty i pola w poprawnym formacie; zastosowanie zmienia kartę', () => {
+    const doc = new Y.Doc()
+    const id = createCard(
+      doc,
+      { type: 'sight', date: '2027-07-14', time: '10:00' },
+      new Date(),
+      'Pena',
+    )
+    const changes = normalizeChanges(
+      {
+        changes: [
+          {
+            card_id: `card:${id}`,
+            time: '09:30',
+            status: 'missing',
+            append_text: 'bilety: https://x.pt',
+            reason: 'mniej ludzi',
+          },
+          { card_id: 'nie-ma', time: '11:00' },
+          { card_id: id, time: '25:99' },
+        ],
+      },
+      readCards(doc),
+    )
+    expect(changes).toHaveLength(1)
+    applyCardChange(doc, changes[0] as CardChange)
+    const card = readCards(doc)[0]
+    expect(card?.time).toBe('09:30')
+    expect(card?.status).toBe('missing')
+    expect(card?.preview).toContain('bilety: https://x.pt')
+  })
+})
+
+describe('proposalsSummary', () => {
+  it('numerowane propozycje i zmiany dla historii modelu; pusto, gdy nic nie było', () => {
+    const text = proposalsSummary(
+      [
+        { type: 'sight', title: 'Koloseum', date: '2027-07-15', time: '09:00', place: 'Rzym' },
+        { type: 'food', title: 'Da Enzo' },
+      ] as CardProposal[],
+      [{ cardId: 'abc', reason: 'wcześniej mniej ludzi' }] as CardChange[],
+    )
+    expect(text).toContain('1. Koloseum (2027-07-15 09:00) · Rzym')
+    expect(text).toContain('2. Da Enzo')
+    expect(text).toContain('zmiana karty abc: wcześniej mniej ludzi')
+    expect(proposalsSummary([], [])).toBe('')
   })
 })

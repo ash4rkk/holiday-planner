@@ -34,7 +34,7 @@ export function computeReminders(
 ): ReminderRow[] {
   const out: ReminderRow[] = []
   for (const card of cards) {
-    if (card.deletedAt || !card.date || !card.time) continue
+    if (card.deletedAt || card.skipped || !card.date || !card.time) continue
     const remind = card.remindMin ?? defaults[card.type]
     if (!remind) continue
     let start: Temporal.ZonedDateTime

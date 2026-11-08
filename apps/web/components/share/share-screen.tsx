@@ -12,7 +12,7 @@ import { type PendingShare, randomId, shareStore } from '@/lib/share-store'
 
 type TripOption = { id: string; title: string; startDate: string | null; endDate: string | null }
 
-/** Ekran po „Udostępnij → Planer”: podgląd, wybór wyjazdu, notatka, do skrzynki. */
+/** Ekran po „Udostępnij → Planer”: podgląd, wybór wyjazdu, notatka, do pomysłów. */
 export function ShareScreen({ trips }: { trips: TripOption[] }) {
   const router = useRouter()
   const params = useSearchParams()
@@ -59,7 +59,7 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
     await flushOutbox()
     const left = await shareStore.all('outbox')
     if (left.length) setState('queued')
-    else router.replace(`/trips/${tripId}/inbox`)
+    else router.replace(`/trips/${tripId}/board?ideas=1`)
   }
 
   // Pliki (bilet, paragon) → kolejka importu AI wyjazdu; przetworzy ją widok wyjazdu (także później, offline).
@@ -109,7 +109,7 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
           {state === 'queued' ? (
             <div className="island p-4 text-sm">
               <p>
-                <span className="text-green">●</span> zapisane na telefonie — trafi do skrzynki, gdy
+                <span className="text-green">●</span> zapisane na telefonie — trafi do pomysłów, gdy
                 wróci zasięg
               </p>
               <button
@@ -188,7 +188,7 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
                     disabled={!tripId || state === 'sending'}
                     className={buttonClass('primary')}
                   >
-                    {state === 'sending' ? 'dodaję…' : 'dodaj do skrzynki'}
+                    {state === 'sending' ? 'dodaję…' : 'dodaj do pomysłów'}
                   </button>
                 )}
               </div>

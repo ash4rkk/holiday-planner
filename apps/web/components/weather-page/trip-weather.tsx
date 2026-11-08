@@ -15,9 +15,11 @@ import { useEffect, useMemo, useState } from 'react'
 import type { HourlyWeather } from '@/app/api/weather/hourly/route'
 import type { NormalWeather } from '@/app/api/weather/normal/route'
 import type { Weather } from '@/app/api/weather/route'
+import { ChatButton } from '@/components/ai/chat-panel'
 import { CardSheet } from '@/components/card/card-sheet'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
+import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
 import { weatherIcon } from '@/components/weather'
 import { useCardSheet } from '@/lib/use-card-sheet'
@@ -174,7 +176,14 @@ export function TripWeather({ fallback }: { fallback?: LatLng }) {
         back={TRIPS_BACK}
         morph={`trip-${trip.id}`}
         menu={<TripMenu />}
+        actions={
+          <>
+            <ChatButton onOpenCard={(id) => sheet.open(id)} />
+            <TripStatus />
+          </>
+        }
       />
+      <SessionBanner />
       {status && (
         <p className="px-3 pt-1 text-xs text-subtle italic">
           {status} · {formatDateSpan(startDate, endDate)}
@@ -324,7 +333,7 @@ function DetailDay({
                   aria-hidden="true"
                 />
                 <span className="font-bold">{Math.round(h.temp)}°</span>
-                <span className={cx('text-[11px] text-blue', h.rain < 20 && 'invisible')}>
+                <span className={cx('text-2xs text-blue', h.rain < 20 && 'invisible')}>
                   {h.rain}%
                 </span>
               </li>
@@ -344,7 +353,7 @@ function DetailDay({
               <button
                 type="button"
                 onClick={() => onOpen(c.id)}
-                className="underline-offset-2 hover:underline"
+                className="hit underline-offset-2 hover:underline"
               >
                 {c.title || 'bez tytułu'} o {c.time}
               </button>
@@ -396,7 +405,7 @@ function LaterDays({ days, detailFrom }: { days: LaterDay[]; detailFrom?: string
         <div>
           <BandChart days={days} lo={lo} hi={hi} />
           <div
-            className="mt-0.5 grid text-center text-[11px] text-dim"
+            className="mt-0.5 grid text-center text-2xs text-dim"
             style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
             aria-hidden="true"
           >
@@ -512,12 +521,10 @@ function BandChart({ days, lo, hi }: { days: LaterDay[]; lo: number; hi: number 
           vectorEffect="non-scaling-stroke"
         />
       </svg>
-      <span className="absolute top-0 left-0 -translate-y-1/2 text-[11px] text-amber">
-        {deg(hi)}
-      </span>
+      <span className="absolute top-0 left-0 -translate-y-1/2 text-2xs text-amber">{deg(hi)}</span>
       {zero !== undefined && (
         <span
-          className="absolute right-0 -translate-y-full text-[11px] text-dim"
+          className="absolute right-0 -translate-y-full text-2xs text-dim"
           style={{ top: `${(zero / H) * 100}%` }}
         >
           0°

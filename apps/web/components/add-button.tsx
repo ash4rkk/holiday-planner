@@ -6,6 +6,8 @@ import { createPortal } from 'react-dom'
 import { NAV_SLOT } from '@/components/nav/bottom-nav'
 import { cx } from '@/components/ui'
 import type { Template } from '@/lib/card-templates'
+import { useDismiss } from '@/lib/use-dismiss'
+import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
 
 /** „+” w menu dolnym: nowa karta, z szablonu, wklejony link, zdjęcie albo PDF do importu AI. */
 export function AddButton({
@@ -27,18 +29,24 @@ export function AddButton({
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
   const root = useRef<HTMLDivElement>(null)
+  useHideWhenInactive(root)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
-  useEffect(() => setSlot(document.getElementById(NAV_SLOT)), [])
+  // Ukryty widok (router trzyma go w <Activity>) oddaje miejsce w menu — inaczej byłyby dwa „+”.
+  useEffect(() => {
+    setSlot(document.getElementById(NAV_SLOT))
+    return () => {
+      setSlot(null)
+      setOpen(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) {
       setPicking(false)
       return
     }
-    const close = (e: PointerEvent) => !root.current?.contains(e.target as Node) && setOpen(false)
-    document.addEventListener('pointerdown', close)
-    return () => document.removeEventListener('pointerdown', close)
   }, [open])
+  useDismiss(open, () => setOpen(false), root)
 
   const items = picking
     ? [
@@ -100,7 +108,7 @@ export function AddButton({
                   if (!keepOpen) setOpen(false)
                 }
               }}
-              className="flex min-h-11 items-center gap-2 rounded-[9px] px-3 text-left text-sm hover:bg-raised"
+              className="flex min-h-11 items-center gap-2 rounded-inner px-3 text-left text-sm hover:bg-raised"
             >
               <Icon className="size-4 text-muted" aria-hidden="true" />
               {busy && label === 'wklej link' ? 'szukam miejsca…' : label}
@@ -128,7 +136,7 @@ export function AddButton({
         onClick={() => setOpen((v) => !v)}
         aria-label="dodaj"
         aria-expanded={open}
-        className="flex size-11 items-center justify-center rounded-[9px] bg-accent text-on-accent transition-colors hover:bg-accent-hover"
+        className="flex size-11 items-center justify-center rounded-inner bg-accent text-on-accent transition-colors hover:bg-accent-hover"
       >
         <Plus
           className={cx('size-6 transition-transform duration-200', open && 'rotate-45')}

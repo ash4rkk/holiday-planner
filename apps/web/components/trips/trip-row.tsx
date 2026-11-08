@@ -21,7 +21,11 @@ export function TripRow({ trip, countdown }: { trip: Trip; countdown?: number })
         )}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <Flag country={trip.country} className="h-3 w-[18px]" />
+            <ViewTransition name={`trip-flag-${trip.id}`}>
+              <span className="flex shrink-0">
+                <Flag country={trip.country} className="h-3 w-[18px]" />
+              </span>
+            </ViewTransition>
             <ViewTransition name={`trip-${trip.id}`}>
               <p className="truncate font-bold">{trip.title}</p>
             </ViewTransition>

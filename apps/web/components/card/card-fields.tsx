@@ -55,7 +55,7 @@ export function Section({
   )
 }
 
-const chip = 'min-h-9 rounded-small border px-3 text-xs transition-colors'
+const chip = 'min-h-11 rounded-small border px-3 text-xs transition-colors'
 
 /**
  * Pola karty jako wysepki: „kiedy” z chipami (tap otwiera pole pod spodem) i „miejsce”. Dalsze
@@ -107,7 +107,7 @@ export function CardSections({
                 className={cx(
                   chip,
                   set
-                    ? 'border-accent bg-accent/15 text-accent'
+                    ? 'border-accent bg-active text-accent'
                     : 'border-dashed border-line text-muted hover:text-accent',
                 )}
               >
@@ -134,7 +134,7 @@ export function CardSections({
                 type="button"
                 onClick={() => clear(key)}
                 aria-label={`usuń pole ${label}`}
-                className="flex size-6 items-center justify-center text-dim hover:text-red"
+                className="-my-2.5 -mr-1.5 flex size-11 items-center justify-center text-dim hover:text-red"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>
@@ -293,7 +293,8 @@ function LocationField({
 }) {
   const location = card[field]
   const [link, setLink] = useState('')
-  const [state, setState] = useState<'idle' | 'resolving' | 'failed'>('idle')
+  const [state, setState] = useState<'idle' | 'resolving' | 'failed' | 'offline'>('idle')
+  const [relink, setRelink] = useState(false)
   const hasCoords = location?.lat !== undefined && location?.lng !== undefined
 
   const set = (patch: Partial<CardLocation>) =>
@@ -302,17 +303,25 @@ function LocationField({
   const resolve = async (text: string) => {
     if (!text.trim()) return
     setState('resolving')
-    const place = await resolvePastedPlace(text).catch(() => null)
+    let place: Awaited<ReturnType<typeof resolvePastedPlace>>
+    try {
+      place = await resolvePastedPlace(text)
+    } catch {
+      setState('offline')
+      return
+    }
     if (!place) {
       setState('failed')
       return
     }
     setLink('')
     setState('idle')
+    setRelink(false)
     onChange({
       [field]: {
-        name: location?.name || place.name,
-        address: location?.address || place.address || undefined,
+        // Nowy link przy zmianie miejsca: nazwa i adres z linku, nie stare.
+        name: (!relink && location?.name) || place.name,
+        address: (!relink && location?.address) || place.address || undefined,
         ...(place.lat != null && place.lng != null && { lat: place.lat, lng: place.lng }),
         ...(place.mapsUrl && { mapsUrl: place.mapsUrl }),
       },
@@ -333,11 +342,11 @@ function LocationField({
         value={location?.address ?? ''}
         onChange={(e) => set({ address: e.target.value || undefined })}
       />
-      {!location?.mapsUrl && (
+      {(!location?.mapsUrl || relink) && (
         <input
           className={inputClass}
           inputMode="url"
-          placeholder="wklej link z Google Maps"
+          placeholder="wklej link z Map Google"
           value={link}
           onChange={(e) => {
             setLink(e.target.value)
@@ -349,7 +358,10 @@ function LocationField({
       )}
       {state === 'resolving' && <span className="text-xs text-subtle italic">szukam miejsca…</span>}
       {state === 'failed' && (
-        <span className="text-xs text-red">● to nie jest link do Google Maps</span>
+        <span className="text-xs text-red">● nie rozpoznano linku do Map Google</span>
+      )}
+      {state === 'offline' && (
+        <span className="text-xs text-red">● brak zasięgu — wklej link jeszcze raz później</span>
       )}
       {hasCoords && (
         <MiniMap lat={location.lat as number} lng={location.lng as number} className="mt-1" />
@@ -375,6 +387,15 @@ function LocationField({
             Mapy Google ›
           </a>
         </div>
+      )}
+      {location?.mapsUrl && !relink && (
+        <button
+          type="button"
+          onClick={() => setRelink(true)}
+          className="min-h-11 self-start px-1 text-xs text-subtle italic hover:text-accent"
+        >
+          inne miejsce · wklej nowy link ›
+        </button>
       )}
     </div>
   )

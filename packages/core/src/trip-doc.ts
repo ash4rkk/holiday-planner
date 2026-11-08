@@ -27,7 +27,9 @@ const DAY_STACK_GAP = GRID * 3
 function daySlot(doc: Y.Doc, date: string, except?: string): { x: number; y: number } | undefined {
   let slot: { x: number; y: number } | undefined
   for (const [id, card] of cardsOf(doc).entries()) {
+    // Noclegi są belką nad dniami, nie miejscem w kolumnie.
     if (id === except || card.get('date') !== date || card.get('deletedAt')) continue
+    if (card.get('type') === 'stay') continue
     const y = (card.get('y') as number) + ((card.get('h') as number) ?? CARD_SIZE.h) + DAY_STACK_GAP
     if (!slot || y > slot.y) slot = { x: card.get('x') as number, y }
   }
@@ -40,7 +42,7 @@ function daySlot(doc: Y.Doc, date: string, except?: string): { x: number; y: num
  */
 function tidyDay(doc: Y.Doc, date: string) {
   const day = [...cardsOf(doc).values()]
-    .filter((c) => c.get('date') === date && !c.get('deletedAt'))
+    .filter((c) => c.get('date') === date && !c.get('deletedAt') && c.get('type') !== 'stay')
     .map((card) => ({
       card,
       time: card.get('time') as string | undefined,
@@ -112,6 +114,23 @@ export function createCard(
   return id
 }
 
+/** Dopisuje akapity na końcu treści karty (zatwierdzona zmiana od AI, np. link do biletów). */
+export function appendCardText(doc: Y.Doc, id: string, text: string, now = new Date()) {
+  const card = cardsOf(doc).get(id)
+  if (!card) return
+  doc.transact(() => {
+    const content = contentOf(card)
+    for (const line of text.split('\n').filter((l) => l.trim())) {
+      const paragraph = new Y.XmlElement('paragraph')
+      const t = new Y.XmlText()
+      t.insert(0, line)
+      paragraph.insert(0, [t])
+      content.push([paragraph])
+    }
+    card.set('updatedAt', now.toISOString())
+  })
+}
+
 /** Przenosi kartę na inny dzień; nocleg zachowuje długość. `undefined` = karta bez daty. */
 export function moveCardToDay(doc: Y.Doc, id: string, date: string | undefined) {
   const card = cardsOf(doc).get(id)
@@ -163,6 +182,38 @@ export function trashCard(doc: Y.Doc, id: string, now = new Date()) {
 export function restoreCard(doc: Y.Doc, id: string) {
   const card = cardsOf(doc).get(id)
   if (card) doc.transact(() => card.delete('deletedAt'))
+}
+
+/**
+ * Robi zmianę planu (karty, ramki, strzałki) jako jedną transakcję i zwraca jej cofnięcie (pasek „cofnij”). Cofa tylko tę
+ * zmianę, nie zmiany drugiej osoby. `dispose` zwalnia nasłuch, gdy cofnięcia już nie będzie.
+ */
+export function undoable(
+  doc: Y.Doc,
+  change: () => void,
+): { undo: () => void; dispose: () => void } {
+  const origin = Symbol('undoable')
+  // Karty, ramki i strzałki: usunięcie ramki zmienia też karty, które w niej leżały.
+  const scope = [cardsOf(doc), doc.getMap('frames'), doc.getMap('edges')]
+  const manager = new Y.UndoManager(scope, {
+    trackedOrigins: new Set([origin]),
+    captureTimeout: 0,
+  })
+  doc.transact(change, origin)
+  let done = false
+  const dispose = () => {
+    if (done) return
+    done = true
+    manager.destroy()
+  }
+  return {
+    undo: () => {
+      if (done) return
+      manager.undo()
+      dispose()
+    },
+    dispose,
+  }
 }
 
 /** Usuwa na stałe karty z kosza starsze niż 30 dni. Zwraca liczbę usuniętych. */
@@ -311,6 +362,21 @@ export function chooseVariant(doc: Y.Doc, id: string, now = new Date()) {
     card.set('updatedAt', now.toISOString())
     const date = card.get('date') as string | undefined
     if (date) tidyDay(doc, date)
+  })
+}
+
+/**
+ * „Do pomysłów”: karta bez dnia, nieprzypięta i poza ramką (inaczej nie trafi do drawera); wariant
+ * wychodzi ze stosu.
+ */
+export function moveToIdeas(doc: Y.Doc, id: string, now = new Date()) {
+  const card = cardsOf(doc).get(id)
+  if (!card) return
+  doc.transact(() => {
+    if (card.get('variantOf')) detachVariant(doc, id, now)
+    else moveCardToDay(doc, id, undefined)
+    for (const key of ['pinned', 'frameId', 'aiDraft', 'skipped']) card.delete(key)
+    card.set('updatedAt', now.toISOString())
   })
 }
 

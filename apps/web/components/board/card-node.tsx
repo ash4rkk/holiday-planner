@@ -1,8 +1,8 @@
 'use client'
 
 import type { CardSnapshot } from '@planer/core'
-import { Handle, type Node, type NodeProps, NodeToolbar, Position } from '@xyflow/react'
-import { ChevronLeft, ChevronRight, Pin, PinOff, SquarePen, Trash2 } from 'lucide-react'
+import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { memo, useState } from 'react'
 import { TimeCell } from '@/components/card/time-cell'
 import { cx } from '@/components/ui'
@@ -51,32 +51,11 @@ export const CardNode = memo(function CardNode({
     onMove: board.dragMove,
     onEnd: board.dragEnd,
     onPan: board.panBy,
+    onMenu: (x, y) => board.openMenu(id, x, y),
   })
 
   return (
     <>
-      <NodeToolbar isVisible={selected && !grouped} position={Position.Top} offset={20}>
-        <div className="flex gap-1 rounded-island border border-line bg-panel p-1">
-          <ToolButton label="otwórz kartę" onClick={() => board.openCard(id)}>
-            <SquarePen className="size-5" aria-hidden="true" />
-          </ToolButton>
-          <ToolButton
-            label={card.pinned ? 'odepnij' : 'przypnij'}
-            onClick={() => board.togglePin(id)}
-            active={card.pinned}
-          >
-            {card.pinned ? (
-              <PinOff className="size-5" aria-hidden="true" />
-            ) : (
-              <Pin className="size-5" aria-hidden="true" />
-            )}
-          </ToolButton>
-          <ToolButton label="przenieś do kosza" onClick={() => board.trash(id)} danger>
-            <Trash2 className="size-5" aria-hidden="true" />
-          </ToolButton>
-        </div>
-      </NodeToolbar>
-
       {onAxis && (
         <TimeCell card={shown} className="pointer-events-none absolute top-2 right-full mr-2" />
       )}
@@ -95,6 +74,7 @@ export const CardNode = memo(function CardNode({
           'nopan nodrag pointer-events-auto relative flex size-full touch-none flex-col gap-1 overflow-hidden rounded-island border bg-panel py-2 pr-3 pl-4',
           selected ? 'border-accent' : 'border-line',
           card.aiDraft && 'border-dashed border-accent',
+          card.skipped && 'opacity-60',
         )}
         role="button"
         tabIndex={0}
@@ -113,7 +93,7 @@ export const CardNode = memo(function CardNode({
               type="button"
               onClick={() => step(-1)}
               aria-label="poprzednia opcja"
-              className="flex size-9 items-center justify-center rounded-small border border-line text-muted"
+              className="hit flex size-9 items-center justify-center rounded-small border border-line text-muted"
             >
               <ChevronLeft className="size-4" aria-hidden="true" />
             </button>
@@ -124,7 +104,7 @@ export const CardNode = memo(function CardNode({
               type="button"
               onClick={() => step(1)}
               aria-label="następna opcja"
-              className="flex size-9 items-center justify-center rounded-small border border-line text-muted"
+              className="hit flex size-9 items-center justify-center rounded-small border border-line text-muted"
             >
               <ChevronRight className="size-4" aria-hidden="true" />
             </button>
@@ -136,7 +116,7 @@ export const CardNode = memo(function CardNode({
                   setShownIndex(0)
                   board.chooseVariant(shown.id)
                 }}
-                className="min-h-9 px-2 text-xs font-bold text-accent"
+                className="hit min-h-9 px-2 text-xs font-bold text-accent"
               >
                 wybierz
               </button>
@@ -183,9 +163,9 @@ export function ToolButton({
       title={label}
       onClick={onClick}
       className={cx(
-        'flex size-11 items-center justify-center rounded-[9px] transition-colors',
+        'flex size-11 items-center justify-center rounded-inner transition-colors',
         active
-          ? 'bg-accent/20 text-accent'
+          ? 'bg-active text-accent'
           : danger
             ? 'text-muted hover:text-red'
             : 'text-muted hover:text-accent',

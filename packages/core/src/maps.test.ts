@@ -151,11 +151,13 @@ describe('trasa dnia', () => {
     expect(route.start?.id).toBe(hotel)
     expect(route.stops.map((c) => c.id)).toEqual([early, late, untimed])
     expect(route.offMap).toHaveLength(1)
-    // Pierwszy dzień: nocleg tej nocy, a sam nocleg nie jest przystankiem.
-    expect(dayRoute(readCards(doc), '2027-07-14')).toMatchObject({
-      start: { id: hotel },
-      stops: [],
-    })
+    // Pierwszy dzień (przylot): bez startu w hotelu — hotel to zwykły przystanek dnia.
+    const first = dayRoute(readCards(doc), '2027-07-14')
+    expect(first.start).toBeUndefined()
+    expect(first.stops.map((c) => c.id)).toEqual([hotel])
+    expect(first.end).toBeUndefined()
+    // W środku pobytu dzień kończy się w tym samym hotelu — bez osobnego końca.
+    expect(route.end).toBeUndefined()
     // Po wymeldowaniu (17) start z noclegu z nocy 16→17.
     expect(dayRoute(readCards(doc), '2027-07-17').start?.id).toBe(hotel)
     expect(dayRoute(readCards(doc), '2027-07-18').start).toBeUndefined()
@@ -165,6 +167,18 @@ describe('trasa dnia', () => {
       { date: '2027-07-15', hasPlaces: true },
       { date: '2027-07-16', hasPlaces: false },
     ])
+
+    // Zmiana hotelu 17: start w starym, koniec w nowym (gdy nowy nie jest przystankiem bez godziny).
+    const next = createCard(doc, {
+      type: 'stay',
+      date: '2027-07-17',
+      endDate: '2027-07-19',
+      location: at(42.1),
+    })
+    const move = dayRoute(readCards(doc), '2027-07-17')
+    expect(move.start?.id).toBe(hotel)
+    expect(move.stops.map((c) => c.id)).toEqual([next])
+    expect(move.end).toBeUndefined()
   })
 })
 

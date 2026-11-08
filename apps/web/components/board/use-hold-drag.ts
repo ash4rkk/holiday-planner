@@ -11,7 +11,7 @@ type GestureState = {
   x: number
   y: number
   mouse: boolean
-  mode: 'pending' | 'drag' | 'pan'
+  mode: 'pending' | 'held' | 'drag' | 'pan'
   lastX: number
   lastY: number
   timer?: ReturnType<typeof setTimeout>
@@ -27,6 +27,11 @@ type Handlers = {
   onEnd: () => void
   /** Palec ruszył przed przytrzymaniem: przesuwa widok o tyle pikseli od ostatniego ruchu. */
   onPan?: (dx: number, dy: number) => void
+  /**
+   * Menu elementu: prawy klik myszą albo przytrzymanie palcem. Z menu przytrzymanym palcem dalej
+   * można przeciągnąć — ruch po przytrzymaniu zaczyna przeciąganie (onStart).
+   */
+  onMenu?: (x: number, y: number) => void
 }
 
 /**
@@ -37,6 +42,8 @@ export function useHoldDrag(handlers: Handlers) {
   const h = useRef(handlers)
   h.current = handlers
   const state = useRef<GestureState | null>(null)
+  // Prawy klik nie przechodzi przez onPointerDown (button !== 0) — rodzaj wskaźnika zapamiętujemy osobno.
+  const lastPointer = useRef<string>('mouse')
 
   const finish = () => {
     if (state.current?.timer) clearTimeout(state.current.timer)
@@ -45,6 +52,7 @@ export function useHoldDrag(handlers: Handlers) {
 
   return {
     onPointerDown(e: React.PointerEvent) {
+      lastPointer.current = e.pointerType
       if (e.button !== 0 || state.current) return
       if ((e.target as HTMLElement).closest('.react-flow__handle, button, a, input')) return
       const s: GestureState = {
@@ -61,9 +69,14 @@ export function useHoldDrag(handlers: Handlers) {
       if (!s.mouse) {
         s.timer = setTimeout(() => {
           if (state.current !== s || s.mode !== 'pending') return
-          s.mode = 'drag'
           navigator.vibrate?.(10)
-          h.current.onStart(s.x, s.y)
+          if (h.current.onMenu) {
+            s.mode = 'held'
+            h.current.onMenu(s.x, s.y)
+          } else {
+            s.mode = 'drag'
+            h.current.onStart(s.x, s.y)
+          }
         }, HOLD_MS)
       }
     },
@@ -76,6 +89,10 @@ export function useHoldDrag(handlers: Handlers) {
         if (s.timer) clearTimeout(s.timer)
         s.mode = s.mouse ? 'drag' : 'pan'
         if (s.mouse) h.current.onStart(s.x, s.y)
+      }
+      if (s.mode === 'held' && Math.hypot(dx, dy) > MOVE_PX) {
+        s.mode = 'drag'
+        h.current.onStart(s.x, s.y)
       }
       if (s.mode === 'drag') h.current.onMove(dx, dy)
       if (s.mode === 'pan') h.current.onPan?.(e.clientX - s.lastX, e.clientY - s.lastY)
@@ -95,9 +112,10 @@ export function useHoldDrag(handlers: Handlers) {
       if (s.mode === 'drag') h.current.onEnd()
       finish()
     },
-    // Przytrzymanie palcem nie otwiera menu przeglądarki.
+    // Przytrzymanie palcem nie otwiera menu przeglądarki; prawy klik myszą otwiera menu elementu.
     onContextMenu(e: React.MouseEvent) {
       e.preventDefault()
+      if (lastPointer.current === 'mouse') h.current.onMenu?.(e.clientX, e.clientY)
     },
   }
 }

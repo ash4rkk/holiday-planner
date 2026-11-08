@@ -37,7 +37,7 @@ export function DayAxis({
   onOpen: (id: string) => void
   legText?: (id: string) => string | undefined
 }) {
-  const timed = cards.filter((c) => c.time && c.type !== 'stay')
+  const timed = cards.filter((c) => c.time && c.type !== 'stay' && !c.skipped)
   const [selectedId, setSelectedId] = useState<string>()
   const axisRef = useRef<HTMLDivElement>(null)
   const index = timed.findIndex((c) => c.id === selectedId)
@@ -105,7 +105,7 @@ export function DayAxis({
           />
         )}
       </div>
-      <div className="mt-1 flex justify-between text-[11px] text-dim" aria-hidden="true">
+      <div className="mt-1 flex justify-between text-2xs text-dim" aria-hidden="true">
         {hours.map((h) => (
           <span key={h}>{h}</span>
         ))}
@@ -206,12 +206,15 @@ function AxisPreview({
       ref={ref}
       role="dialog"
       aria-label={card.title || 'podgląd miejsca'}
-      className={cx('fixed z-50 w-[min(22rem,calc(100vw-1rem))]', pos ? 'pop-in' : 'invisible')}
+      className={cx(
+        'fixed z-(--z-dialog) w-[min(22rem,calc(100vw-1rem))]',
+        pos ? 'pop-in' : 'invisible',
+      )}
       style={{ left: pos?.left ?? 0, top: pos?.top ?? 0 }}
     >
       <span
         className={cx(
-          'absolute z-10 size-3 -translate-x-1/2 rotate-45 border-line bg-raised',
+          'absolute z-(--z-overlay) size-3 -translate-x-1/2 rotate-45 border-line bg-raised',
           pos?.below === false ? '-bottom-1.5 border-r border-b' : '-top-1.5 border-t border-l',
         )}
         style={{ left: pos?.arrow ?? 0 }}
@@ -239,7 +242,7 @@ function AxisPreview({
           {card.status && <StatusMark status={card.status} />}
         </button>
         {card.status === 'missing' && (
-          <p className="text-xs text-red">● {CARD_STATUS_LABELS.missing}</p>
+          <p className="text-xs text-amber">● {CARD_STATUS_LABELS.missing}</p>
         )}
         {leg && <p className="text-xs text-green">• {leg}</p>}
         <div className="flex items-center justify-between">
@@ -249,7 +252,7 @@ function AxisPreview({
               onClick={onPrev}
               disabled={!onPrev}
               aria-label="poprzednie miejsce"
-              className="flex size-9 items-center justify-center hover:text-accent disabled:opacity-30"
+              className="flex size-11 items-center justify-center hover:text-accent disabled:opacity-30"
             >
               ‹
             </button>
@@ -259,7 +262,7 @@ function AxisPreview({
               onClick={onNext}
               disabled={!onNext}
               aria-label="następne miejsce"
-              className="flex size-9 items-center justify-center hover:text-accent disabled:opacity-30"
+              className="flex size-11 items-center justify-center hover:text-accent disabled:opacity-30"
             >
               ›
             </button>
@@ -267,7 +270,7 @@ function AxisPreview({
           <button
             type="button"
             onClick={onOpen}
-            className="min-h-9 px-1 text-xs text-accent hover:text-accent-hover"
+            className="min-h-11 px-1 text-xs text-accent hover:text-accent-hover"
           >
             otwórz kartę ›
           </button>

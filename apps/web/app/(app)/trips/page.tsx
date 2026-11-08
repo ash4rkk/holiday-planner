@@ -1,6 +1,8 @@
 import { daysBetween, todayLocal } from '@planer/core'
 import type { Trip } from '@planer/core/db'
+import { Plus } from 'lucide-react'
 import Link from 'next/link'
+import { connection } from 'next/server'
 import { ProfilePhoto } from '@/components/profile/profile-photo'
 import { TopBar } from '@/components/top-bar'
 import { CurrentTrip } from '@/components/trips/current-trip'
@@ -10,8 +12,6 @@ import { buttonClass, SectionLabel } from '@/components/ui'
 import { getCurrentUser } from '@/lib/auth/user'
 import { tripSummary } from '@/lib/trip-summary'
 import { listTrips } from '@/lib/trips'
-
-export const dynamic = 'force-dynamic'
 
 /** Zwinięta grupa (minione, archiwum): wiersz z liczbą, po rozwinięciu wyjazdy. */
 function Folded({ label, trips }: { label: string; trips: Trip[] }) {
@@ -36,6 +36,7 @@ function Folded({ label, trips }: { label: string; trips: Trip[] }) {
 }
 
 export default async function TripsPage() {
+  await connection()
   const today = todayLocal()
   const [user, { current, upcoming, past, archived }] = await Promise.all([
     getCurrentUser(),
@@ -53,9 +54,9 @@ export default async function TripsPage() {
             href="/trips/new"
             aria-label="nowy wyjazd"
             title="nowy wyjazd"
-            className="flex w-11 self-stretch items-center justify-center border-l border-line text-xl text-accent hover:text-accent-hover"
+            className="flex w-11 self-stretch items-center justify-center border-l border-line text-accent hover:text-accent-hover"
           >
-            +
+            <Plus className="size-5" aria-hidden="true" />
           </Link>
         }
         actions={

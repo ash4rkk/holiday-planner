@@ -78,6 +78,7 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - Rozwijanie linków chodzi tylko po hostach Google (`isAllowedMapsHost`) — to ochrona przed SSRF, nie poluzowuj jej.
 - AI: historia czatu wraca do modelu bez bloków rozumowania (zapisujemy tylko tekst tur), więc opis wyjazdu w prompcie systemowym może się zmieniać między pytaniami — nie dodawaj zapisu pełnych bloków odpowiedzi bez przemyślenia „preserved thinking” (edycja historii = 400).
 - AI: zmienne dane (data, godzina, kto pyta) idą w treść pytania, nie do promptu systemowego — inaczej cache promptu nie działa.
+- AI: odpowiedź czatu nie zależy od połączenia przeglądarki (dokańcza się i zapisuje w tle), przerywa ją tylko `/api/ai/chat/stop`. Rejestr trwających odpowiedzi (`lib/ai/chat-runs.ts`) jest w pamięci procesu — przy kilku replikach web trzeba go przenieść do bazy. Do modelu idzie najwyżej 40 ostatnich wiadomości; propozycje kart wracają jako krótki opis w treści odpowiedzi (`proposalsSummary`), a decyzje osób są w `ai_messages.decisions`.
 - Treść kart do HTML tylko przez `blocksToHtml` (ucieczka znaków, odrzuca niebezpieczne linki) — nigdy surowego tekstu z dokumentu w `dangerouslySetInnerHTML`.
 - `Temporal` tylko po stronie serwera (`@planer/core/reminders`) — nie importuj go do kodu klienta, przeglądarki go jeszcze nie mają.
 - Moduły `@planer/core/fx`, `/push`, `/reminders-db` używają bazy — tylko serwer (API, sync, worker).
@@ -91,6 +92,10 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - `pnpm dev` dla sync/worker uruchamia `tsx watch` jako osobny proces `node` — zabicie powłoki go nie zatrzymuje; przy testach sprawdzaj `ps`, bo stary worker potrafi przejąć przypomnienia.
 - Wartości z `;` w `.env` (np. `USER_NAMES`) w cudzysłowie, inaczej `source .env` w powłoce je ucina.
 - W zsh nie używaj zmiennej `path` w skryptach (to tablica powiązana z `PATH`).
+- `cacheComponents: true`: router trzyma 3 ostatnie widoki ukryte w `<Activity>` (stan zostaje, efekty się zwijają). Bez `export const dynamic` — strony z bazą bez innego dynamicznego API zaczynają od `await connection()`; layout wyjazdu i Pogoda mają `instant = false` (wejście może czekać). Nie owijaj drzewa w `key={pathname}` — odmontowuje wszystkie widoki.
+- Portale z ukrytego widoku (np. „+” w menu, `<Toast>`, czat) nie chowają się same — `useHideWhenInactive(ref)` chowa je synchronicznie. Biblioteki z instancją w efekcie (MapLibre) po powrocie odtwarzałyby się od nowa: mapa żyje w `components/map/map-cache.ts`, widok tylko ją przypina.
+- Linki dolnego menu bez `prefetch={true}`: przy `cacheComponents` dev zgłasza wtedy „dynamic data during prefetching” i nawigacja potrafi stanąć.
+- Testy przejść w headless Chrome: wyjście z Tablicy z View Transition wisi (brak klatek) — testuj z `headless: false`. W dev wskaźnik Next w lewym dolnym rogu zasłania „dziś”.
 
 ## Auth
 
@@ -105,6 +110,11 @@ pnpm db:migrate          # wymaga DATABASE_URL
 - Kolory wyłącznie z tokenów Vague (`bg-panel`, `text-muted`, `border-line`, `text-accent`…) zdefiniowanych w `apps/web/app/globals.css`; żadnych surowych hexów w komponentach.
 - Obramowanie 1 px `line` zamiast cieni; wysepki `.island` (12 px), małe elementy 6–8 px; przyciski min. 44 px.
 - Bez emoji; znaki: › dalej, ⌖ miejsca/przypięte, ● komunikat, • zaznaczone, · separator.
+- Tokeny poza kolorami: `rounded-inner` (element w wysepce z `p-1`), `bg-active` (wybrane/włączone), `text-2xs` (najmniejszy tekst, nic poniżej 11 px), warstwy `z-(--z-overlay|popover|nav|drawer|sheet|panel|dialog|toast)`. Gęste przyciski poniżej 44 px dostają `.hit` (obszar dotyku 44 × 44).
+- Odwracalne zmiany planu (kosz, pomysły, pominięcie, usunięcie ramki/strzałki) od razu i z „cofnij”: `withUndo(doc, label, fn)` z `lib/undo.ts` (`undoable` w core). Okno potwierdzenia tylko dla nieodwracalnych, `danger` dla destrukcyjnych.
+- Bez `window.prompt/confirm`: `askText` / `askConfirm` z `components/confirm-dialog.tsx` (rysuje `DialogHost` w layoucie). Menu i okienka zamyka `useDismiss` (Esc + dotknięcie obok). Komunikaty nad menu dolnym przez `<Toast>` (wspólny stos).
+- Słownictwo: karty bez dnia to „pomysły”, usuwanie to „do kosza”, Mapy Google odmieniane po polsku (napis `Google Maps` tylko jako atrybucja). Tytuły okien też małymi literami.
+- Ustawienia wracają tam, skąd je otwarto (`?from=`, `lib/back.ts`).
 - Mobile-first (Android, Chrome); desktop to dodatek.
 - Wersje zależności przypięte dokładnie; nie bierz wydań młodszych niż ok. tydzień (pnpm 11 i tak ich pilnuje przez `minimumReleaseAge`).
 - Migracje addytywne; każda trafia na produkcję (serwis `planer-migrate` przy deployu) i do lokalnej bazy (`pnpm db:migrate`).

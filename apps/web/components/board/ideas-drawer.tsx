@@ -2,7 +2,7 @@
 
 import type { CardSnapshot } from '@planer/core'
 import { ChevronDown, ChevronRight, Lightbulb } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { type PointerEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { TYPE_STYLE } from '@/components/card/type-style'
@@ -11,6 +11,8 @@ import { cx } from '@/components/ui'
 import { useHoldDrag } from './use-hold-drag'
 
 export const PANEL_WIDTH = 320
+/** Tyle trzeba pociągnąć w dół, żeby schować drawer (jak arkusz karty). */
+const DRAG_CLOSE_PX = 110
 
 /** Przyciski Tablicy: na szerokim ekranie w linii z dolnym menu, na telefonie rząd wyżej. */
 export function controlsBottom(wide: boolean): string {
@@ -24,7 +26,7 @@ export type IdeaDrag = {
 }
 
 // Palec po przytrzymaniu ciągnie kartę, więc przeglądarka nie może już przewijać listy.
-const stopScroll = (e: TouchEvent) => e.preventDefault()
+const stopScroll = (e: globalThis.TouchEvent) => e.preventDefault()
 
 function IdeaCard({
   card,
@@ -118,6 +120,66 @@ export function IdeasDrawer({
   onOpenCard: (id: string) => void
 }) {
   const Close = wide ? ChevronRight : ChevronDown
+
+  // Przeciągnięcie w dół chowa drawer (telefon): za uchwyt i nagłówek albo z listy przewiniętej do góry.
+  const [dragY, setDragY] = useState(0)
+  const from = useRef<number | null>(null)
+  const pulled = useRef(0)
+  const list = useRef<HTMLDivElement>(null)
+  const startPull = (y: number) => {
+    from.current = y
+    pulled.current = 0
+  }
+  const movePull = (y: number) => {
+    if (from.current === null) return
+    pulled.current = y - from.current
+    setDragY(Math.max(0, pulled.current))
+  }
+  const endPull = () => {
+    if (from.current === null) return
+    from.current = null
+    setDragY(0)
+    if (pulled.current > DRAG_CLOSE_PX) onToggle()
+  }
+  const handle = wide
+    ? {}
+    : {
+        onPointerDown: (e: PointerEvent) => {
+          // Przyciski w nagłówku działają zwyczajnie; ciągnie się resztą paska.
+          if ((e.target as HTMLElement).closest('button')) return
+          startPull(e.clientY)
+          e.currentTarget.setPointerCapture(e.pointerId)
+        },
+        onPointerMove: (e: PointerEvent) => movePull(e.clientY),
+        onPointerUp: endPull,
+        onPointerCancel: endPull,
+      }
+  // Lista: ciągnięcie w dół, gdy jest przewinięta do samej góry (dalej przewija się normalnie).
+  const listPull = wide
+    ? {}
+    : {
+        onTouchStart: (e: TouchEvent) => {
+          const t = e.touches[0]
+          if (t && e.touches.length === 1 && (list.current?.scrollTop ?? 0) <= 0) {
+            from.current = t.clientY
+            pulled.current = 0
+          } else from.current = null
+        },
+        onTouchMove: (e: TouchEvent) => {
+          const t = e.touches[0]
+          if (!t || from.current === null) return
+          // W górę to zwykłe przewijanie listy.
+          if (t.clientY < from.current) {
+            from.current = null
+            setDragY(0)
+            return
+          }
+          movePull(t.clientY)
+        },
+        onTouchEnd: endPull,
+        onTouchCancel: endPull,
+      }
+
   return (
     <>
       {!open && (
@@ -128,7 +190,7 @@ export function IdeasDrawer({
           aria-label={`pomysły (${ideas.length})`}
           style={{ bottom: controlsBottom(wide) }}
           className={cx(
-            'island absolute left-1 z-10 flex h-11 items-center gap-2 px-3 text-sm',
+            'island absolute left-1 z-(--z-overlay) flex h-11 items-center gap-2 px-3 text-sm',
             dragging
               ? 'right-1 justify-center border-dashed border-accent text-accent'
               : 'text-muted',
@@ -144,27 +206,44 @@ export function IdeasDrawer({
         inert={!open}
         data-ideas-drop
         className={cx(
-          'fixed z-[35] flex flex-col bg-bg transition-transform duration-200 motion-reduce:transition-none',
+          'fixed z-(--z-drawer) flex flex-col bg-bg motion-reduce:transition-none',
+          from.current === null && 'transition-transform duration-200',
           wide
             ? 'inset-y-0 right-0 border-l border-line'
-            : 'inset-x-0 bottom-0 h-[55dvh] rounded-t-island border-t border-line',
+            : 'inset-x-0 bottom-0 h-[60dvh] rounded-t-island border-t border-line',
           !open && (wide ? 'translate-x-full' : 'translate-y-full'),
         )}
-        style={wide ? { width: PANEL_WIDTH } : undefined}
+        style={{
+          ...(wide && { width: PANEL_WIDTH }),
+          ...(open && dragY > 0 && { transform: `translateY(${dragY}px)` }),
+        }}
       >
-        <div className="flex shrink-0 items-center gap-2 pl-3">
-          <h2 className="flex-1 text-sm font-bold">pomysły · {ideas.length}</h2>
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label="zwiń pomysły"
-            className="flex size-11 items-center justify-center text-muted hover:text-accent"
-          >
-            <Close className="size-5" aria-hidden="true" />
-          </button>
+        <div {...handle} className={cx('shrink-0', !wide && 'touch-none')}>
+          {!wide && (
+            <div aria-hidden="true" className="flex h-6 items-center justify-center">
+              <span className="h-1 w-10 rounded-full bg-line" />
+            </div>
+          )}
+          <div className={cx('flex items-center gap-1 p-1', !wide && 'pt-0')}>
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-label="zwiń pomysły"
+              className="island flex size-11 items-center justify-center text-muted hover:text-accent"
+            >
+              <Close className="size-5" aria-hidden="true" />
+            </button>
+            <h2 className="flex h-11 items-center gap-2 rounded-island bg-active px-3 text-sm text-accent">
+              <Lightbulb className="size-5" aria-hidden="true" />
+              pomysły
+              <span className="font-bold">{ideas.length}</span>
+            </h2>
+          </div>
         </div>
         {ideas.length ? (
           <div
+            ref={list}
+            {...listPull}
             className={cx(
               'grid flex-1 content-start gap-1 overflow-y-auto overscroll-y-contain p-1',
               // Na telefonie dolne menu leży nad drawerem.
@@ -183,7 +262,8 @@ export function IdeasDrawer({
           </div>
         ) : (
           <p className="px-3 py-4 text-sm text-subtle italic">
-            karty bez dnia czekają tutaj · przeciągnij je na dzień
+            karty bez dnia i miejsca udostępnione z Map Google czekają tutaj · przeciągnij je na
+            dzień
           </p>
         )}
       </aside>

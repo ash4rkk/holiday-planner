@@ -57,7 +57,7 @@ export type Totals = {
  * kurs z dzisiaj (`today`), bo NBP nie publikuje kursów naprzód.
  */
 export function totals(
-  cards: Pick<CardSnapshot, 'amounts' | 'date' | 'deletedAt'>[],
+  cards: Pick<CardSnapshot, 'amounts' | 'date' | 'deletedAt' | 'skipped'>[],
   rate: RateLookup,
   today: string,
   mainCurrency = 'PLN',
@@ -65,7 +65,7 @@ export function totals(
   let pln = 0
   const unconverted: Amount[] = []
   for (const card of cards) {
-    if (card.deletedAt) continue
+    if (card.deletedAt || card.skipped) continue
     const date = card.date && card.date <= today ? card.date : today
     for (const a of card.amounts ?? []) {
       const r = a.currency === 'PLN' ? 1 : rate(a.currency, date)
@@ -97,7 +97,7 @@ export function formatAmount({ value, currency }: Amount): string {
 
 /** Wydatki w PLN na każdy z `days` (karty z tą datą; karty bez daty i spoza listy pomijamy). */
 export function spendingByDay(
-  cards: Pick<CardSnapshot, 'amounts' | 'date' | 'deletedAt'>[],
+  cards: Pick<CardSnapshot, 'amounts' | 'date' | 'deletedAt' | 'skipped'>[],
   rate: RateLookup,
   today: string,
   days: string[],

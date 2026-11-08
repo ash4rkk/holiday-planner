@@ -11,7 +11,7 @@ export function StatusMark({ status, className }: { status: CardStatus; classNam
       title={label}
       className={cx(
         'flex size-8 shrink-0 items-center justify-center rounded-small',
-        status === 'booked' ? 'bg-green/15 text-green' : 'bg-red/15 text-red',
+        status === 'booked' ? 'bg-green/15 text-green' : 'bg-amber/15 text-amber',
         className,
       )}
     >

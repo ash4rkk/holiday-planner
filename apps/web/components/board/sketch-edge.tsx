@@ -186,7 +186,7 @@ export const OrderEdge = memo(function OrderEdge({
         <EdgeLabelRenderer>
           <span
             className={cx(
-              'pointer-events-none absolute rounded-small border bg-panel px-1.5 py-0.5 text-[10px] whitespace-nowrap',
+              'pointer-events-none absolute rounded-small border bg-panel px-1.5 py-0.5 text-2xs whitespace-nowrap',
               data.warn ? 'border-red text-red' : 'border-line text-subtle',
             )}
             style={{

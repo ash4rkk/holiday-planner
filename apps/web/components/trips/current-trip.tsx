@@ -73,7 +73,10 @@ export function CurrentTrip({
             ● trwa · dzień {dayNo} z {dayCount}
           </p>
           <div className="flex min-w-0 items-center gap-2">
-            {flag}
+            {/* Flaga przechodzi do nagłówka wyjazdu razem z nazwą. */}
+            <ViewTransition name={`trip-flag-${trip.id}`}>
+              <span className="flex shrink-0">{flag}</span>
+            </ViewTransition>
             <ViewTransition name={`trip-${trip.id}`}>
               <p className="truncate text-2xl font-bold">{trip.title}</p>
             </ViewTransition>

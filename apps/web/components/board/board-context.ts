@@ -15,6 +15,8 @@ export type BoardApi = {
   togglePin: (id: string) => void
   chooseVariant: (id: string) => void
   trash: (id: string) => void
+  /** Menu karty w punkcie ekranu (prawy klik, przytrzymanie). */
+  openMenu: (id: string, x: number, y: number) => void
   renameFrame: (id: string) => void
   deleteFrame: (id: string) => void
   resizeFrame: (id: string, rect: { x: number; y: number; w: number; h: number }) => void

@@ -70,7 +70,8 @@ export function dayGaps(cards: CardSnapshot[]): DayGap[] {
 
 /** Odcinki całego dnia: z noclegu do pierwszej karty, między kartami, powrót do noclegu. */
 export function dayLegs(cards: CardSnapshot[], date: string): DayGap[] {
-  const live = cards.filter((c) => !c.deletedAt)
+  // Pominięte karty nie biorą udziału w dojazdach.
+  const live = cards.filter((c) => !c.deletedAt && !c.skipped)
   const day = live.filter((c) => c.date === date)
   const timed = timedCards(day)
   const legs = dayGaps(day)

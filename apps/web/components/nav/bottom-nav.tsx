@@ -5,12 +5,32 @@ import Link from 'next/link'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { cx } from '@/components/ui'
-import { useNavHidden } from './nav-context'
+import { useScrollHidden } from '@/lib/use-scroll-direction'
 
 const LAST_TRIP_KEY = 'planer-last-trip'
+const VIEWS = [
+  { view: 'today', label: 'dziś', icon: Sun },
+  { view: 'list', label: 'lista', icon: List },
+  { view: 'board', label: 'tablica', icon: LayoutDashboard },
+  { view: 'map', label: 'mapa', icon: MapIcon },
+  { view: 'weather', label: 'pogoda', icon: CloudSun },
+] as const
+
+/** Kierunek przejścia między widokami wyjazdu: nowy widok wjeżdża od strony, w którą idziemy. */
+export function navDirection(from: number, to: number): string[] | undefined {
+  if (from < 0 || to < 0 || from === to) return undefined
+  return [to > from ? 'nav-forward' : 'nav-back']
+}
 const SWIPE_MIN_PX = 70
 const SWIPE_MAX_MS = 600
 export const NAV_SLOT = 'nav-slot'
+
+/** Widoczny ekran (ukryte przez router widoki mają display: none). */
+function activePage(): HTMLElement | null {
+  for (const el of document.querySelectorAll<HTMLElement>('.app main'))
+    if (el.offsetParent !== null || el.getClientRects().length) return el
+  return null
+}
 
 /**
  * Pływająca kapsuła wyjazdu: dziś, lista, tablica, mapa, pogoda. Poza wyjazdem prowadzi do ostatnio
@@ -19,7 +39,8 @@ export const NAV_SLOT = 'nav-slot'
 export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
   const pathname = usePathname()
   const params = useParams<{ tripId?: string }>()
-  const hidden = useNavHidden()
+  // Na Tablicy i Mapie menu się nie chowa — przesuwanie palcem rusza widokiem.
+  const hidden = useScrollHidden(!/\/(board|map)$/.test(pathname), pathname)
   const [lastTrip, setLastTrip] = useState<string>()
   useEffect(() => {
     try {
@@ -30,23 +51,16 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
   const tripId = params.tripId ?? lastTrip ?? fallbackTripId
   const tripHref = (view: string) => (tripId ? `/trips/${tripId}/${view}` : '/trips')
 
-  const items = [
-    { href: tripHref('today'), label: 'dziś', icon: Sun, active: pathname.endsWith('/today') },
-    { href: tripHref('list'), label: 'lista', icon: List, active: pathname.endsWith('/list') },
-    {
-      href: tripHref('board'),
-      label: 'tablica',
-      icon: LayoutDashboard,
-      active: pathname.endsWith('/board'),
-    },
-    { href: tripHref('map'), label: 'mapa', icon: MapIcon, active: pathname.endsWith('/map') },
-    {
-      href: tripHref('weather'),
-      label: 'pogoda',
-      icon: CloudSun,
-      active: pathname.endsWith('/weather'),
-    },
-  ]
+  // Pozycja podświetla się od razu po dotknięciu, zanim przyjdzie nowy widok.
+  const [tapped, setTapped] = useState<string>()
+  useEffect(() => setTapped(undefined), [pathname])
+  const current = tapped ?? pathname
+  const items = VIEWS.map((v) => ({
+    ...v,
+    href: tripHref(v.view),
+    active: current.endsWith(`/${v.view}`),
+  }))
+  const activeIndex = VIEWS.findIndex((v) => pathname.endsWith(`/${v.view}`))
 
   // Przesunięcie palcem w bok zmienia ekran. Na Tablicy i Mapie palec rusza widokiem, więc tam nie.
   const router = useRouter()
@@ -56,6 +70,10 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
     if (!/\/(today|list|weather)$/.test(pathname) || !orderKey) return
     const hrefs = orderKey.split(',')
     let start: { x: number; y: number; at: number } | null = null
+    // Widok idzie za palcem (z oporem), więc widać, że gest działa i dokąd prowadzi.
+    let page: HTMLElement | null = null
+    let dragging = false
+    const from = () => hrefs.indexOf(window.location.pathname)
     const down = (e: TouchEvent) => {
       const t = e.touches[0]
       const target = e.target as HTMLElement
@@ -63,25 +81,80 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
       const own = target.closest('.overflow-x-auto, input, textarea, [role=dialog]')
       start =
         t && e.touches.length === 1 && !own ? { x: t.clientX, y: t.clientY, at: e.timeStamp } : null
+      dragging = false
+      page = start ? activePage() : null
+    }
+    const move = (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (!start || !t || !page) return
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      if (!dragging) {
+        // Ruch w pionie to przewijanie — gest odpada do końca dotyku.
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+          start = null
+          return
+        }
+        if (Math.abs(dx) < 12) return
+        dragging = true
+        page.style.transition = 'none'
+      }
+      // Za krawędzią (pierwszy/ostatni widok) opór jest większy.
+      const edge = !hrefs[from() + (dx < 0 ? 1 : -1)]
+      const shift = dx * (edge ? 0.12 : 0.35)
+      page.style.transform = `translateX(${shift}px)`
+      page.style.opacity = String(1 - Math.min(Math.abs(shift) / 400, 0.25))
+    }
+    const settle = (el: HTMLElement | null) => {
+      if (!el) return
+      el.style.transition = 'transform 200ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms'
+      el.style.transform = ''
+      el.style.opacity = ''
     }
     const up = (e: TouchEvent) => {
       const t = e.changedTouches[0]
-      if (!start || !t) return
+      const el = page
+      page = null
+      if (!start || !t) return settle(el)
       const dx = t.clientX - start.x
       const dy = t.clientY - start.y
       const quick = e.timeStamp - start.at < SWIPE_MAX_MS
+      const far = Math.abs(dx) > window.innerWidth * 0.3
       start = null
-      if (!quick || Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dy) > Math.abs(dx) / 2) return
-      const next = hrefs[hrefs.indexOf(window.location.pathname) + (dx < 0 ? 1 : -1)]
-      if (next) router.push(next)
+      if ((!quick && !far) || Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dy) > Math.abs(dx) / 2)
+        return settle(el)
+      const at = from()
+      const to = at + (dx < 0 ? 1 : -1)
+      const next = hrefs[to]
+      if (!next) return settle(el)
+      navigator.vibrate?.(5)
+      router.push(next, { transitionTypes: navDirection(at, to) })
+    }
+    const cancel = () => {
+      settle(page)
+      page = null
+      start = null
     }
     document.addEventListener('touchstart', down, { passive: true })
+    document.addEventListener('touchmove', move, { passive: true })
     document.addEventListener('touchend', up, { passive: true })
+    document.addEventListener('touchcancel', cancel, { passive: true })
     return () => {
       document.removeEventListener('touchstart', down)
+      document.removeEventListener('touchmove', move)
       document.removeEventListener('touchend', up)
+      document.removeEventListener('touchcancel', cancel)
     }
   }, [pathname, orderKey, router])
+
+  // Po zmianie widoku przesunięcie z gestu znika (ukryty widok wraca potem na swoje miejsce).
+  useEffect(() => {
+    for (const el of document.querySelectorAll<HTMLElement>('.app main')) {
+      el.style.transition = ''
+      el.style.transform = ''
+      el.style.opacity = ''
+    }
+  }, [pathname])
 
   if (pathname === '/') return null
 
@@ -89,21 +162,23 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
     <nav
       aria-label="menu"
       className={cx(
-        'bottom-nav fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[max(8px,env(safe-area-inset-bottom))]',
+        'bottom-nav fixed inset-x-0 bottom-0 z-(--z-nav) flex justify-center pb-[max(8px,env(safe-area-inset-bottom))]',
         'pointer-events-none transition-transform duration-200 motion-reduce:transition-none',
         hidden && 'translate-y-[calc(100%+8px)]',
       )}
     >
       <ul className="pointer-events-auto flex items-center gap-1 rounded-island border border-line bg-panel/82 p-1 backdrop-blur-[14px]">
-        {items.map(({ href, label, icon: Icon, active }) => (
+        {items.map(({ href, label, icon: Icon, active }, i) => (
           <li key={label}>
             <Link
               href={href}
+              transitionTypes={navDirection(activeIndex, i)}
+              onNavigate={() => setTapped(href)}
               aria-label={label}
               aria-current={active ? 'page' : undefined}
               className={cx(
-                'flex h-11 items-center justify-center gap-2 rounded-[9px] transition-colors',
-                active ? 'bg-accent/20 px-4 text-accent' : 'w-11 text-muted hover:text-text',
+                'flex h-11 items-center justify-center gap-2 rounded-inner transition-colors',
+                active ? 'bg-active px-4 text-accent' : 'w-11 text-muted hover:text-text',
               )}
             >
               <Icon className="size-5" aria-hidden="true" strokeWidth={1.8} />

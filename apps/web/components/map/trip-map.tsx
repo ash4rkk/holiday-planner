@@ -21,13 +21,12 @@ import {
 } from '@planer/core'
 import { ChevronLeft, ChevronRight, Navigation, SquarePen } from 'lucide-react'
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
 import { TYPE_STYLE } from '@/components/card/type-style'
-import { InboxButton } from '@/components/inbox/inbox-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -36,6 +35,7 @@ import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
 import { useWide } from '@/lib/use-wide'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
+import { type CachedMap, keepMap, takeMap } from './map-cache'
 import { cssVar, themeMap, useMapStyle } from './map-style'
 import { loadMapLibre } from './maplibre'
 
@@ -139,7 +139,8 @@ function groupNearby<T extends { card: MappedCard }>(m: MapLibreMap, pins: T[]):
 
 export function TripMap() {
   const { trip } = useTrip()
-  const cards = useCards()
+  // Pisanie w otwartej karcie ma pierwszeństwo; widok pod nią nadąża chwilę później.
+  const cards = useDeferredValue(useCards())
   const sheet = useCardSheet()
   const wide = useWide()
   const style = useMapStyle()
@@ -166,43 +167,85 @@ export function TripMap() {
     return [
       ...(route.start ? [{ card: route.start, label: '⌂' }] : []),
       ...route.stops.map((card, i) => ({ card, label: String(i + 1) })),
+      ...(route.end ? [{ card: route.end, label: '⌂' }] : []),
     ]
   }, [live, route])
 
-  // ---------- mapa (jedna instancja) ----------
+  // ---------- mapa (jedna na wyjazd, zachowana między wejściami na widok) ----------
+  const entry = useRef<CachedMap | null>(null)
   useEffect(() => {
     let cancelled = false
-    void loadMapLibre().then(({ Map, AttributionControl }) => {
-      if (cancelled || !container.current || map.current) return
-      const m = new Map({
-        container: container.current,
-        style,
-        center: [12.5, 41.9],
-        zoom: 4,
-        attributionControl: false,
-        dragRotate: false,
-        pitchWithRotate: false,
+    // Nasłuch per wejście na widok: stan tego komponentu, nie poprzedniego.
+    const onLoad = () => setLoaded(true)
+    const onZoom = () => map.current && setZoom(map.current.getZoom())
+    const onClick = () => setSelected(null)
+    const attach = (e: CachedMap) => {
+      container.current?.append(e.element)
+      entry.current = e
+      map.current = e.map
+      e.map.on('load', onLoad)
+      e.map.on('zoomend', onZoom)
+      e.map.on('click', onClick)
+      e.map.resize()
+      setZoom(e.map.getZoom())
+      if (e.map.isStyleLoaded()) setLoaded(true)
+    }
+    const reused = takeMap(trip.id)
+    if (reused) {
+      fittedTab.current = reused.tab
+      setTab(reused.tab as Tab)
+      attach(reused)
+    } else
+      void loadMapLibre().then(({ Map, AttributionControl }) => {
+        if (cancelled || !container.current || map.current) return
+        const element = document.createElement('div')
+        element.className = 'size-full'
+        container.current.append(element)
+        const m = new Map({
+          container: element,
+          style,
+          center: [12.5, 41.9],
+          zoom: 4,
+          attributionControl: false,
+          dragRotate: false,
+          pitchWithRotate: false,
+        })
+        m.touchZoomRotate.disableRotation()
+        m.addControl(new AttributionControl({ compact: true }), 'bottom-left')
+        themeMap(m)
+        attach({ tripId: trip.id, element, map: m, style, tab: 'all' })
       })
-      m.touchZoomRotate.disableRotation()
-      m.addControl(new AttributionControl({ compact: true }), 'bottom-left')
-      themeMap(m)
-      m.on('load', () => setLoaded(true))
-      m.on('zoomend', () => setZoom(m.getZoom()))
-      m.on('click', () => setSelected(null))
-      map.current = m
-    })
     return () => {
       cancelled = true
-      map.current?.remove()
+      const e = entry.current
+      const m = map.current
+      if (m) {
+        m.off('load', onLoad)
+        m.off('zoomend', onZoom)
+        m.off('click', onClick)
+      }
+      // Pinezki i strzałki rysuje widok — zdejmujemy je, żeby po powrocie się nie dublowały.
+      for (const marker of markers.current) marker.remove()
+      for (const a of arrows.current) a.remove()
+      markers.current = []
+      arrows.current = []
+      if (e) keepMap({ ...e, tab: tabRef.current })
+      entry.current = null
       map.current = null
       setLoaded(false)
     }
-    // Jedna mapa na cały widok; styl (motyw) zmienia się niżej przez setStyle.
-  }, [])
+    // Jedna mapa na wyjazd; styl (motyw) zmienia się niżej przez setStyle.
+  }, [trip.id])
+
+  // Zakładka dnia wraca razem z mapą.
+  const tabRef = useRef(tab)
+  tabRef.current = tab
 
   useEffect(() => {
     const m = map.current
-    if (!m || !loaded) return
+    const e = entry.current
+    if (!m || !e || !loaded || e.style === style) return
+    e.style = style
     m.setStyle(style)
   }, [style, loaded])
 
@@ -268,7 +311,9 @@ export function TripMap() {
   useEffect(() => {
     const m = map.current
     if (!m || !loaded) return
-    const stops: MappedCard[] = route ? [...(route.start ? [route.start] : []), ...route.stops] : []
+    const stops: MappedCard[] = route
+      ? [...(route.start ? [route.start] : []), ...route.stops, ...(route.end ? [route.end] : [])]
+      : []
     const features = routeFeatures(dayPlans.legs, dayPlans.plans, stops)
     const lines = features.filter((f) => f.properties.kind !== 'plan')
     const marks = dayPlans.legs.flatMap((leg) => {
@@ -430,7 +475,11 @@ export function TripMap() {
 
   const legendKinds = useMemo(() => {
     if (!route) return []
-    const stops = [...(route.start ? [route.start] : []), ...route.stops]
+    const stops = [
+      ...(route.start ? [route.start] : []),
+      ...route.stops,
+      ...(route.end ? [route.end] : []),
+    ]
     const found = new Set(
       routeFeatures(dayPlans.legs, dayPlans.plans, stops).map((f) => f.properties.kind),
     )
@@ -526,7 +575,7 @@ export function TripMap() {
           <div ref={container} className="size-full" />
         </div>
 
-        <div className="pointer-events-none absolute inset-x-px top-1 z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
+        <div className="pointer-events-none absolute inset-x-px top-1 z-(--z-overlay) flex flex-col gap-1 [&>*]:pointer-events-auto">
           <TopBar
             title={<TripTitle />}
             back={TRIPS_BACK}
@@ -535,10 +584,9 @@ export function TripMap() {
             actions={
               <>
                 <ChatButton onOpenCard={(id) => sheet.open(id)} />
-                <InboxButton />
+                <TripStatus />
               </>
             }
-            more={<TripStatus />}
           />
           <div role="tablist" aria-label="dni" className="island flex gap-1 overflow-x-auto p-1">
             {tabs.map((t) => (
@@ -552,7 +600,7 @@ export function TripMap() {
                   setTab(t.id)
                 }}
                 className={cx(
-                  'relative flex h-9 shrink-0 flex-col items-center justify-center rounded-[9px] px-3 text-xs transition-colors',
+                  'hit flex h-9 shrink-0 flex-col items-center justify-center rounded-inner px-3 text-xs transition-colors',
                   tab === t.id ? 'bg-raised font-bold text-accent' : 'text-muted',
                 )}
               >
@@ -572,7 +620,7 @@ export function TripMap() {
         {legendKinds.length > 0 && (
           <ul
             aria-label="legenda trasy"
-            className="island absolute top-[112px] right-1 z-10 flex flex-col gap-1 px-2 py-1.5 text-[11px] text-muted"
+            className="island absolute top-[112px] right-1 z-(--z-overlay) flex flex-col gap-1 px-2 py-1.5 text-2xs text-muted"
           >
             {legendKinds.map((kind) => (
               <li key={kind} className="flex items-center gap-1.5">
@@ -608,7 +656,7 @@ export function TripMap() {
                 </p>
                 <span
                   className={cx(
-                    'shrink-0 rounded-small px-2 py-0.5 text-[11px]',
+                    'shrink-0 rounded-small px-2 py-0.5 text-2xs',
                     TYPE_STYLE[selectedCard.type].chip,
                   )}
                 >
@@ -655,7 +703,7 @@ export function TripMap() {
 
         <SessionBanner />
 
-        <div className="pointer-events-none absolute inset-x-px bottom-[calc(80px+env(safe-area-inset-bottom))] z-10 flex flex-col gap-1 [&>*]:pointer-events-auto">
+        <div className="pointer-events-none absolute inset-x-px bottom-[calc(80px+env(safe-area-inset-bottom))] z-(--z-overlay) flex flex-col gap-1 [&>*]:pointer-events-auto">
           <div className="island flex items-center self-end">
             <button
               type="button"
@@ -687,7 +735,7 @@ export function TripMap() {
                   key={c.id}
                   type="button"
                   onClick={() => sheet.open(c.id)}
-                  className="flex min-h-9 w-full items-center gap-2 text-left text-sm"
+                  className="flex min-h-11 w-full items-center gap-2 text-left text-sm"
                 >
                   <span className={cx('size-2 shrink-0 rounded-full', TYPE_STYLE[c.type].bar)} />
                   <span className="truncate">{c.title || 'bez tytułu'}</span>

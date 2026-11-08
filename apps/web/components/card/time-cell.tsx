@@ -14,7 +14,7 @@ export function TimeCell({
     <span className={cx('w-12 shrink-0 text-right leading-tight', className)}>
       <span className="block text-sm font-bold">{card.time}</span>
       {card.durationMin && (
-        <span className="block text-[11px] text-subtle">
+        <span className="block text-2xs text-subtle">
           {formatDuration(card.durationMin).replace(/ h (\d+) min/, ' h $1')}
         </span>
       )}

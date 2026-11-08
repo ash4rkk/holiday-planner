@@ -5,7 +5,10 @@ import type { ReactNode } from 'react'
 
 const INLINE = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\(((?:https?:\/\/|card:)[^)\s]+)\)/g
 
-function inline(text: string, onCard: (id: string) => void, key: string): ReactNode[] {
+/** Linki do kart: otwarcie i czy karta jeszcze jest (skasowana — przekreślona, bez akcji). */
+export type CardLinks = { onCard: (id: string) => void; exists?: (id: string) => boolean }
+
+function inline(text: string, links: CardLinks, key: string): ReactNode[] {
   const out: ReactNode[] = []
   let last = 0
   for (const m of text.matchAll(INLINE)) {
@@ -21,16 +24,23 @@ function inline(text: string, onCard: (id: string) => void, key: string): ReactN
       )
     else if (m[4]?.startsWith('card:')) {
       const id = m[4].slice(5)
-      out.push(
-        <button
-          key={k}
-          type="button"
-          onClick={() => onCard(id)}
-          className="font-bold text-accent underline decoration-dotted"
-        >
-          {m[3]}
-        </button>,
-      )
+      if (links.exists && !links.exists(id))
+        out.push(
+          <span key={k} className="text-dim line-through" title="karta w koszu albo usunięta">
+            {m[3]}
+          </span>,
+        )
+      else
+        out.push(
+          <button
+            key={k}
+            type="button"
+            onClick={() => links.onCard(id)}
+            className="font-bold text-accent underline decoration-dotted"
+          >
+            {m[3]}
+          </button>,
+        )
     } else
       out.push(
         <a
@@ -49,14 +59,14 @@ function inline(text: string, onCard: (id: string) => void, key: string): ReactN
   return out
 }
 
-export function AiMarkdown({ text, onCard }: { text: string; onCard: (id: string) => void }) {
+export function AiMarkdown({ text, ...links }: { text: string } & CardLinks) {
   const blocks: ReactNode[] = []
   let list: { ordered: boolean; items: string[] } | null = null
   let para: string[] = []
   const flushPara = () => {
     if (para.length)
       blocks.push(
-        <p key={`p${blocks.length}`}>{inline(para.join(' '), onCard, `p${blocks.length}`)}</p>,
+        <p key={`p${blocks.length}`}>{inline(para.join(' '), links, `p${blocks.length}`)}</p>,
       )
     para = []
   }
@@ -67,7 +77,7 @@ export function AiMarkdown({ text, onCard }: { text: string; onCard: (id: string
     blocks.push(
       <Tag key={k} className={list.ordered ? 'list-decimal pl-5' : 'list-disc pl-5'}>
         {list.items.map((item, i) => (
-          <li key={i}>{inline(item, onCard, `${k}-${i}`)}</li>
+          <li key={i}>{inline(item, links, `${k}-${i}`)}</li>
         ))}
       </Tag>,
     )
@@ -89,7 +99,7 @@ export function AiMarkdown({ text, onCard }: { text: string; onCard: (id: string
       flushList()
       blocks.push(
         <p key={`h${blocks.length}`} className="font-bold">
-          {inline(heading[1] as string, onCard, `h${blocks.length}`)}
+          {inline(heading[1] as string, links, `h${blocks.length}`)}
         </p>,
       )
     } else if (!line.trim()) {
