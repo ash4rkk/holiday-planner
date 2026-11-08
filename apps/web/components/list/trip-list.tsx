@@ -42,7 +42,7 @@ import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { buttonClass, cx, SectionLabel } from '@/components/ui'
-import { DayWeather } from '@/components/weather'
+import { DayWeather, RainPlanB } from '@/components/weather'
 import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
@@ -288,6 +288,7 @@ export function TripList() {
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
+                  <RainPlanB date={day.date} cards={day.cards} />
                   <span className="flex-1" />
                   {/* Są pomysły: czat dokłada je do dnia w wolne godziny (zmiany do zatwierdzenia). */}
                   {ideaCount > 0 && (

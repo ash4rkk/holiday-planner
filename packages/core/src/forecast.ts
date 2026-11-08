@@ -1,10 +1,7 @@
-import type { DayForecast } from './briefing'
+import { type DayForecast, isWetHour } from './briefing'
 import type { LatLng } from './maps'
 
 // Prognoza jednego dnia z Open-Meteo (bez klucza) — dla workera (wieczorne podsumowanie).
-
-const RAIN_PROBABILITY = 50
-const RAIN_MM = 0.2
 
 export async function dayForecast(at: LatLng, date: string): Promise<DayForecast | undefined> {
   const url = new URL('https://api.open-meteo.com/v1/forecast')
@@ -31,9 +28,7 @@ export async function dayForecast(at: LatLng, date: string): Promise<DayForecast
   const rainHours = b.hourly.time
     .map((t, i) => ({
       hour: t.slice(11, 13),
-      wet:
-        (b.hourly.precipitation_probability[i] ?? 0) >= RAIN_PROBABILITY ||
-        (b.hourly.precipitation[i] ?? 0) >= RAIN_MM,
+      wet: isWetHour(b.hourly.precipitation_probability[i] ?? 0, b.hourly.precipitation[i] ?? 0),
     }))
     .filter((h) => h.wet && Number(h.hour) >= 7 && Number(h.hour) <= 22)
     .map((h) => h.hour)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AttachmentMeta } from './attachments'
-import { composeBriefing, rainSpans } from './briefing'
+import { cardsInRain, composeBriefing, rainSpans } from './briefing'
 import type { CardSnapshot } from './cards'
 
 const card = (p: Partial<CardSnapshot>) => ({ title: '', type: 'note', ...p }) as CardSnapshot
@@ -38,5 +38,20 @@ describe('wieczorne podsumowanie', () => {
   it('przedziały godzin deszczu', () => {
     expect(rainSpans(['09', '10', '11', '20'])).toBe('9–12, 20–21')
     expect(rainSpans([])).toBe('')
+  })
+})
+
+describe('karty w deszczu', () => {
+  it('czas trwania zahacza o godzinę deszczu; bez godziny i z innego dnia — nie', () => {
+    const cards = [
+      card({ id: 'rano', date, time: '09:00', durationMin: 90 }),
+      card({ id: 'park', date, time: '13:30', durationMin: 60 }),
+      card({ id: 'kolacja', date, time: '20:00' }),
+      card({ id: 'bez-godziny', date }),
+      card({ id: 'jutro', date: '2027-07-16', time: '14:00' }),
+    ]
+    expect(cardsInRain(cards, date, ['14', '15']).map((c) => c.id)).toEqual(['park'])
+    expect(cardsInRain(cards, date, ['10', '20']).map((c) => c.id)).toEqual(['rano', 'kolacja'])
+    expect(cardsInRain(cards, date, [])).toEqual([])
   })
 })

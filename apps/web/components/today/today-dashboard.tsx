@@ -42,7 +42,7 @@ import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
-import { useWeather, weatherIcon } from '@/components/weather'
+import { RainPlanB, useWeather, weatherIcon } from '@/components/weather'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
 import { useFetchCached } from '@/lib/use-fetch-cached'
@@ -253,7 +253,12 @@ export function TodayDashboard({ userName }: { userName: string }) {
         </>
       )}
 
-      {!after && <SectionLabel>{before ? 'pierwszy dzień' : 'plan dnia'}</SectionLabel>}
+      {!after && (
+        <div className="flex items-center gap-2 pr-1">
+          <SectionLabel>{before ? 'pierwszy dzień' : 'plan dnia'}</SectionLabel>
+          <RainPlanB date={planDate} cards={live} className="mt-2" />
+        </div>
+      )}
       {after ? null : todays.length === 0 ? (
         <p className="island p-4 text-sm text-muted">
           ● {before ? 'na pierwszy dzień' : 'na dziś'} nic nie zaplanowano

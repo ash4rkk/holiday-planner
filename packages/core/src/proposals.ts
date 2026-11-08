@@ -33,6 +33,8 @@ export type CardProposal = {
   ticketsUrl?: string
   /** Trzeba kupić bilet albo zarezerwować — karta dostaje status „do rezerwacji”. */
   booking?: boolean
+  /** Zamiennik istniejącej karty (np. plan B na deszcz) — dodawany jako jej wariant. */
+  variantOf?: string
 }
 
 /** Tylko adresy http(s); inne (javascript:, data:) odrzucamy. */
@@ -93,6 +95,8 @@ export function normalizeProposals(
         ...(notes && { notes }),
         ...(ticketsUrl && { ticketsUrl }),
         ...(c.needs_booking === true && { booking: true }),
+        ...(typeof c.variant_of === 'string' &&
+          /^[\w-]{4,40}$/.test(c.variant_of) && { variantOf: c.variant_of }),
       },
     ]
   })

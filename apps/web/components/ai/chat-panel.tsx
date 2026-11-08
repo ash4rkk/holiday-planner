@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  addVariant,
   applyCardChange,
   CARD_STATUS_LABELS,
   CARD_TYPE_LABELS,
@@ -185,7 +186,10 @@ function Proposals({
   const create = (card: CardProposal, target: 'idea' | 'plan') => {
     const { type, date, time, durationMin, location, address, booking } = card
     const planned = target === 'plan'
-    createCard(
+    // Zamiennik (plan B): wariant istniejącej karty — dzień i godzinę bierze z niej.
+    const main =
+      planned && card.variantOf ? existing.find((c) => c.id === card.variantOf) : undefined
+    const id = createCard(
       doc,
       {
         type,
@@ -199,6 +203,7 @@ function Proposals({
       new Date(),
       proposalText(card),
     )
+    if (main) addVariant(doc, id, main.id)
   }
   // Dodanie od razu, z „cofnij” jak w reszcie planu; cofnięcie zdejmuje też decyzję.
   const add = (indexes: number[], target: 'idea' | 'plan') => {
@@ -236,6 +241,14 @@ function Proposals({
           card.amount && formatAmount(card.amount),
         ].filter(Boolean)
         const onMap = card.location?.lat !== undefined
+        const replaces = card.variantOf
+          ? existing.find((c) => c.id === card.variantOf && !c.deletedAt)
+          : undefined
+        const planLabel = replaces
+          ? 'jako wariant'
+          : card.date
+            ? `do planu · ${formatShortDate(card.date)}`
+            : undefined
         return (
           <section
             key={i}
@@ -254,6 +267,11 @@ function Proposals({
             </p>
             {meta.length > 0 && (
               <p className="truncate text-xs text-subtle italic">{meta.join(' · ')}</p>
+            )}
+            {replaces && (
+              <p className="truncate text-xs text-blue">
+                zamiast: {replaces.title || 'bez tytułu'}
+              </p>
             )}
             {card.address && <p className="truncate text-xs text-subtle">⌖ {card.address}</p>}
             {card.description && <p className="mt-1 text-xs text-text">{card.description}</p>}
@@ -294,18 +312,20 @@ function Proposals({
             {state ? (
               <p className="mt-1 flex items-center gap-1 text-xs text-subtle">
                 {state !== 'skipped' && <Check className="size-3.5" aria-hidden="true" />}
-                {DECISION_LABELS[state]}
+                {state === 'plan' && card.variantOf
+                  ? 'dodano jako wariant'
+                  : DECISION_LABELS[state]}
               </p>
             ) : (
-              <div className={cx('mt-1 grid gap-1', card.date ? 'grid-cols-3' : 'grid-cols-2')}>
-                {/* Karta z terminem najpewniej ma trafić do planu, więc to jest główny wybór. */}
-                {card.date && (
+              <div className={cx('mt-1 grid gap-1', planLabel ? 'grid-cols-3' : 'grid-cols-2')}>
+                {/* Karta z terminem albo zamiennik najpewniej ma trafić do planu — główny wybór. */}
+                {planLabel && (
                   <button
                     type="button"
                     onClick={() => add([i], 'plan')}
                     className="min-h-11 rounded-small bg-accent text-xs font-bold text-on-accent"
                   >
-                    do planu · {formatShortDate(card.date)}
+                    {planLabel}
                   </button>
                 )}
                 <button
@@ -313,7 +333,7 @@ function Proposals({
                   onClick={() => add([i], 'idea')}
                   className={cx(
                     'min-h-11 rounded-small text-xs font-bold',
-                    card.date ? 'border border-accent text-accent' : 'bg-accent text-on-accent',
+                    planLabel ? 'border border-accent text-accent' : 'bg-accent text-on-accent',
                   )}
                 >
                   do pomysłów

@@ -55,3 +55,38 @@ export function composeBriefing(input: {
   ].filter(Boolean) as string[]
   return { title: `jutro · ${formatDayHeader(input.date)}`, body: lines.join('\n') }
 }
+
+// ---------- deszcz w godzinach kart (plan B) ----------
+
+export const RAIN_PROBABILITY = 50
+export const RAIN_MM = 0.2
+
+/** Godzina deszczowa: prawdopodobny opad albo realny opad w prognozie. */
+export function isWetHour(probability: number, mm: number): boolean {
+  return probability >= RAIN_PROBABILITY || mm >= RAIN_MM
+}
+
+const minutesOf = (time: string) => {
+  const [h = 0, m = 0] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+/**
+ * Karty dnia, których czas trwania (domyślnie godzina) zahacza o godziny deszczu. Które są pod
+ * gołym niebem, ocenia dopiero AI na życzenie — tu tylko „czy w ogóle jest o co pytać”.
+ */
+export function cardsInRain(
+  cards: CardSnapshot[],
+  date: string,
+  rainHours: string[],
+): CardSnapshot[] {
+  const wet = new Set(rainHours.map(Number))
+  if (!wet.size) return []
+  return cards.filter((c) => {
+    if (c.date !== date || !c.time || c.deletedAt || c.variantOf || c.skipped) return false
+    const start = minutesOf(c.time)
+    const end = start + (c.durationMin ?? 60)
+    for (let h = Math.floor(start / 60); h * 60 < end; h++) if (wet.has(h)) return true
+    return false
+  })
+}

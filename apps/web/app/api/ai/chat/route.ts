@@ -75,6 +75,10 @@ const PROPOSE_CARDS: Anthropic.Beta.BetaTool = {
               type: ['boolean', 'null'],
               description: 'trzeba kupić bilet lub zarezerwować',
             },
+            variant_of: nullable(
+              'string',
+              'id istniejącej karty, której ta propozycja jest zamiennikiem (np. plan B na deszcz); inaczej null',
+            ),
           },
           required: [
             'type',
@@ -90,6 +94,7 @@ const PROPOSE_CARDS: Anthropic.Beta.BetaTool = {
             'notes',
             'tickets_url',
             'needs_booking',
+            'variant_of',
           ],
           additionalProperties: false,
         },
