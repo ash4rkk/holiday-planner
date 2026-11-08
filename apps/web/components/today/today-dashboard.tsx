@@ -34,6 +34,7 @@ import { CardSheet } from '@/components/card/card-sheet'
 import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { SearchButton } from '@/components/search/search-button'
+import { TicketsButton } from '@/components/tickets/tickets'
 import { CountdownRing } from '@/components/today/countdown-ring'
 import { DayAxis } from '@/components/today/day-axis'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
@@ -149,6 +150,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
         }
       />
       <SessionBanner />
+      <TicketsButton start={planDate} className="mt-1" />
 
       {during ? (
         <>

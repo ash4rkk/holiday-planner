@@ -88,7 +88,7 @@ export function AttachmentViewer({
   )
 }
 
-function PdfPages({ url }: { url: string }) {
+export function PdfPages({ url }: { url: string }) {
   const container = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
 

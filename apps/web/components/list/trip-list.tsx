@@ -37,6 +37,7 @@ import { StatusMark } from '@/components/card/status-mark'
 import { TimeCell } from '@/components/card/time-cell'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { SearchButton } from '@/components/search/search-button'
+import { TicketsButton } from '@/components/tickets/tickets'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
@@ -287,6 +288,7 @@ export function TripList() {
                       .join(' · ')}
                   </span>
                   <span className="flex-1" />
+                  <TicketsButton start={day.date} compact />
                   <button
                     type="button"
                     onClick={() => add(day.date)}

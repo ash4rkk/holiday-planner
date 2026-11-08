@@ -3,6 +3,9 @@ import { OfflinePrefetch } from '@/components/offline-prefetch'
 import { TodayDashboard } from '@/components/today/today-dashboard'
 import { getCurrentUser } from '@/lib/auth/user'
 
+// „dziś” czyta profil z nagłówka logowania — wejście może chwilę poczekać.
+export const instant = false
+
 export default async function TodayPage({ params }: PageProps<'/trips/[tripId]/today'>) {
   const [{ tripId }, user] = await Promise.all([params, getCurrentUser()])
   return (
