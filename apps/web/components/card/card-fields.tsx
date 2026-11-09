@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  arriveEarlyMin,
   type CardLocation,
   type CardSnapshot,
   type EditableCardFields,
@@ -15,7 +16,15 @@ import { cx, inputClass } from '@/components/ui'
 import { resolvePastedPlace } from '@/lib/place-card'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
-type Key = 'date' | 'endDate' | 'time' | 'durationMin' | 'location' | 'destination' | 'remindMin'
+type Key =
+  | 'date'
+  | 'endDate'
+  | 'time'
+  | 'durationMin'
+  | 'location'
+  | 'destination'
+  | 'remindMin'
+  | 'arriveEarlyMin'
 type TimeKey = Exclude<Key, 'location' | 'destination'>
 
 const WHEN: { key: TimeKey; label: string; value: (card: CardSnapshot) => string }[] = [
@@ -32,7 +41,19 @@ const WHEN: { key: TimeKey; label: string; value: (card: CardSnapshot) => string
     value: (c) => formatDuration(c.durationMin as number),
   },
   { key: 'remindMin', label: 'przypomnienie', value: (c) => formatRemind(c.remindMin as number) },
+  {
+    key: 'arriveEarlyMin',
+    label: 'na miejscu wcześniej',
+    value: (c) =>
+      c.arriveEarlyMin ? `na miejscu ${formatDuration(c.arriveEarlyMin)} wcześniej` : 'na styk',
+  },
 ]
+
+const EARLY_OPTIONS = [0, 10, 15, 30, 45, 60, 90, 120, 150, 180] as const
+
+/** Zapas przed kartą ma sens przy transporcie (odprawa, peron); przy innych kartach go nie pokazujemy. */
+const whenFields = (card: CardSnapshot) =>
+  WHEN.filter((f) => f.key !== 'arriveEarlyMin' || card.type === 'transport')
 
 /** Wysepka karty z małą etykietą. */
 export function Section({
@@ -47,7 +68,7 @@ export function Section({
   return (
     <section className="island flex flex-col gap-1 p-2">
       <div className="flex min-h-6 items-center gap-2">
-        <h3 className="flex-1 text-xs text-subtle italic">{label}</h3>
+        <h3 className="flex-1 text-xs text-subtle">{label}</h3>
         {action}
       </div>
       {children}
@@ -85,7 +106,7 @@ export function CardSections({
     })
     onChange({ [key]: undefined })
   }
-  const active = WHEN.find((f) => f.key === editing)
+  const active = whenFields(card).find((f) => f.key === editing)
   // „Dokąd” ma sens tylko przy transporcie: bez tego nie wiadomo, skąd liczyć następny dojazd.
   const places = [
     { key: 'location' as const, label: 'miejsce' },
@@ -96,7 +117,7 @@ export function CardSections({
     <div className="flex flex-col gap-1">
       <Section label="kiedy">
         <div className="flex flex-wrap gap-1">
-          {WHEN.map(({ key, label, value }) => {
+          {whenFields(card).map(({ key, label, value }) => {
             const set = card[key] !== undefined
             return (
               <button
@@ -134,7 +155,7 @@ export function CardSections({
                 type="button"
                 onClick={() => clear(key)}
                 aria-label={`usuń pole ${label}`}
-                className="-my-2.5 -mr-1.5 flex size-11 items-center justify-center text-dim hover:text-red"
+                className="-my-2.5 -mr-1.5 flex size-11 items-center justify-center text-subtle hover:text-red"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>
@@ -176,14 +197,14 @@ function Row({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-20 shrink-0 text-xs text-subtle italic">{label}</span>
+      <span className="w-20 shrink-0 text-xs text-subtle">{label}</span>
       <div className="min-w-0 flex-1">{children}</div>
       {onClear && (
         <button
           type="button"
           onClick={onClear}
           aria-label={`usuń pole ${label}`}
-          className="flex size-11 shrink-0 items-center justify-center text-dim hover:text-red"
+          className="flex size-11 shrink-0 items-center justify-center text-subtle hover:text-red"
         >
           <X className="size-4" aria-hidden="true" />
         </button>
@@ -260,6 +281,25 @@ function FieldInput({
           {REMIND_OPTIONS.map((m) => (
             <option key={m} value={m}>
               {formatRemind(m)}
+            </option>
+          ))}
+        </select>
+      )
+    case 'arriveEarlyMin':
+      return (
+        <select
+          className={inputClass}
+          value={card.arriveEarlyMin ?? ''}
+          onChange={(e) =>
+            onChange({ arriveEarlyMin: e.target.value ? Number(e.target.value) : undefined })
+          }
+        >
+          <option value="">
+            domyślnie {formatDuration(arriveEarlyMin({ ...card, arriveEarlyMin: undefined }))}
+          </option>
+          {EARLY_OPTIONS.map((m) => (
+            <option key={m} value={m}>
+              {m ? formatDuration(m) : 'na styk'}
             </option>
           ))}
         </select>
@@ -356,7 +396,7 @@ function LocationField({
           onBlur={() => void resolve(link)}
         />
       )}
-      {state === 'resolving' && <span className="text-xs text-subtle italic">szukam miejsca…</span>}
+      {state === 'resolving' && <span className="text-xs text-subtle">szukam miejsca…</span>}
       {state === 'failed' && (
         <span className="text-xs text-red">● nie rozpoznano linku do Map Google</span>
       )}
@@ -392,7 +432,7 @@ function LocationField({
         <button
           type="button"
           onClick={() => setRelink(true)}
-          className="min-h-11 self-start px-1 text-xs text-subtle italic hover:text-accent"
+          className="min-h-11 self-start px-1 text-xs text-subtle hover:text-accent"
         >
           inne miejsce · wklej nowy link ›
         </button>

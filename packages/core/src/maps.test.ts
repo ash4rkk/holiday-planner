@@ -4,6 +4,7 @@ import {
   decodePolyline,
   isAllowedMapsHost,
   isGoogleMapsUrl,
+  mainCluster,
   nameFromMapsUrl,
   navigationUrl,
   parseShared,
@@ -189,5 +190,23 @@ describe('decodePolyline', () => {
       [-120.95, 40.7],
       [-126.453, 43.252],
     ])
+  })
+})
+
+describe('mainCluster', () => {
+  it('kadr na miasto, a nie na lotnisko w innym kraju', () => {
+    const lisbon = [
+      { lat: 38.71, lng: -9.14 },
+      { lat: 38.69, lng: -9.21 },
+      { lat: 38.8, lng: -9.39 },
+    ]
+    const warsaw = { lat: 52.17, lng: 20.97 }
+    expect(mainCluster([warsaw, ...lisbon])).toEqual(lisbon)
+  })
+
+  it('łańcuch bliskich punktów to jedno skupisko', () => {
+    const chain = [0, 0.3, 0.6, 0.9].map((d) => ({ lat: 50, lng: 20 + d }))
+    expect(mainCluster(chain)).toHaveLength(4)
+    expect(mainCluster([])).toEqual([])
   })
 })

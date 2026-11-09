@@ -6,6 +6,8 @@ import type { PlanResponse } from '@/app/api/route/plan/route'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 const DEBOUNCE_MS = 700
+/** Po powrocie do aplikacji w dniu odcinków: pytamy serwer, gdy ostatni wynik jest starszy. */
+const STALE_MS = 15 * 60_000
 
 /**
  * Plany odcinków dnia, pobierane same: od razu ostatni wynik z telefonu (działa offline), w tle
@@ -18,12 +20,16 @@ export function useDayPlans(date: string | null) {
   const legs = useMemo(() => (date ? dayLegs(cards, date) : []), [cards, date])
   const [plans, setPlans] = useState<Record<string, LegPlan | null>>({})
   const [limited, setLimited] = useState(false)
+  const [early, setEarly] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
+  const loadedAt = useRef(0)
 
   const requests = useMemo(
     () =>
       legs.flatMap((l) =>
-        l.route ? [{ id: l.id, ...l.route, leaveAt: l.leaveAt, arriveBy: l.arriveBy }] : [],
+        l.route
+          ? [{ id: l.id, ...l.route, leaveAt: l.leaveAt, arriveBy: l.arriveBy, mode: l.mode }]
+          : [],
       ),
     [legs],
   )
@@ -44,8 +50,10 @@ export function useDayPlans(date: string | null) {
       const body = res?.ok ? ((await res.json()) as PlanResponse) : null
       setBusy(false)
       if (!body) return
+      loadedAt.current = Date.now()
       setPlans(body.plans)
       setLimited(body.limited)
+      setEarly(body.early ?? [])
       try {
         localStorage.setItem(storageKey, JSON.stringify(body.plans))
       } catch {}
@@ -67,5 +75,17 @@ export function useDayPlans(date: string | null) {
     return () => clearTimeout(timer)
   }, [signature, date, load])
 
-  return { legs, plans, limited, busy, refresh: () => void load(true) }
+  // W trasie telefon długo leży w kieszeni: po powrocie do aplikacji sprawdzamy rozkład jeszcze raz.
+  // Serwer i tak odda wynik z bazy, jeśli jest dość świeży.
+  useEffect(() => {
+    if (!date || date !== todayLocal()) return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - loadedAt.current > STALE_MS)
+        void load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [date, load])
+
+  return { legs, plans, limited, early, busy, refresh: () => void load(true) }
 }

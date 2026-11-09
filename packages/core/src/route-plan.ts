@@ -37,8 +37,13 @@ export type LegPlan = {
   polyline?: string
   /** Powrót: o tej porze nie ma już sensownego połączenia, zostaje dojście pieszo. */
   noService?: boolean
+  /** Cena biletu na osobę z Google (komunikacja), gdy przewoźnik ją podaje. */
+  fare?: { amount: number; currency: string }
   checkedAt: string
 }
+
+/** Plan bez znacznika czasu: tak go liczymy, `checkedAt` dopisuje zapis. */
+export type LegDraft = Omit<LegPlan, 'checkedAt'>
 
 /** Dłuższe czekanie na odjazd znaczy, że ostatnie połączenie już odjechało. */
 export const NO_SERVICE_WAIT_MIN = 60
@@ -77,6 +82,95 @@ export function planMaxAgeMs(msToDeparture: number): number {
 
 /** Dłuższa trasa piesza to nie dojazd, tylko brak połączenia. */
 export const MAX_FALLBACK_WALK_MIN = 45
+
+/** Krótkie odcinki idzie się pieszo; nie ma po co pytać o rozkład. */
+export const SHORT_WALK_MIN = 10
+
+/** Nocny powrót „nic nie jedzie”: dojście pieszo pokazujemy tylko do takiej długości. */
+export const NO_SERVICE_MAX_WALK_MIN = 180
+
+/** Dalej niż tyle dni naprzód Google zwykle nie ma rozkładu; nie pytamy wcale. */
+export const TRANSIT_HORIZON_DAYS = 60
+
+/** Pusta odpowiedź Google dla daty dalej niż tyle dni znaczy „rozkład jeszcze niedostępny”. */
+export const EARLY_EMPTY_DAYS = 7
+
+/** Wynik zapytania o komunikację; błąd i brak połączeń to co innego. */
+export type TransitOutcome =
+  | { kind: 'ok'; plan: LegDraft }
+  | { kind: 'empty' }
+  | { kind: 'error' }
+  | { kind: 'limited' }
+  | { kind: 'no-key' }
+
+export type PlanChoice = {
+  plan: LegDraft | null
+  /** Zapis do bazy; wyniku awaryjnego nie zapisujemy, żeby po powrocie Google pojawił się poprawny. */
+  keep: boolean
+  limited?: boolean
+  /** Rozkładu na ten dzień jeszcze nie ma: sprawdzimy bliżej wyjazdu. */
+  early?: boolean
+}
+
+export type PlanInput = {
+  mode: TravelMode
+  /** Trasa z OSRM: przy aucie samochodem, inaczej pieszo (null = nie udało się policzyć). */
+  osrm: LegDraft | null
+  leaveAt?: string
+  arriveBy?: string
+  /** Tylko przejazd (inne połączenie): bez zamiany na dojście pieszo. */
+  ride?: boolean
+  /** Ile dni od dziś do odcinka. */
+  daysAhead: number
+}
+
+/** Czy pytać Google o komunikację; inaczej `choosePlan` dostaje `transit: undefined`. */
+export function needsTransit({ mode, osrm: walking, ride, daysAhead }: PlanInput): boolean {
+  if (mode !== 'transit') return false
+  if (!ride && walking && walking.minutes <= SHORT_WALK_MIN) return false
+  return daysAhead <= TRANSIT_HORIZON_DAYS
+}
+
+/** „Nic już nie jedzie”: dojście pieszo, o ile da się je przejść; dalej zostaje brak połączenia. */
+function noService(walking: LegDraft | null): LegDraft | null {
+  return walking && walking.minutes <= NO_SERVICE_MAX_WALK_MIN
+    ? { ...walking, noService: true }
+    : null
+}
+
+/**
+ * Wybór planu odcinka z tego, co policzył OSRM i Google. Czysta funkcja: decyzje (dojście pieszo
+ * zamiast komunikacji, „nic nie jedzie”, wynik awaryjny bez zapisu) są w jednym miejscu i w testach.
+ */
+export function choosePlan(input: PlanInput, transit?: TransitOutcome): PlanChoice {
+  const { mode, osrm: walking, leaveAt, arriveBy, ride, daysAhead } = input
+  if (mode !== 'transit') return { plan: walking, keep: true }
+  if (!ride && walking && walking.minutes <= SHORT_WALK_MIN) return { plan: walking, keep: true }
+  const fallback = walking && walking.minutes <= MAX_FALLBACK_WALK_MIN ? walking : null
+  if (daysAhead > TRANSIT_HORIZON_DAYS) return { plan: null, keep: false, early: true }
+  // Powrót bez godziny przyjazdu: tylko tu „nic nie jedzie” ma sens.
+  const night = !arriveBy && leaveAt !== undefined
+  switch (transit?.kind) {
+    case 'ok': {
+      const ride_ = transit.plan
+      if (ride) return { plan: ride_, keep: true }
+      const departs = ride_.steps.find((s) => s.kind === 'transit')?.departs
+      if (night && departs && waitMinutes(leaveAt as string, departs) > NO_SERVICE_WAIT_MIN)
+        return { plan: noService(walking), keep: true }
+      return { plan: walking && walking.minutes <= ride_.minutes ? walking : ride_, keep: true }
+    }
+    case 'empty':
+      if (daysAhead > EARLY_EMPTY_DAYS) return { plan: null, keep: false, early: true }
+      if (ride) return { plan: null, keep: false }
+      if (night) return { plan: noService(walking), keep: true }
+      return { plan: fallback, keep: false }
+    case 'limited':
+      return { plan: ride ? null : fallback, keep: false, limited: true }
+    default:
+      // Błąd Google, brak klucza: dojście pieszo, jeśli krótkie; nigdy „nic nie jedzie”.
+      return { plan: ride ? null : fallback, keep: false }
+  }
+}
 
 /** Awaryjna trasa piesza za długa, żeby ją pokazać; piechurów i komunikat „nic nie jedzie” zostawia. */
 export function isFarWalk(plan: LegPlan, travelMode: TravelMode): boolean {

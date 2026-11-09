@@ -2,19 +2,44 @@
 
 import {
   type DayGap,
+  formatAmount,
   type LegPlan,
   type LegStep,
   legShortfall,
   shiftClock,
+  sumByCurrency,
   TRAVEL_MODE_LABELS,
+  type TravelMode,
   transitUrl,
+  updateCard,
 } from '@planer/core'
 import { ChevronDown, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import type { PlanResponse } from '@/app/api/route/plan/route'
 import { cx } from '@/components/ui'
+import { withUndo } from '@/lib/undo'
 import { useTrip } from '@/lib/yjs/trip-doc'
 import { formatDuration } from './type-style'
+
+const MODES: TravelMode[] = ['transit', 'walk', 'drive']
+
+/** Zapytanie o inne połączenie: od chwili wyjścia, nie od odjazdu (inaczej przeskakuje kursy). */
+export function shiftRequest(
+  plan: Pick<LegPlan, 'departAt' | 'minutes' | 'steps'>,
+  direction: 'earlier' | 'later',
+): { leaveAt: string } | { arriveBy: string } | undefined {
+  const first = plan.steps.find((s) => s.kind === 'transit')
+  const leave = plan.departAt ?? first?.departs
+  if (!leave) return undefined
+  return direction === 'later'
+    ? { leaveAt: shiftClock(leave, 1) }
+    : { arriveBy: shiftClock(leave, plan.minutes - 1) }
+}
+
+/** „bilet ok. 3,10 € / os.” */
+export function fareText(fare: NonNullable<LegPlan['fare']>): string {
+  return `bilet ok. ${formatAmount({ value: fare.amount, currency: fare.currency })} / os.`
+}
 
 const LABELS: Record<DayGap['kind'], string | undefined> = {
   start: 'z noclegu',
@@ -97,7 +122,7 @@ function StepTimeline({ rows }: { rows: TimelineRow[] }) {
                     'my-0.5 min-h-4 flex-1',
                     r.kind === 'transit'
                       ? 'border-l-[3px] border-blue'
-                      : 'border-l-2 border-dotted border-dim',
+                      : 'border-l-2 border-dotted border-subtle',
                   )}
                 />
               )}
@@ -136,23 +161,36 @@ export function LegRow({
   plan: base,
   bufferMin,
   onRefresh,
+  early,
 }: {
   leg: DayGap
   date: string
   plan?: LegPlan | null
   bufferMin: number
   onRefresh?: () => void
+  /** Google nie ma jeszcze rozkładu na ten dzień. */
+  early?: boolean
 }) {
-  const { trip } = useTrip()
+  const { trip, doc } = useTrip()
   const [open, setOpen] = useState(false)
   // Wybrane inne połączenie; zostaje do wyjścia z ekranu, plan dnia się nie zmienia.
   const [other, setOther] = useState<LegPlan | null>(null)
   const [searching, setSearching] = useState(false)
   const plan = other ?? base
 
+  const mode = leg.mode ?? trip.travelMode
+  const setMode = (next: TravelMode) => {
+    const cardId = leg.modeCardId
+    if (!cardId || next === mode) return
+    setOther(null)
+    withUndo(doc, `dojazd ${TRAVEL_MODE_LABELS[next]}`, () =>
+      updateCard(doc, cardId, { arriveMode: next === trip.travelMode ? undefined : next }),
+    )
+  }
+
   const shift = async (direction: 'earlier' | 'later') => {
-    const first = plan?.steps.find((s) => s.kind === 'transit')
-    if (!leg.route || !first?.departs) return
+    const when = plan && shiftRequest(plan, direction)
+    if (!leg.route || !when) return
     setSearching(true)
     const res = await fetch('/api/route/plan', {
       method: 'POST',
@@ -165,9 +203,8 @@ export function LegRow({
           {
             id: leg.id,
             ...leg.route,
-            ...(direction === 'later'
-              ? { leaveAt: shiftClock(first.departs, 1) }
-              : { arriveBy: shiftClock(first.departs, first.minutes - 1) }),
+            mode: leg.mode,
+            ...when,
           },
         ],
       }),
@@ -178,7 +215,7 @@ export function LegRow({
     if (found) setOther(found)
   }
   const overlap = leg.freeMin !== undefined && leg.freeMin < 0
-  if (!overlap && !leg.route) return null
+  if (!overlap && !leg.route && !leg.far) return null
 
   const short = plan ? legShortfall(leg, plan, bufferMin) : undefined
   const late = short !== undefined && short > 0
@@ -187,7 +224,8 @@ export function LegRow({
       ? shiftClock(plan.departAt ?? shiftClock(leg.arriveBy, -plan.minutes), -bufferMin)
       : undefined
   const label = LABELS[leg.kind]
-  const details = plan && (plan.steps.length > 0 || onRefresh)
+  // Rozwinięcie zawsze, gdy jest trasa: tam też wybór, czym jechać (np. auto przy braku połączenia).
+  const details = Boolean(leg.route && (plan !== undefined || early))
 
   return (
     <div className="px-2 text-xs">
@@ -222,28 +260,80 @@ export function LegRow({
             )}
           </button>
         )}
+        {leg.far && (
+          <span className="text-subtle">
+            {label && `${label}: `}za daleko na dojazd · dodaj kartę transportu
+          </span>
+        )}
         {plan === null && leg.route && (
-          <span className="text-orange">● {label && `${label}: `}brak połączenia</span>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className={cx(
+              'hit flex min-h-7 items-center gap-1 text-left',
+              early ? 'text-subtle' : 'text-amber',
+            )}
+          >
+            <span>
+              {!early && '● '}
+              {label && `${label}: `}
+              {early ? 'rozkładu jeszcze nie ma, sprawdzimy bliżej wyjazdu' : 'brak połączenia'}
+            </span>
+            <ChevronDown
+              className={cx('size-3 shrink-0 transition-transform', open && 'rotate-180')}
+              aria-hidden="true"
+            />
+          </button>
         )}
         {leg.route && (
           <a
             href={transitUrl(leg.route.from, leg.route.to)}
             target="_blank"
             rel="noreferrer"
-            className="hit ml-auto flex min-h-7 items-center text-subtle italic hover:text-accent"
+            className="hit ml-auto flex min-h-7 items-center text-subtle hover:text-accent"
           >
             dojazd ›
           </a>
         )}
       </div>
+      {open && details && (
+        <div className="fade-in flex flex-col gap-0.5 pb-1 pl-1 text-subtle">
+          {leg.modeCardId && (
+            <span className="flex flex-wrap items-center gap-1.5" role="group" aria-label="czym">
+              <span className="text-subtle">czym</span>
+              {MODES.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMode(m)}
+                  aria-pressed={m === mode}
+                  className={cx(
+                    'flex min-h-11 items-center rounded-full border px-3',
+                    m === mode
+                      ? 'border-accent bg-active font-bold text-accent'
+                      : 'border-line text-muted hover:text-accent',
+                  )}
+                >
+                  {m === 'drive' ? 'autem / taxi' : TRAVEL_MODE_LABELS[m]}
+                </button>
+              ))}
+            </span>
+          )}
+          {leg.earlyMin !== undefined && (
+            <span>na miejscu {formatDuration(leg.earlyMin)} przed godziną karty</span>
+          )}
+        </div>
+      )}
       {open && plan && (
         <div className="fade-in flex flex-col gap-0.5 pb-1 pl-1 text-subtle">
+          {plan.fare && <span>{fareText(plan.fare)}</span>}
           {plan.steps.length > 0 && (
             <StepTimeline rows={timeline(plan.steps, leaveBy ?? plan.departAt)} />
           )}
           {plan.mode === 'transit' && (
             <span className="flex flex-wrap items-center gap-1.5">
-              <span className="text-subtle italic">odjazd</span>
+              <span className="text-subtle">odjazd</span>
               <button
                 type="button"
                 disabled={searching}
@@ -271,14 +361,14 @@ export function LegRow({
                 <button
                   type="button"
                   onClick={() => setOther(null)}
-                  className="min-h-11 px-1 text-subtle italic hover:text-accent"
+                  className="min-h-11 px-1 text-subtle hover:text-accent"
                 >
                   wróć do planu
                 </button>
               )}
             </span>
           )}
-          <span className="flex items-center gap-2 text-dim italic">
+          <span className="flex items-center gap-2 text-subtle">
             sprawdzono {checkedText(plan.checkedAt)}
             {plan.mode === 'transit' && (
               <span className="font-sans text-attrib not-italic">Google Maps</span>
@@ -314,10 +404,14 @@ export function DayTravelSummary({
   if (!summary && !limited) return null
   const minutes = list.reduce((sum, p) => sum + p.minutes, 0)
   const km = list.reduce((sum, p) => sum + (p.km ?? 0), 0)
+  const fares = sumByCurrency(
+    list.flatMap((p) => (p.fare ? [{ value: p.fare.amount, currency: p.fare.currency }] : [])),
+  )
   return (
-    <p className="px-3 text-xs text-subtle italic">
+    <p className="px-3 text-xs text-subtle">
       {summary &&
         `w drodze około ${formatDuration(minutes)}${km ? ` · ${String(Math.round(km * 10) / 10).replace('.', ',')} km` : ''}`}
+      {summary && fares.length > 0 && ` · bilety ok. ${fares.map(formatAmount).join(' + ')} / os.`}
       {limited && <span className="text-red not-italic"> ● limit dojazdów wyczerpany</span>}
     </p>
   )

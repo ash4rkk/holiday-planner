@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CardSnapshot } from './cards'
 import {
   arrivalClock,
+  arriveEarlyMin,
   cardIsPast,
   dayGaps,
   dayLegs,
@@ -59,11 +60,11 @@ describe('dayGaps', () => {
         time: '09:00',
         durationMin: 60,
         location: place,
-        destination: { name: 'dworzec', lat: 5, lng: 6 },
+        destination: { name: 'dworzec', lat: 1.05, lng: 2.05 },
       }),
       card('b', { time: '12:00', location: place }),
     ])
-    expect(gap?.route?.from).toEqual({ lat: 5, lng: 6 })
+    expect(gap?.route?.from).toEqual({ lat: 1.05, lng: 2.05 })
   })
 
   it('po transporcie nie ma trasy, bo nie wiadomo, gdzie się kończy', () => {
@@ -85,7 +86,7 @@ describe('dayLegs', () => {
     type: 'stay',
     date: '2027-07-13',
     endDate: '2027-07-16',
-    location: { name: 'hotel', lat: 9, lng: 9 },
+    location: { name: 'hotel', lat: 1.1, lng: 2.1 },
   })
 
   it('dodaje dojazd z noclegu i powrót', () => {
@@ -99,13 +100,68 @@ describe('dayLegs', () => {
     )
     expect(legs.map((l) => l.kind)).toEqual(['start', 'between', 'end'])
     expect(legs[0]).toMatchObject({ to: 'a', arriveBy: '10:00' })
-    expect(legs[0]?.route?.from).toEqual({ lat: 9, lng: 9 })
+    expect(legs[0]?.route?.from).toEqual({ lat: 1.1, lng: 2.1 })
     expect(legs[2]).toMatchObject({ from: 'b', leaveAt: '14:00' })
+  })
+
+  it('tryb dojazdu z karty docelowej, przy powrocie z noclegu', () => {
+    const legs = dayLegs(
+      [
+        { ...stay, arriveMode: 'drive' },
+        card('a', { time: '10:00', location: place, arriveMode: 'walk' }),
+        card('b', { time: '14:00', location: place }),
+      ],
+      '2027-07-14',
+    )
+    expect(legs.map((l) => [l.kind, l.mode, l.modeCardId])).toEqual([
+      ['start', 'walk', 'a'],
+      ['between', undefined, 'b'],
+      ['end', 'drive', 'h'],
+    ])
+  })
+
+  it('powrót z lotniska do hotelu w innym kraju: za daleko, bez trasy', () => {
+    const legs = dayLegs(
+      [
+        { ...stay, location: { name: 'hotel', lat: 38.71, lng: -9.13 } },
+        card('a', { time: '18:00', location: { name: 'Okęcie', lat: 52.17, lng: 20.97 } }),
+      ],
+      '2027-07-14',
+    )
+    const end = legs.find((l) => l.kind === 'end')
+    expect(end?.far).toBe(true)
+    expect(end?.route).toBeUndefined()
   })
 
   it('bez noclegu tylko odcinki między kartami', () => {
     const legs = dayLegs([card('a', { time: '10:00' }), card('b', { time: '14:00' })], '2027-07-14')
     expect(legs.map((l) => l.kind)).toEqual(['between'])
+  })
+})
+
+describe('zapas przed kartą', () => {
+  it('lot 2 h, inny transport 15 min, reszta 0, a ustawione na karcie wygrywa', () => {
+    expect(arriveEarlyMin(card('a', { type: 'transport', title: 'Lot LO 319' }))).toBe(120)
+    expect(
+      arriveEarlyMin(
+        card('a', { type: 'transport', title: 'odprawa', location: { name: 'Lotnisko Chopina' } }),
+      ),
+    ).toBe(120)
+    expect(arriveEarlyMin(card('a', { type: 'transport', title: 'pociąg do Porto' }))).toBe(15)
+    // „lot” tylko jako całe słowo: „Lotus” to nie lot.
+    expect(arriveEarlyMin(card('a', { type: 'transport', title: 'autobus Lotus' }))).toBe(15)
+    expect(arriveEarlyMin(card('a', { title: 'muzeum' }))).toBe(0)
+    expect(arriveEarlyMin(card('a', { type: 'transport', title: 'lot', arriveEarlyMin: 0 }))).toBe(
+      0,
+    )
+  })
+
+  it('godzina „na miejscu” i wolny czas uwzględniają zapas', () => {
+    const [gap] = dayGaps([
+      card('a', { time: '06:00', durationMin: 60, location: place }),
+      card('b', { type: 'transport', title: 'lot do Lizbony', time: '10:00', location: place }),
+    ])
+    expect(gap).toMatchObject({ arriveBy: '08:00', freeMin: 60, earlyMin: 120 })
   })
 })
 

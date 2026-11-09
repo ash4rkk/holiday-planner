@@ -12,13 +12,24 @@ const body = z.object({
   ride: z.boolean().optional(),
   live: z.boolean().optional(),
   legs: z
-    .array(z.object({ id: z.string(), from: point, to: point, leaveAt: time, arriveBy: time }))
+    .array(
+      z.object({
+        id: z.string(),
+        from: point,
+        to: point,
+        leaveAt: time,
+        arriveBy: time,
+        mode: z.enum(['transit', 'walk', 'drive']).optional(),
+      }),
+    )
     .max(16),
 })
 
 export type PlanResponse = {
   plans: Record<string, LegPlan | null>
   limited: boolean
+  /** Odcinki, dla których Google nie ma jeszcze rozkładu (sprawdzimy bliżej wyjazdu). */
+  early: string[]
   /** Przy `live`: godzina na miejscu wyjazdu, od której liczono. */
   now?: string
 }
@@ -38,17 +49,19 @@ export async function POST(request: Request) {
 
   const plans: PlanResponse['plans'] = {}
   let limited = false
+  const early: string[] = []
   // Kolejno: publiczny serwer OSRM nie lubi serii równoległych zapytań.
   for (const { id, ...leg } of legs) {
     const request = live ? { ...leg, date, leaveAt: now, arriveBy: undefined } : { ...leg, date }
     const result = await planLeg(request, trip, { refresh, ride, live }).catch((error) => {
       console.warn('[routes] plan', String(error))
-      return { plan: null, limited: false }
+      return { plan: null, limited: false, early: false }
     })
     plans[id] = result.plan
     limited ||= Boolean(result.limited)
+    if (result.early) early.push(id)
   }
-  return Response.json({ plans, limited, now } satisfies PlanResponse, {
+  return Response.json({ plans, limited, early, now } satisfies PlanResponse, {
     headers: { 'cache-control': 'no-store' },
   })
 }

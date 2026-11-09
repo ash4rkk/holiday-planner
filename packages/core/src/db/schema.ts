@@ -212,12 +212,24 @@ export const routesUsage = pgTable('routes_usage', {
   requests: integer('requests').notNull().default(0),
 })
 
+/** Dzienny bezpiecznik zapytań do Google (wspólny dla web i workera; dzień w Europe/Warsaw). */
+export const routesDaily = pgTable('routes_daily', {
+  day: text('day').primaryKey(),
+  requests: integer('requests').notNull().default(0),
+})
+
+/** Wysłane przypomnienia „czas wyjść”: raz na odcinek, dzień i godzinę, niezależnie od cache tras. */
+export const leaveAlerts = pgTable('leave_alerts', {
+  key: text('key').primaryKey(),
+  alertedAt: timestamp('alerted_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 /** Wyniki tras (czas, przesiadki, przebieg): wspólne dla obu telefonów, nie zużywają limitu drugi raz. */
 export const routeCache = pgTable('route_cache', {
   key: text('key').primaryKey(),
   plan: jsonb('plan').notNull(),
   checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
-  // Przypomnienie „czas wyjść” idzie raz na odcinek.
+  // Nieużywane od leave_alerts (migracje tylko addytywne).
   alertedAt: timestamp('alerted_at', { withTimezone: true }),
 })
 

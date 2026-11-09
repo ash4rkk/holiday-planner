@@ -1,6 +1,7 @@
 import type { CardLocation, CardSnapshot } from './cards'
 import { addDays } from './dates'
-import { hasCoords, type LatLng } from './maps'
+import { distanceKm, hasCoords, type LatLng } from './maps'
+import type { TravelMode } from './route-plan'
 import { staysOver } from './trip-doc'
 
 // Przerwy między kartami dnia: czy się nakładają i czy jest sens sprawdzać dojazd.
@@ -19,6 +20,50 @@ export type DayGap = {
   arriveBy?: string
   /** Skąd dokąd, gdy obie karty mają miejsce i dojazd ma sens. */
   route?: { from: LatLng; to: LatLng }
+  /** Miejsca za daleko na dojazd (lot, pociąg dalekobieżny): bez trasy, z podpowiedzią karty transportu. */
+  far?: boolean
+  /** Tryb dojazdu ustawiony na karcie docelowej (`modeCardId`); bez niego tryb wyjazdu. */
+  mode?: TravelMode
+  /** Karta, na której zapisuje się tryb tego odcinka (docelowa, przy powrocie nocleg). */
+  modeCardId?: string
+  /** O tyle minut przed godziną karty trzeba być na miejscu; `arriveBy` już to uwzględnia. */
+  earlyMin?: number
+}
+
+/** Dalej niż tyle (w linii prostej) to już nie dojazd, tylko podróż: lot albo pociąg dalekobieżny. */
+export const FAR_LEG_KM = 500
+
+/** Domyślny zapas przed odlotem i przed innym transportem (pociąg, autobus, prom). */
+export const FLIGHT_EARLY_MIN = 120
+export const TRANSPORT_EARLY_MIN = 15
+
+const FLIGHT =
+  /(^|[^\p{L}])(lot|samolot|lotnisk\p{L}*|airport|aeroport\p{L}*|aéroport|aeropuerto|flughafen|flight)(?![\p{L}])/iu
+
+/** Ile minut przed kartą trzeba być na miejscu: z karty albo domyślnie (lot 2 h, transport 15 min). */
+export function arriveEarlyMin(
+  c: Pick<CardSnapshot, 'type' | 'title' | 'location' | 'arriveEarlyMin'>,
+): number {
+  if (c.arriveEarlyMin !== undefined) return Math.max(0, c.arriveEarlyMin)
+  if (c.type !== 'transport') return 0
+  return FLIGHT.test(`${c.title ?? ''} ${c.location?.name ?? ''}`)
+    ? FLIGHT_EARLY_MIN
+    : TRANSPORT_EARLY_MIN
+}
+
+/** Trasa odcinka albo znacznik „za daleko”; dalekich miejsc nie pytamy ani Google, ani OSRM. */
+function withRoute(gap: DayGap, from?: LatLng, to?: LatLng): DayGap {
+  if (!from || !to) return gap
+  if (distanceKm(from, to) > FAR_LEG_KM) gap.far = true
+  else gap.route = { from, to }
+  return gap
+}
+
+function withMode(gap: DayGap, card?: CardSnapshot): DayGap {
+  if (!card) return gap
+  gap.modeCardId = card.id
+  if (card.arriveMode) gap.mode = card.arriveMode
+  return gap
 }
 
 const minutes = (time: string) => {
@@ -52,19 +97,18 @@ export function dayGaps(cards: CardSnapshot[]): DayGap[] {
   return timed.slice(1).map((to, i) => {
     const from = timed[i] as CardSnapshot
     const end = endOf(from)
+    const early = arriveEarlyMin(to)
     const gap: DayGap = {
       id: `${from.id}>${to.id}`,
       kind: 'between',
       from: from.id,
       to: to.id,
-      freeMin: minutes(to.time as string) - end,
+      freeMin: minutes(to.time as string) - early - end,
       leaveAt: clock(end),
-      arriveBy: to.time,
+      arriveBy: shiftClock(to.time as string, -early),
+      ...(early ? { earlyMin: early } : {}),
     }
-    const start = departurePoint(from)
-    const stop = point(to.location)
-    if (start && stop) gap.route = { from: start, to: stop }
-    return gap
+    return withMode(withRoute(gap, departurePoint(from), point(to.location)), to)
   })
 }
 
@@ -83,24 +127,28 @@ export function dayLegs(cards: CardSnapshot[], date: string): DayGap[] {
 
   const home = point(morning?.location)
   const firstStop = point(first?.location)
-  if (first && home && firstStop)
-    legs.unshift({
+  if (first && home && firstStop) {
+    const early = arriveEarlyMin(first)
+    const start: DayGap = {
       id: `start>${first.id}`,
       kind: 'start',
       to: first.id,
-      arriveBy: first.time,
-      route: { from: home, to: firstStop },
-    })
+      arriveBy: shiftClock(first.time as string, -early),
+      ...(early ? { earlyMin: early } : {}),
+    }
+    legs.unshift(withMode(withRoute(start, home, firstStop), first))
+  }
   const bed = point(night?.location)
   const lastStop = last && departurePoint(last)
-  if (last && bed && lastStop)
-    legs.push({
+  if (last && bed && lastStop) {
+    const end: DayGap = {
       id: `${last.id}>end`,
       kind: 'end',
       from: last.id,
       leaveAt: clock(endOf(last)),
-      route: { from: lastStop, to: bed },
-    })
+    }
+    legs.push(withMode(withRoute(end, lastStop, bed), night))
+  }
   return legs
 }
 

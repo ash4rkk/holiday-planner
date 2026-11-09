@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  choosePlan,
   isFarWalk,
+  type LegDraft,
   type LegPlan,
   mergeWalks,
+  needsTransit,
+  type PlanInput,
   planMaxAgeMs,
   routeMarks,
   vehicleKind,
@@ -116,5 +120,81 @@ describe('routeMarks', () => {
     expect(vehicleKind({ vehicle: 'metro' })).toBe('metro')
     expect(vehicleKind({ vehicle: 'trolejbus' })).toBe('bus')
     expect(vehicleKind({ vehicle: 'przejazd' })).toBe('transit')
+  })
+})
+
+describe('choosePlan', () => {
+  const walk = (minutes: number): LegDraft => ({ minutes, mode: 'walk', steps: [] })
+  const ride = (departs: string, minutes = 20): LegDraft => ({
+    minutes,
+    mode: 'transit',
+    departAt: departs,
+    steps: [{ kind: 'transit', minutes, departs }],
+  })
+  const base: PlanInput = { mode: 'transit', osrm: walk(30), arriveBy: '14:00', daysAhead: 1 }
+  const night: PlanInput = { ...base, arriveBy: undefined, leaveAt: '23:30' }
+
+  it('krótki odcinek pieszo, bez pytania Google', () => {
+    const input = { ...base, osrm: walk(8) }
+    expect(needsTransit(input)).toBe(false)
+    expect(choosePlan(input)).toEqual({ plan: walk(8), keep: true })
+  })
+
+  it('pieszo szybciej niż komunikacją → pieszo', () => {
+    expect(choosePlan(base, { kind: 'ok', plan: ride('13:20', 40) }).plan).toEqual(walk(30))
+    expect(choosePlan(base, { kind: 'ok', plan: ride('13:20', 15) }).plan?.mode).toBe('transit')
+  })
+
+  it('błąd Google to nie „nic nie jedzie”: dojście pieszo bez zapisu', () => {
+    const choice = choosePlan(night, { kind: 'error' })
+    expect(choice).toEqual({ plan: walk(30), keep: false })
+    expect(choosePlan({ ...night, osrm: walk(90) }, { kind: 'error' }).plan).toBeNull()
+  })
+
+  it('pusta odpowiedź nocą: nic nie jedzie, z zapisem', () => {
+    expect(choosePlan(night, { kind: 'empty' })).toEqual({
+      plan: { ...walk(30), noService: true },
+      keep: true,
+    })
+  })
+
+  it('poranny kurs przy nocnym powrocie: nic nie jedzie', () => {
+    const choice = choosePlan(night, { kind: 'ok', plan: ride('05:40') })
+    expect(choice.plan?.noService).toBe(true)
+  })
+
+  it('nic nie jedzie, a pieszo wiele godzin: brak połączenia zamiast trasy pieszej', () => {
+    expect(choosePlan({ ...night, osrm: walk(45_088) }, { kind: 'empty' }).plan).toBeNull()
+  })
+
+  it('daleka data: rozkładu jeszcze nie ma', () => {
+    expect(choosePlan({ ...night, daysAhead: 20 }, { kind: 'empty' })).toEqual({
+      plan: null,
+      keep: false,
+      early: true,
+    })
+    const far = { ...base, daysAhead: 90 }
+    expect(needsTransit(far)).toBe(false)
+    expect(choosePlan(far).early).toBe(true)
+  })
+
+  it('limit: krótkie dojście pieszo i znacznik', () => {
+    expect(choosePlan(base, { kind: 'limited' })).toEqual({
+      plan: walk(30),
+      keep: false,
+      limited: true,
+    })
+  })
+
+  it('inne połączenie: tylko przejazd, nigdy pieszo', () => {
+    const r = ride('13:00', 40)
+    expect(choosePlan({ ...base, ride: true }, { kind: 'ok', plan: r }).plan).toEqual(r)
+    expect(choosePlan({ ...base, ride: true }, { kind: 'error' }).plan).toBeNull()
+  })
+
+  it('auto i pieszo z OSRM bez Google', () => {
+    const car: LegDraft = { minutes: 12, mode: 'drive', steps: [] }
+    expect(needsTransit({ ...base, mode: 'drive', osrm: car })).toBe(false)
+    expect(choosePlan({ ...base, mode: 'drive', osrm: car })).toEqual({ plan: car, keep: true })
   })
 })

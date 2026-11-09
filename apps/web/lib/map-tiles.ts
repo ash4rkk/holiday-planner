@@ -1,4 +1,4 @@
-import type { LatLng } from '@planer/core'
+import { distanceKm, type LatLng } from '@planer/core'
 
 // Kafelki mapy do pobrania offline, w trzech warstwach, żeby nie pobierać pustych obszarów między
 // miastami (np. lotnisko w Warszawie i plan w Lizbonie):
@@ -39,12 +39,6 @@ function rangeTiles(box: { south: number; north: number; west: number; east: num
   const y1 = Math.min(max, tileY(box.south, z))
   for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) out.push({ z, x, y })
   return out
-}
-
-function distanceKm(a: LatLng, b: LatLng): number {
-  const dLat = (a.lat - b.lat) * 111
-  const dLng = (a.lng - b.lng) * 111 * Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180)
-  return Math.hypot(dLat, dLng)
 }
 
 type Box = { south: number; north: number; west: number; east: number }

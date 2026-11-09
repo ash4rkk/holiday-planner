@@ -1,4 +1,5 @@
 import type { Amount } from './amounts'
+import type { TravelMode } from './route-plan'
 
 export const CARD_TYPES = ['stay', 'sight', 'food', 'transport', 'note'] as const
 export type CardType = (typeof CARD_TYPES)[number]
@@ -71,6 +72,10 @@ export type CardFields = {
    * wydatków jej nie liczymy.
    */
   skipped?: boolean
+  /** Jak dojechać na tę kartę (nocleg: powrót wieczorem); bez pola = tryb całego wyjazdu. */
+  arriveMode?: TravelMode
+  /** Ile minut przed godziną karty trzeba być na miejscu (lot, pociąg); bez pola = domyślnie wg typu. */
+  arriveEarlyMin?: number
 }
 
 /** Pola, które użytkownik zmienia w edytorze karty. */
@@ -90,6 +95,8 @@ export type EditableCardFields = Pick<
   | 'aiDraft'
   | 'pinned'
   | 'skipped'
+  | 'arriveMode'
+  | 'arriveEarlyMin'
 >
 
 export type CardSnapshot = CardFields & {

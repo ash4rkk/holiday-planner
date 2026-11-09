@@ -8,6 +8,30 @@ import { staysOver } from './trip-doc'
 
 export type LatLng = { lat: number; lng: number }
 
+/**
+ * Największe skupisko punktów (łączone, gdy leżą bliżej niż `km` od któregoś z grupy). Kadr mapy
+ * „wszystkie” na nim, żeby lotnisko w innym kraju nie oddalało widoku na pół Europy.
+ */
+export function mainCluster<T extends LatLng>(points: T[], km = 50): T[] {
+  const groups: T[][] = []
+  for (const p of points) {
+    const near = groups.filter((g) => g.some((q) => distanceKm(p, q) <= km))
+    const merged = [p, ...near.flat()]
+    for (const g of near) groups.splice(groups.indexOf(g), 1)
+    groups.push(merged)
+  }
+  const best = groups.reduce<T[]>((top, g) => (g.length > top.length ? g : top), [])
+  // W kolejności wejścia, jak reszta listy.
+  return points.filter((p) => best.includes(p))
+}
+
+/** Odległość w linii prostej (km); przybliżenie równoprostokątne wystarcza do setek kilometrów. */
+export function distanceKm(a: LatLng, b: LatLng): number {
+  const dLat = (a.lat - b.lat) * 111
+  const dLng = (a.lng - b.lng) * 111 * Math.cos((((a.lat + b.lat) / 2) * Math.PI) / 180)
+  return Math.hypot(dLat, dLng)
+}
+
 // Domena krajowa to dokładnie 2 litery — inaczej przejdzie cudza google.xy.io. Wzorzec nie wystarcza:
 // serwer i tak łączy się tylko z adresami publicznymi (lib/safe-fetch.ts).
 const GOOGLE_HOST = /^(?:www\.|maps\.)?google\.(?:com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/i

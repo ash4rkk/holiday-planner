@@ -15,7 +15,7 @@ import { dayForecast } from '@planer/core/forecast'
 import { getRates } from '@planer/core/fx'
 import { sendPush } from '@planer/core/push'
 import { dueReminders, markReminderSent, unmarkReminderSent } from '@planer/core/reminders-db'
-import { legsFromDoc, markLegAlerted, planLeg } from '@planer/core/routes'
+import { legsFromDoc, markLegAlerted, planLeg, sweepRouteCache } from '@planer/core/routes'
 import { briefingSentFor, getBriefingSettings, markBriefingSent } from '@planer/core/settings'
 import { nightlyBackup } from './backup'
 
@@ -39,22 +39,37 @@ const toMinutes = (time: string) => {
 
 /** „Czas wyjść”: świeży dojazd do następnej karty i push na chwilę przed godziną wyjścia. */
 async function leaveReminders() {
-  const today = Temporal.Now.plainDateISO('Europe/Warsaw').toString()
+  // Szerzej o dzień w obie strony, bo „dziś” liczy się w strefie wyjazdu, nie w Warszawie.
+  const warsaw = Temporal.Now.plainDateISO('Europe/Warsaw').toString()
   const rows = await getDb()
     .select({ trip: trips, state: tripDocs.state })
     .from(trips)
     .innerJoin(tripDocs, eq(tripDocs.tripId, trips.id))
-    .where(and(eq(trips.archived, false), lte(trips.startDate, today), gte(trips.endDate, today)))
+    .where(
+      and(
+        eq(trips.archived, false),
+        lte(trips.startDate, addDays(warsaw, 1)),
+        gte(trips.endDate, addDays(warsaw, -1)),
+      ),
+    )
 
   for (const { trip, state } of rows) {
     const now = Temporal.Now.zonedDateTimeISO(trip.timezone)
     const date = now.toPlainDate().toString()
+    if (!trip.startDate || date < trip.startDate || date > (trip.endDate ?? trip.startDate))
+      continue
     const clock = now.hour * 60 + now.minute
     for (const leg of legsFromDoc(state, date)) {
       if (!leg.route || !leg.arriveBy) continue
       const arrive = toMinutes(leg.arriveBy)
       if (arrive <= clock || arrive - clock > LEAVE_LOOKAHEAD_MIN) continue
-      const request = { ...leg.route, date, leaveAt: leg.leaveAt, arriveBy: leg.arriveBy }
+      const request = {
+        ...leg.route,
+        date,
+        leaveAt: leg.leaveAt,
+        arriveBy: leg.arriveBy,
+        mode: leg.mode,
+      }
       const { plan } = await planLeg(request, trip)
       if (!plan) continue
       const leaveBy = shiftClock(
@@ -62,7 +77,7 @@ async function leaveReminders() {
         -trip.travelBufferMin,
       )
       if (clock < toMinutes(leaveBy) - LEAVE_NOTICE_MIN) continue
-      if (!(await markLegAlerted(request, trip.travelMode))) continue
+      if (!(await markLegAlerted(trip.id, leg, date))) continue
       await sendPush(
         {},
         {
@@ -106,7 +121,7 @@ async function eveningBriefing() {
     let leaveBy: string | undefined
     if (start?.route && start.arriveBy) {
       const { plan } = await planLeg(
-        { ...start.route, date: tomorrow, arriveBy: start.arriveBy },
+        { ...start.route, date: tomorrow, arriveBy: start.arriveBy, mode: start.mode },
         trip,
       ).catch(() => ({ plan: null }))
       if (plan)
@@ -188,6 +203,14 @@ function every(ms: number, job: () => Promise<void>, name: string) {
 
 every(REMINDERS_EVERY_MS, sendReminders, 'przypomnienia')
 every(24 * 60 * 60_000, () => pruneEvents(30), 'porządki dziennika')
+every(
+  24 * 60 * 60_000,
+  async () => {
+    const removed = await sweepRouteCache()
+    if (removed) console.log(`worker: usunięto ${removed} starych tras`)
+  },
+  'porządki tras',
+)
 every(FX_EVERY_MS, refreshRates, 'kursy NBP')
 every(LEAVE_CHECK_MS, leaveReminders, 'czas wyjść')
 every(BRIEFING_CHECK_MS, eveningBriefing, 'podsumowanie na jutro')
