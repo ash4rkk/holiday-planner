@@ -123,10 +123,11 @@ const PROPOSE_CHANGES: Anthropic.Beta.BetaTool = {
             date: nullable('string', 'nowy dzień YYYY-MM-DD'),
             time: nullable('string', 'nowa godzina HH:MM, czas lokalny miejsca'),
             duration_min: nullable('number', 'nowy czas trwania w minutach'),
+            // anyOf, nie type: ['string', 'null'] + enum — tryb strict odrzuca wtedy cały schemat (400).
             status: {
-              type: ['string', 'null'],
-              enum: ['missing', 'booked', 'none', null],
-              description: 'missing = do rezerwacji, booked = zarezerwowane, none = bez statusu',
+              anyOf: [{ type: 'string', enum: ['missing', 'booked', 'none'] }, { type: 'null' }],
+              description:
+                'missing = do rezerwacji, booked = zarezerwowane, none = bez statusu, null = bez zmiany',
             },
             place: nullable('string', 'nowa nazwa miejsca z miastem'),
             address: nullable('string', 'nowy pełny adres'),
