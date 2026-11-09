@@ -3,11 +3,14 @@
 import {
   addDays,
   type CardSnapshot,
+  cardSkies,
   cardsInRain,
   formatDayHeader,
+  isStormCode,
   isWetHour,
   type LatLng,
   rainSpans,
+  type Sky,
   todayLocal,
   weatherPlace,
 } from '@planer/core'
@@ -27,6 +30,7 @@ import { useMemo } from 'react'
 import type { HourlyWeather } from '@/app/api/weather/hourly/route'
 import type { Weather } from '@/app/api/weather/route'
 import { askChat } from '@/components/ai/chat-panel'
+import { CardSky } from '@/components/sky/card-sky'
 import { cx } from '@/components/ui'
 import { useFetchCached } from '@/lib/use-fetch-cached'
 
@@ -66,7 +70,7 @@ export function DayWeather({
   return (
     <span className={cx('flex items-center gap-1 text-xs text-muted', className)} title={label}>
       <Icon className="size-3.5" aria-hidden="true" />
-      {Math.round(day.max)}°<span className="text-dim">/{Math.round(day.min)}°</span>
+      {Math.round(day.max)}°<span className="text-subtle">/{Math.round(day.min)}°</span>
       <span className="sr-only">{label}</span>
     </span>
   )
@@ -88,6 +92,34 @@ export function useRainHours(date: string, cards: CardSnapshot[]): string[] {
         .filter((hour) => Number(hour) >= 6 && Number(hour) <= 23),
     [hourly, date],
   )
+}
+
+/**
+ * Niebo nad kartami dnia (deszcz / burza) do animacji tła kart. Ta sama prognoza godzinowa co
+ * „plan B?” (jeden adres, więc jedno zapytanie); poza zasięgiem 7 dni — pusta mapa.
+ */
+export function useDaySkies(date: string | undefined, cards: CardSnapshot[]): Map<string, Sky> {
+  const today = todayLocal()
+  const inRange = Boolean(date && date >= today && date <= addDays(today, 6))
+  const at = inRange && date ? weatherPlace(cards, date) : undefined
+  const url = at ? `/api/weather/hourly?at=${at.lat.toFixed(2)},${at.lng.toFixed(2)}` : null
+  const hourly = useFetchCached<HourlyWeather>(url, 60 * 60_000)
+  return useMemo(() => {
+    if (!date || !hourly) return new Map<string, Sky>()
+    const hours = hourly.hours
+      .filter((h) => h.time.startsWith(date))
+      .map((h) => ({
+        hour: Number(h.time.slice(11, 13)),
+        wet: isWetHour(h.rain, h.mm),
+        storm: isStormCode(h.code),
+      }))
+    return cardSkies(cards, date, hours)
+  }, [hourly, date, cards])
+}
+
+/** Tło karty w deszczu albo burzy (scena na canvasie); rodzic ma `relative isolate overflow-hidden`. */
+export function SkyLayer({ sky }: { sky: Sky | undefined }) {
+  return sky ? <CardSky kind={sky} /> : null
 }
 
 /**

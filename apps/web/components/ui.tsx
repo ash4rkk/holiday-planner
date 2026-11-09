@@ -21,7 +21,7 @@ export function buttonClass(variant: keyof typeof BUTTON = 'island', extra?: str
 }
 
 export const inputClass =
-  'min-h-11 w-full rounded-small border border-line bg-raised px-3 text-text placeholder:text-dim ' +
+  'min-h-11 w-full rounded-small border border-line bg-raised px-3 text-text placeholder:text-subtle ' +
   'focus:border-accent focus:outline-none'
 
 export function Field({
@@ -37,12 +37,12 @@ export function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs text-subtle italic">{label}</span>
+      <span className="text-xs text-subtle">{label}</span>
       {children}
       {error ? (
         <span className="text-xs text-red">● {error}</span>
       ) : hint ? (
-        <span className="text-xs text-subtle italic">{hint}</span>
+        <span className="text-xs text-subtle">{hint}</span>
       ) : null}
     </label>
   )

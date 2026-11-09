@@ -44,8 +44,8 @@ export function AttachmentViewer({
           <X className="size-5" aria-hidden="true" />
         </button>
         <div className="island flex min-h-11 min-w-0 flex-1 flex-col justify-center px-3">
-          <span className="truncate text-sm font-bold text-teal">{attachment.name}</span>
-          <span className="text-2xs text-subtle italic">{formatSize(attachment.size)}</span>
+          <span className="truncate text-sm font-bold text-accent">{attachment.name}</span>
+          <span className="text-2xs text-subtle">{formatSize(attachment.size)}</span>
         </div>
         <a
           href={url}
@@ -129,9 +129,7 @@ export function PdfPages({ url }: { url: string }) {
 
   return (
     <>
-      {state === 'loading' && (
-        <p className="p-4 text-center text-sm text-subtle italic">otwieram PDF…</p>
-      )}
+      {state === 'loading' && <p className="p-4 text-center text-sm text-subtle">otwieram PDF…</p>}
       {state === 'error' && (
         <p className="island m-1 p-4 text-sm">
           <span className="text-red">●</span> nie udało się otworzyć pliku — bez zasięgu działa

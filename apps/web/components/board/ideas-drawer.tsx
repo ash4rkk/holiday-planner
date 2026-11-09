@@ -78,13 +78,13 @@ function IdeaCard({
         <span
           className={cx(
             'line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-tight',
-            !card.title && 'font-normal text-dim italic',
+            !card.title && 'font-normal text-subtle',
           )}
         >
           {card.title || 'bez tytułu'}
         </span>
       </div>
-      <span className="truncate text-xs text-subtle italic">
+      <span className="truncate text-xs text-subtle">
         {card.location?.name ?? fieldsSummary(card)}
       </span>
       <div className="flex items-center gap-2">
@@ -261,7 +261,7 @@ export function IdeasDrawer({
             ))}
           </div>
         ) : (
-          <p className="px-3 py-4 text-sm text-subtle italic">
+          <p className="px-3 py-4 text-sm text-subtle">
             karty bez dnia i miejsca udostępnione z Map Google czekają tutaj · przeciągnij je na
             dzień
           </p>

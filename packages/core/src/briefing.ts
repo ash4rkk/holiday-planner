@@ -71,6 +71,35 @@ const minutesOf = (time: string) => {
   return h * 60 + m
 }
 
+/** Burza w kodach WMO (Open-Meteo): 95 burza, 96 i 99 burza z gradem. */
+export const isStormCode = (code: number) => code >= 95 && code <= 99
+
+export type Sky = 'rain' | 'storm'
+export type SkyHour = { hour: number; wet: boolean; storm: boolean }
+
+/**
+ * Niebo nad kartami dnia: deszcz albo burza w godzinach, które karta obejmuje (bez czasu trwania —
+ * godzina). Burza wygrywa z deszczem. Do animacji tła karty; pominięte i warianty bez nieba.
+ */
+export function cardSkies(cards: CardSnapshot[], date: string, hours: SkyHour[]): Map<string, Sky> {
+  const out = new Map<string, Sky>()
+  const byHour = new Map(hours.map((h) => [h.hour, h]))
+  if (!hours.some((h) => h.wet || h.storm)) return out
+  for (const c of cards) {
+    if (c.date !== date || !c.time || c.deletedAt || c.variantOf || c.skipped) continue
+    const start = minutesOf(c.time)
+    const end = start + (c.durationMin ?? 60)
+    let sky: Sky | undefined
+    for (let h = Math.floor(start / 60); h * 60 < end; h++) {
+      const at = byHour.get(h)
+      if (at?.storm) sky = 'storm'
+      else if (at?.wet && !sky) sky = 'rain'
+    }
+    if (sky) out.set(c.id, sky)
+  }
+  return out
+}
+
 /**
  * Karty dnia, których czas trwania (domyślnie godzina) zahacza o godziny deszczu. Które są pod
  * gołym niebem, ocenia dopiero AI na życzenie — tu tylko „czy w ogóle jest o co pytać”.

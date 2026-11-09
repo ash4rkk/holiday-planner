@@ -105,7 +105,7 @@ export function DayAxis({
           />
         )}
       </div>
-      <div className="mt-1 flex justify-between text-2xs text-dim" aria-hidden="true">
+      <div className="mt-1 flex justify-between text-2xs text-subtle" aria-hidden="true">
         {hours.map((h) => (
           <span key={h}>{h}</span>
         ))}
@@ -207,7 +207,7 @@ function AxisPreview({
       role="dialog"
       aria-label={card.title || 'podgląd miejsca'}
       className={cx(
-        'fixed z-(--z-dialog) w-[min(22rem,calc(100vw-1rem))]',
+        'fixed z-(--z-dialog) w-[min(22rem,calc(100vw-1rem))] shadow-float rounded-island',
         pos ? 'pop-in' : 'invisible',
       )}
       style={{ left: pos?.left ?? 0, top: pos?.top ?? 0 }}
@@ -233,7 +233,7 @@ function AxisPreview({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-bold">{card.title || 'bez tytułu'}</span>
-            <span className="block truncate text-xs text-subtle italic">
+            <span className="block truncate text-xs text-subtle">
               {card.time}–{end}
               {card.location?.name && ` · ⌖ ${card.location.name}`}
             </span>
@@ -246,7 +246,7 @@ function AxisPreview({
         )}
         {leg && <p className="text-xs text-green">• {leg}</p>}
         <div className="flex items-center justify-between">
-          <div className="flex items-center text-xs text-dim">
+          <div className="flex items-center text-xs text-subtle">
             <button
               type="button"
               onClick={onPrev}

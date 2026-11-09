@@ -25,7 +25,7 @@ export default async function LinksPage() {
             >
               <Link href={`/trips/${l.tripId}/settings#rodzina`} className="min-w-0 flex-1">
                 <span className="block truncate font-bold">{l.tripTitle}</span>
-                <span className="block text-xs text-subtle italic">
+                <span className="block text-xs text-subtle">
                   {formatDateSpan(l.startDate, l.endDate)} · od {created.format(l.createdAt)}
                   {l.createdBy && ` · ${l.createdBy}`}
                 </span>
@@ -42,7 +42,7 @@ export default async function LinksPage() {
           ))}
         </ul>
       )}
-      <p className="px-3 pt-2 text-xs text-subtle italic">
+      <p className="px-3 pt-2 text-xs text-subtle">
         Po unieważnieniu link przestaje działać od razu. Nowy utworzysz w ustawieniach wyjazdu.
       </p>
     </main>

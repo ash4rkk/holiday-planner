@@ -149,41 +149,9 @@ Nawigacja to dolny pasek z czterema pozycjami: Dziś, Tablica, Lista, Mapa; czat
 
 Aplikacja ma dwa warianty motywu Vague: jasny (ciepłe złamane białe tło, przyciemnione akcenty) i ciemny, rozjaśniony względem oryginału. Oba mają jeden akcent w przygaszonym różu, krój Atkinson Hyperlegible, nieruchome tło „mgła” i pływające menu; bez animowanego tła. Domyślnie wariant idzie za ustawieniem systemu, przełącznik w nagłówku zapamiętuje wybór.
 
-### Tokeny
+### Tokeny i kolory znaczeniowe
 
-| Token | Ciemny | Jasny | Użycie w planerze |
-|---|---|---|---|
-| bg | #1e1e22 | #f3f1ed | Tło aplikacji, pasek formatowania |
-| panel | #26262b | #fbfaf7 | Karty, wysepki nagłówka i nawigacji, arkusze |
-| raised | #2c2c32 | #ebe8e3 | Pola w karcie, pola tekstowe, aktywna zakładka |
-| line | #36363f | #dcd8d1 | Obramowania kart, separatory |
-| sel | #44444e | #cfcac2 | Zaznaczenie, uchwyt arkusza |
-| text | #dedede | #2b2a30 | Treść, tytuły kart |
-| muted | #a8a8b6 | #55555f | Ikony, nieaktywne pozycje |
-| subtle | #8f8fa8 | #66667a | Etykiety i metadane kursywą |
-| dim | #5a5a6c | #a7a5ae | Wyłączone elementy, nieaktywne kropki |
-| accent | #c48282 | #9c5859 | Aktywny element, przyciski główne, trasa, szkic AI |
-| accent-hover | #d49a9a | #874a4b | Najechanie na element w akcencie |
-| on-accent | #1e1e22 | #fbfaf7 | Tekst na pełnym akcencie |
-
-Każdy kolor tekstu ma kontrast co najmniej 4,5:1 na swoim tle i panelu, także subtle (ok. 4,8:1). W jasnym wariancie róż jest przyciemniony do #9c5859, bo oryginalny #c48282 na jasnym tle ma tylko ok. 2,7:1.
-
-Poświata akcentu: 12–15% na najechanie i tagi, 18–22% na aktywny filtr i zaznaczenie, 35–40% na mocne wyróżnienie. Na pełnym różu tekst ma kolor #141415.
-
-### Kolory znaczeniowe
-
-| Element | Ciemny | Jasny |
-|---|---|---|
-| Nocleg (śliwka) | #bb9dbd | #85638a |
-| Atrakcja (bursztyn) | #e8b589 | #9a6a34 |
-| Jedzenie, „potwierdzone”, „offline” (zieleń) | #7fa563 | #4f7637 |
-| Transport, woda na mapie (błękit) | #6e94b2 | #3f6b8c |
-| Notatka, nazwy załączników (turkus) | #9bb4bc | #3f7480 |
-| Kwoty `/+` i sumy (pomarańcz) | #e0a363 | #a3621f |
-| Nazwy ramek na tablicy (lawenda) | #aeaed1 | #62629a |
-| Błąd synchronizacji (czerwień) | #d8647e | #ad3f58 |
-
-Tło ikon i plakietek to ten sam kolor przy 14–16% krycia (`color-mix`), więc w obu wariantach liczy się automatycznie.
+Aktualne zasady (znaczenia kolorów, stopnie tekstu, kursywa, cienie) są w [docs/wyglad.md](wyglad.md), wartości w `apps/web/app/globals.css`. Tabele, które tu były, opisywały pierwszą wersję motywu.
 
 ### Tło i menu
 

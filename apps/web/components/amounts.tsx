@@ -8,17 +8,29 @@ import {
   todayLocal,
   totals,
 } from '@planer/core'
+import { Info } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { cx } from '@/components/ui'
 import { rateDate, useRates } from '@/lib/use-rates'
 
 /** Plakietka z sumą kwot karty (per waluta). */
-export function AmountBadge({ amounts, className }: { amounts: Amount[]; className?: string }) {
+export function AmountBadge({
+  amounts,
+  className,
+  plain,
+}: {
+  amounts: Amount[]
+  className?: string
+  /** Sama kwota bez tła (Lista): nie konkuruje z tytułem karty. */
+  plain?: boolean
+}) {
   if (!amounts.length) return null
   return (
     <span
       className={cx(
-        'shrink-0 rounded-small bg-orange/15 px-1.5 py-0.5 text-2xs font-bold text-orange',
+        // Kwota bez koloru (pomarańcz to typ „jedzenie”): pogrubione cyfry o stałej szerokości.
+        'shrink-0 text-2xs font-bold text-text tabular-nums',
+        !plain && 'rounded-small bg-raised px-1.5 py-0.5',
         className,
       )}
     >
@@ -83,7 +95,7 @@ export function TotalsText({
   const any = cards.some((c) => !c.deletedAt && c.amounts?.length)
   if (!any) return null
   return (
-    <span className={cx('text-orange', className)}>
+    <span className={cx('font-bold tabular-nums', className)}>
       {[
         t.pln > 0 && formatAmount({ value: pln, currency: 'PLN' }),
         t.main && t.main.value > 0 && `≈ ${formatAmount({ ...t.main, value: main })}`,
@@ -92,5 +104,42 @@ export function TotalsText({
         .filter(Boolean)
         .join(' · ')}
     </span>
+  )
+}
+
+/**
+ * Suma dnia w nagłówku: w walucie bazowej wyjazdu, z (i). Najechanie myszą albo dotknięcie pokazuje
+ * złotówki (dotknięcie przełącza na stałe, do następnego). Wyjazd w PLN: sama kwota, bez (i).
+ */
+export function DayTotal({ cards, mainCurrency }: { cards: CardSnapshot[]; mainCurrency: string }) {
+  const t = useTotals(cards, mainCurrency)
+  const [pinned, setPinned] = useState(false)
+  const [hover, setHover] = useState(false)
+  if (!t.pln && !t.unconverted.length) return null
+  const plnText = formatAmount({ value: t.pln, currency: 'PLN' })
+  const extra = t.unconverted.map((a) => ` + ${formatAmount(a)}`).join('')
+  if (!t.main)
+    return (
+      <span className="shrink-0 text-xs font-bold tabular-nums">
+        {plnText}
+        {extra}
+      </span>
+    )
+  const showPln = pinned || hover
+  return (
+    <button
+      type="button"
+      onClick={() => setPinned((v) => !v)}
+      onPointerEnter={(e) => e.pointerType === 'mouse' && setHover(true)}
+      onPointerLeave={(e) => e.pointerType === 'mouse' && setHover(false)}
+      aria-pressed={showPln}
+      aria-label={`wydatki dnia: ${formatAmount(t.main)}, w złotych ${plnText}`}
+      title={showPln ? `w ${t.main.currency}: ${formatAmount(t.main)}` : `w złotych: ${plnText}`}
+      className="hit flex shrink-0 items-center gap-1 text-xs font-bold tabular-nums hover:text-accent"
+    >
+      {showPln ? plnText : formatAmount(t.main)}
+      {extra}
+      <Info className="size-3.5 text-subtle" aria-hidden="true" />
+    </button>
   )
 }

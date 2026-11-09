@@ -7,7 +7,7 @@ export default function NotificationsPage() {
     <main className="mx-auto flex max-w-xl flex-col gap-1">
       <TopBar title="powiadomienia" back={SETTINGS_BACK} />
       <PushSettings publicKey={process.env.VAPID_PUBLIC_KEY} />
-      <p className="px-3 pt-2 text-xs text-subtle italic">
+      <p className="px-3 pt-2 text-xs text-subtle">
         Powiadomienia działają w zainstalowanej aplikacji (Chrome → „Zainstaluj aplikację”). Godzina
         przypomnienia liczy się w strefie czasowej wyjazdu (ustawienia wyjazdu).
       </p>

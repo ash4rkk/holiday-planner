@@ -85,12 +85,12 @@ export function AddButton({
 
   if (!slot) return null
   return createPortal(
-    <div ref={root} className="relative">
+    <div ref={root} className="island relative bg-panel/82 p-1 shadow-float backdrop-blur-[14px]">
       {open && (
         <div
           key={picking ? 'templates' : 'main'}
           role="menu"
-          className="island pop-menu absolute right-0 bottom-[calc(100%+12px)] flex max-h-[60vh] min-w-48 flex-col overflow-y-auto p-1"
+          className="island pop-menu shadow-float absolute right-0 bottom-[calc(100%+12px)] flex max-h-[60vh] min-w-48 flex-col overflow-y-auto p-1"
         >
           {items.map(({ label, icon: Icon, run, keepOpen }, i) => (
             <button

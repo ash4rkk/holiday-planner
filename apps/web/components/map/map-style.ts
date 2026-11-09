@@ -95,6 +95,7 @@ function darkPaint(): Record<string, Record<string, string>> {
  */
 export function themeMap(map: import('maplibre-gl').Map, { quiet = false } = {}) {
   map.on('style.load', () => {
+    polishLabels(map)
     if (quiet) {
       for (const id of ['road_oneway', 'road_oneway_opposite'])
         if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none')
@@ -106,4 +107,20 @@ export function themeMap(map: import('maplibre-gl').Map, { quiet = false } = {})
         map.setPaintProperty(id, key as Parameters<typeof map.setPaintProperty>[1], value)
     }
   })
+}
+
+/** Nazwy na mapie po polsku, gdy OpenStreetMap je zna; inaczej łacińskie, na końcu lokalne. */
+function polishLabels(map: import('maplibre-gl').Map) {
+  for (const layer of map.getStyle().layers ?? []) {
+    if (layer.type !== 'symbol') continue
+    const field = map.getLayoutProperty(layer.id, 'text-field')
+    // Tylko warstwy z nazwami miejsc (numery dróg i domów zostają).
+    if (!field || !JSON.stringify(field).includes('name')) continue
+    map.setLayoutProperty(layer.id, 'text-field', [
+      'coalesce',
+      ['get', 'name:pl'],
+      ['get', 'name:latin'],
+      ['get', 'name'],
+    ])
+  }
 }

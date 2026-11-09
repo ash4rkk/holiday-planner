@@ -106,9 +106,7 @@ export function CardMenu({
   const content =
     view === 'main' ? (
       <>
-        <p className="truncate px-3 pt-2 pb-1 text-xs text-subtle italic">
-          {card.title || 'bez tytułu'}
-        </p>
+        <p className="truncate px-3 pt-2 pb-1 text-xs text-subtle">{card.title || 'bez tytułu'}</p>
         <Item
           icon={card.pinned ? <PinOff className="size-5" /> : <Pin className="size-5" />}
           label={card.pinned ? 'odepnij' : 'przypnij'}
@@ -179,7 +177,7 @@ export function CardMenu({
         role="menu"
         aria-label={`menu karty ${card.title}`}
         className={cx(
-          'island absolute flex flex-col p-1',
+          'island shadow-float absolute flex flex-col p-1',
           wide
             ? cx('w-60 fade-in', !pos && 'invisible')
             : 'sheet-in inset-x-px bottom-px pb-[max(4px,env(safe-area-inset-bottom))]',

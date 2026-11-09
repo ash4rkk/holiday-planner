@@ -167,9 +167,10 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
         hidden && 'translate-y-[calc(100%+8px)]',
       )}
     >
-      <ul className="pointer-events-auto flex items-center gap-1 rounded-island border border-line bg-panel/82 p-1 backdrop-blur-[14px]">
+      {/* Stała szerokość: wybrana pozycja wypełnia resztę, więc kapsuła nie skacze między ekranami. */}
+      <ul className="pointer-events-auto flex w-[292px] items-center justify-between gap-0.5 rounded-island border border-line bg-panel/82 p-1 shadow-float backdrop-blur-[14px]">
         {items.map(({ href, label, icon: Icon, active }, i) => (
-          <li key={label}>
+          <li key={label} className={cx(active && 'flex-1')}>
             <Link
               href={href}
               transitionTypes={navDirection(activeIndex, i)}
@@ -177,8 +178,8 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
               aria-label={label}
               aria-current={active ? 'page' : undefined}
               className={cx(
-                'flex h-11 items-center justify-center gap-2 rounded-inner transition-colors',
-                active ? 'bg-active px-4 text-accent' : 'w-11 text-muted hover:text-text',
+                'flex h-11 items-center justify-center gap-1.5 rounded-inner transition-colors',
+                active ? 'bg-active px-2.5 text-accent' : 'w-11 text-muted hover:text-text',
               )}
             >
               <Icon className="size-5" aria-hidden="true" strokeWidth={1.8} />
@@ -186,9 +187,10 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
             </Link>
           </li>
         ))}
-        {/* Tu widoki wyjazdu wstawiają przycisk „+” (AddButton), żeby nie zasłaniał treści. */}
-        <li id={NAV_SLOT} className="empty:hidden" />
       </ul>
+      {/* Osobna wysepka na „+” (AddButton) z widoku. Bez niego zostaje puste miejsce tej samej
+          wielkości, żeby menu stało w jednym miejscu na każdym ekranie. */}
+      <div id={NAV_SLOT} className="pointer-events-auto ml-1 size-[54px] shrink-0" />
     </nav>
   )
 }

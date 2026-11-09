@@ -67,7 +67,7 @@ export const DayNode = memo(function DayNode({ data, width, height }: NodeProps<
             ))}
           </svg>
         </span>
-        {data.sub && <span className="text-xs text-subtle italic">{data.sub}</span>}
+        {data.sub && <span className="text-xs text-subtle">{data.sub}</span>}
         <DayWeather date={data.date} cards={cards} className="ml-auto" />
       </div>
     </>

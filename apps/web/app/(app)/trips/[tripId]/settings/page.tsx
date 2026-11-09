@@ -43,7 +43,7 @@ export default async function TripSettingsPage({
             do druku
           </a>
         </div>
-        <p className="text-xs text-subtle italic">
+        <p className="text-xs text-subtle">
           plan dzień po dniu z treścią kart, kwotami i nazwami plików
         </p>
       </section>
@@ -56,7 +56,7 @@ export default async function TripSettingsPage({
           {trip.archived ? 'przywróć z archiwum' : 'przenieś do archiwum'}
         </button>
       </form>
-      <p className="px-3 pt-2 text-xs text-subtle italic">
+      <p className="px-3 pt-2 text-xs text-subtle">
         Wyjazd w archiwum nadal można edytować; znika tylko z nadchodzących.
       </p>
     </main>

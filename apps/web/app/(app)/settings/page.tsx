@@ -3,6 +3,7 @@ import { recentEvents } from '@planer/core/events'
 import type { ReminderDefaults } from '@planer/core/reminders'
 import { routesLimit, routesUsedThisMonth } from '@planer/core/routes'
 import { getBriefingSettings, getReminderDefaults } from '@planer/core/settings'
+import { Bell, Clock, Link2, Route, ScrollText, Sparkles, SunMoon } from 'lucide-react'
 import Link from 'next/link'
 import { connection } from 'next/server'
 import { ProfilePhoto } from '@/components/profile/profile-photo'
@@ -64,12 +65,21 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         </Link>
       )}
 
-      <SettingsGroup>
-        <SettingsRow href="/settings/theme" label="motyw" value={<ThemeValue />} />
-        <SettingsRow href="/settings/notifications" label="powiadomienia" value={<PushValue />} />
+      <SettingsGroup label="wygląd">
+        <SettingsRow href="/settings/theme" label="motyw" icon={SunMoon} value={<ThemeValue />} />
+      </SettingsGroup>
+
+      <SettingsGroup label="w podróży">
+        <SettingsRow
+          href="/settings/notifications"
+          label="powiadomienia"
+          icon={Bell}
+          value={<PushValue />}
+        />
         <SettingsRow
           href="/settings/reminders"
           label="przypomnienia"
+          icon={Clock}
           value={[
             defaults.transport ? `transport ${formatLead(defaults.transport)}` : 'bez przypomnień',
             briefing.enabled && `podsumowanie ${briefing.time}`,
@@ -79,23 +89,21 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         />
       </SettingsGroup>
 
-      <SettingsGroup>
+      <SettingsGroup label="udostępnianie">
         <SettingsRow
           href="/settings/links"
           label="linki dla rodziny"
+          icon={Link2}
           value={links.length ? `${links.length} aktywne` : 'brak'}
-        />
-        <SettingsRow
-          href="/settings/logs"
-          label="logi i problemy"
-          value={weekProblems ? `${weekProblems} w tygodniu` : 'bez problemów'}
         />
       </SettingsGroup>
 
-      <SettingsGroup>
+      <SettingsGroup label="system">
         <SettingsRow
           href="/settings/ai"
           label="AI"
+          icon={Sparkles}
+          warn={!aiConfigured()}
           value={
             aiConfigured()
               ? `${formatAmount({ value: Math.round(spent), currency: 'PLN' })} / ${formatAmount({ value: MONTHLY_BUDGET_PLN, currency: 'PLN' })}`
@@ -106,9 +114,16 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
           <SettingsRow
             href="/settings/routes"
             label="trasy Google"
+            icon={Route}
             value={`${checks} / ${routesLimit()}`}
           />
         )}
+        <SettingsRow
+          href="/settings/logs"
+          label="logi i problemy"
+          icon={ScrollText}
+          value={weekProblems ? `${weekProblems} w tygodniu` : 'bez problemów'}
+        />
       </SettingsGroup>
     </main>
   )

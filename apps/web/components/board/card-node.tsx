@@ -1,13 +1,15 @@
 'use client'
 
-import type { CardSnapshot } from '@planer/core'
+import type { CardSnapshot, Sky } from '@planer/core'
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { memo, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { TimeCell } from '@/components/card/time-cell'
 import { cx } from '@/components/ui'
+import { SkyLayer } from '@/components/weather'
 import { useBoard } from './board-context'
 import { CardFace } from './card-face'
+import { CardLens, useFarZoom } from './card-lens'
 import { useHoldDrag } from './use-hold-drag'
 import { ChooseButton } from './variant-node'
 
@@ -22,13 +24,15 @@ export type CardNodeType = Node<
     /** Karta w zaznaczeniu kilku kart: bez narzędzi pojedynczej karty. */
     grouped?: boolean
     stayUntil?: string
+    /** Deszcz albo burza w godzinach karty: animacja w tle. */
+    sky?: Sky
   },
   'card'
 >
 
 export const CardNode = memo(function CardNode({
   id,
-  data: { card, files, options, branch, grouped, stayUntil },
+  data: { card, files, options, branch, grouped, stayUntil, sky },
   selected,
 }: NodeProps<CardNodeType>) {
   const board = useBoard()
@@ -39,6 +43,10 @@ export const CardNode = memo(function CardNode({
   const index = stacked ? shownIndex % all.length : 0
   const shown = all[index] ?? card
   const onAxis = Boolean(card.date && card.time)
+  // Lupa przy oddalonej Tablicy: najechanie myszą albo zaznaczona karta (dotyk).
+  const far = useFarZoom()
+  const [hover, setHover] = useState(false)
+  const body = useRef<HTMLDivElement>(null)
   const step = (by: number) => setShownIndex((index + by + all.length) % all.length)
   const gesture = useHoldDrag({
     // Tap w zaznaczoną kartę otwiera edytor (to też podwójny tap); Ctrl i Shift zbierają karty.
@@ -59,6 +67,7 @@ export const CardNode = memo(function CardNode({
       {onAxis && (
         <TimeCell card={shown} className="pointer-events-none absolute top-2 right-full mr-2" />
       )}
+      {far && (hover || selected) && !grouped && <CardLens anchor={body} card={shown} />}
 
       {stacked && (
         <>
@@ -70,8 +79,11 @@ export const CardNode = memo(function CardNode({
       {/* nopan: React Flow nie zaczyna tu własnego przesuwania; robi to gest karty, a karta reaguje na tap i przytrzymanie. */}
       <div
         {...gesture}
+        ref={body}
+        onPointerEnter={(e) => e.pointerType === 'mouse' && setHover(true)}
+        onPointerLeave={() => setHover(false)}
         className={cx(
-          'nopan nodrag pointer-events-auto relative flex size-full touch-none flex-col gap-1 overflow-hidden rounded-island border bg-panel py-2 pr-3 pl-4',
+          'nopan nodrag pointer-events-auto relative isolate flex size-full touch-none flex-col gap-1 overflow-hidden rounded-island border bg-panel py-2 pr-3 pl-4',
           selected ? 'border-accent' : 'border-line',
           card.aiDraft && 'border-dashed border-accent',
           card.skipped && 'opacity-60',
@@ -81,11 +93,13 @@ export const CardNode = memo(function CardNode({
         aria-label={card.title || 'karta bez tytułu'}
         onKeyDown={(e) => e.key === 'Enter' && board.openCard(id)}
       >
+        {index === 0 && <SkyLayer sky={sky} />}
         <CardFace
           card={shown}
           files={files}
           stayUntil={index ? undefined : stayUntil}
           onAxis={onAxis}
+          footerSpace={stacked}
         />
         {stacked && (
           <div className="absolute inset-x-1 bottom-1 flex items-center gap-1 bg-panel">

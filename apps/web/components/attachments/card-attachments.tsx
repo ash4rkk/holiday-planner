@@ -64,11 +64,11 @@ export function CardAttachments({ cardId }: { cardId: string }) {
                   className="min-h-0 flex-1 object-cover"
                 />
               ) : (
-                <span className="flex flex-1 items-center justify-center text-teal">
+                <span className="flex flex-1 items-center justify-center text-accent">
                   <FileText className="size-8" aria-hidden="true" />
                 </span>
               )}
-              <span className="truncate px-1.5 py-1 text-2xs text-teal">{f.name}</span>
+              <span className="truncate px-1.5 py-1 text-2xs text-accent">{f.name}</span>
               <span className="sr-only">{formatSize(f.size)}</span>
             </button>
           ))}

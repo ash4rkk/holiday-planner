@@ -129,13 +129,13 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
           </span>
           <div className="min-w-0">
             <p className="font-bold">{card.title}</p>
-            <p className="text-xs text-subtle italic">{CARD_TYPE_LABELS[card.type]}</p>
+            <p className="text-xs text-subtle">{CARD_TYPE_LABELS[card.type]}</p>
           </div>
         </div>
         <dl className="mt-3 grid grid-cols-[5rem_1fr] gap-x-2 gap-y-1 text-sm">
           {rows.map(([k, v]) => (
             <div key={k} className="contents">
-              <dt className="text-xs text-subtle italic">{k}</dt>
+              <dt className="text-xs text-subtle">{k}</dt>
               <dd>{v}</dd>
             </div>
           ))}

@@ -27,7 +27,7 @@ export default async function RoutesSettingsPage() {
                   style={{ width: `${Math.min(100, (checks / routesLimit()) * 100)}%` }}
                 />
               </div>
-              <p className="mt-2 text-xs text-subtle italic">
+              <p className="mt-2 text-xs text-subtle">
                 limit kwoty {formatAmount({ value: routesBudgetPln(), currency: 'PLN' })} · po jego
                 wyczerpaniu sprawdzanie wyłącza się do końca miesiąca
               </p>

@@ -52,7 +52,7 @@ export function TopBar({
           <ViewTransition name={morph}>
             <h1 className="truncate text-lg font-bold">{title}</h1>
           </ViewTransition>
-          {subtitle && <span className="shrink-0 text-xs text-subtle italic">{subtitle}</span>}
+          {subtitle && <span className="shrink-0 text-xs text-subtle">{subtitle}</span>}
         </div>
         {menu}
       </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import '@xyflow/react/dist/base.css'
-import type { DropColumn } from '@planer/core'
+import type { DropColumn, Sky } from '@planer/core'
 import {
   addDays,
   addVariant,
@@ -92,6 +92,7 @@ import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { buttonClass, cx } from '@/components/ui'
+import { useDaySkies } from '@/components/weather'
 import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
@@ -176,6 +177,19 @@ function DayPlans({
   return null
 }
 
+/** Deszcz i burza nad kartami jednego dnia (tło kart); osobny komponent z tego samego powodu. */
+function DaySkies({
+  date,
+  onSkies,
+}: {
+  date: string
+  onSkies: (date: string, skies: Map<string, Sky>) => void
+}) {
+  const skies = useDaySkies(date, useCards())
+  useEffect(() => onSkies(date, skies), [date, skies, onSkies])
+  return null
+}
+
 function BoardCanvas() {
   const { trip, doc, ready, provider, templates } = useTrip()
   const cards = useCards()
@@ -195,6 +209,15 @@ function BoardCanvas() {
   const [undo, setUndo] = useState<Positions | null>(null)
   const [arranging, setArranging] = useState(false)
   const [legPlans, setLegPlans] = useState<Record<string, LegPlan | null>>({})
+  const [skiesByDay, setSkiesByDay] = useState<Record<string, Map<string, Sky>>>({})
+  const addSkies = useCallback(
+    (date: string, skies: Map<string, Sky>) => setSkiesByDay((all) => ({ ...all, [date]: skies })),
+    [],
+  )
+  const skies = useMemo(
+    () => new Map(Object.values(skiesByDay).flatMap((m) => [...m])),
+    [skiesByDay],
+  )
   const addPlans = useCallback(
     (plans: Record<string, LegPlan | null>) => setLegPlans((all) => ({ ...all, ...plans })),
     [],
@@ -701,15 +724,23 @@ function BoardCanvas() {
         const by = shiftAt(n.position.x) + (insets.get(n.id) ?? 0)
         const branch = Boolean(card && branches(card))
         const stayUntil = stays.get(n.id)
+        const sky = skies.get(n.id)
         const shown =
-          n.selected === selected && !past && !target && !by && !branch && !grouped && !stayUntil
+          n.selected === selected &&
+          !past &&
+          !target &&
+          !by &&
+          !branch &&
+          !grouped &&
+          !stayUntil &&
+          !sky
             ? n
             : {
                 ...n,
                 selected,
                 position: { x: n.position.x + by, y: n.position.y },
                 className: cx(past && 'is-past', target && 'is-drop') || undefined,
-                data: { ...n.data, branch, grouped, stayUntil },
+                data: { ...n.data, branch, grouped, stayUntil, sky },
               }
         if (!card || !branch) return [shown]
         const w = n.width ?? CARD_SIZE.w
@@ -1271,6 +1302,9 @@ function BoardCanvas() {
       {days.map(({ date }) => (
         <DayPlans key={date} date={date} onPlans={addPlans} />
       ))}
+      {days.map(({ date }) => (
+        <DaySkies key={date} date={date} onSkies={addSkies} />
+      ))}
       <div
         ref={canvas}
         inert={!!sheet.openId && !wide}
@@ -1496,7 +1530,7 @@ function BoardCanvas() {
         <DraftReview onEdit={(id) => sheet.open(id)} />
 
         {ready && !live.length && !frames.length && (
-          <p className="pointer-events-none absolute inset-x-4 top-1/3 text-center text-sm text-subtle italic">
+          <p className="pointer-events-none absolute inset-x-4 top-1/3 text-center text-sm text-subtle">
             pusta tablica · przytrzymaj tło albo dotknij +
           </p>
         )}
@@ -1505,7 +1539,7 @@ function BoardCanvas() {
           <div
             ref={menuRef}
             role="menu"
-            className="island fade-in absolute z-(--z-popover) flex min-w-48 flex-col p-1"
+            className="island fade-in shadow-float absolute z-(--z-popover) flex min-w-48 flex-col p-1"
             // Cały na ekranie: szerokość min-w-48, wysokość z liczby pozycji (44 px + ramka).
             style={{
               left: Math.min(menu.x, window.innerWidth - 192 - 8),

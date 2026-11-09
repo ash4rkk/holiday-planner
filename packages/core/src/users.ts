@@ -1,5 +1,6 @@
 // Kolory kursorów: akcent i błękit z motywu Vague (wariant ciemny).
-const CURSOR_COLORS = ['#c48282', '#6e94b2', '#bb9dbd', '#e8b589'] as const
+// Kolory osób (kursory, awatary): bez kolorów stanów — bursztyn czy zieleń mówiłyby „uwaga” / „ok”.
+const CURSOR_COLORS = ['#c48282', '#6e94b2', '#bb9dbd', '#aeaed1'] as const
 
 export function parseEmailList(value: string | undefined): string[] {
   return (value ?? '')

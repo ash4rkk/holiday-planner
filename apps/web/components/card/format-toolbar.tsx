@@ -109,7 +109,7 @@ export function FormatToolbar({ editor }: { editor: Editor }) {
         type="button"
         aria-label="kwota"
         onPointerDown={run(() => chain().insertContent('/+').run())}
-        className="flex h-11 items-center justify-center rounded-small px-3 font-bold text-orange"
+        className="flex h-11 items-center justify-center rounded-small px-3 font-bold text-text"
       >
         /+
       </button>

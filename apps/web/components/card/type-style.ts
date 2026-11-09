@@ -8,21 +8,27 @@ import {
   UtensilsCrossed,
 } from 'lucide-react'
 
-// Kolory znaczeniowe z docs/plan.md; klasy pełne, żeby Tailwind je znalazł.
+// Kolory typów z docs/wyglad.md: bez kolorów stanów (czerwień, bursztyn, zieleń), notatka bez koloru.
+// Klasy pełne, żeby Tailwind je znalazł.
 export const TYPE_STYLE: Record<
   CardType,
   { icon: LucideIcon; text: string; chip: string; bar: string }
 > = {
   stay: { icon: BedDouble, text: 'text-plum', chip: 'bg-plum/15 text-plum', bar: 'bg-plum' },
-  sight: { icon: Landmark, text: 'text-amber', chip: 'bg-amber/15 text-amber', bar: 'bg-amber' },
+  sight: { icon: Landmark, text: 'text-teal', chip: 'bg-teal/15 text-teal', bar: 'bg-teal' },
   food: {
     icon: UtensilsCrossed,
-    text: 'text-green',
-    chip: 'bg-green/15 text-green',
-    bar: 'bg-green',
+    text: 'text-orange',
+    chip: 'bg-orange/15 text-orange',
+    bar: 'bg-orange',
   },
   transport: { icon: TrainFront, text: 'text-blue', chip: 'bg-blue/15 text-blue', bar: 'bg-blue' },
-  note: { icon: StickyNote, text: 'text-teal', chip: 'bg-teal/15 text-teal', bar: 'bg-teal' },
+  note: {
+    icon: StickyNote,
+    text: 'text-subtle',
+    chip: 'bg-subtle/15 text-subtle',
+    bar: 'bg-subtle',
+  },
 }
 
 export function formatDuration(min: number): string {

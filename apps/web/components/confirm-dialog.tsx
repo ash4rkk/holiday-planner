@@ -29,7 +29,7 @@ export function DialogFrame({
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="island pop-in relative flex w-full max-w-sm flex-col gap-2 p-3"
+        className="island pop-in shadow-float relative flex w-full max-w-sm flex-col gap-2 p-3"
       >
         <h2 className="font-bold">{title}</h2>
         {children}
@@ -107,7 +107,7 @@ export function PromptDialog({
     <DialogFrame title={title} onCancel={onCancel}>
       <form onSubmit={submit} className="flex flex-col gap-2">
         <label className="flex flex-col gap-1">
-          {label && <span className="text-xs text-subtle italic">{label}</span>}
+          {label && <span className="text-xs text-subtle">{label}</span>}
           <input
             autoFocus
             className={inputClass}

@@ -131,7 +131,7 @@ export const SketchEdge = memo(function SketchEdge({
                 type="button"
                 onClick={() => board.select({ kind: 'edge', id })}
                 className={cx(
-                  'rounded-small border bg-panel px-2 py-1 text-xs italic',
+                  'rounded-small border bg-panel px-2 py-1 text-xs',
                   selected ? 'border-accent text-accent' : 'border-line text-subtle',
                 )}
               >
@@ -178,7 +178,7 @@ export const OrderEdge = memo(function OrderEdge({
           pathLength={1}
           className={cx(
             'order-arrow pointer-events-none',
-            data?.warn ? 'stroke-red' : 'stroke-teal/80',
+            data?.warn ? 'stroke-red' : 'stroke-subtle/70',
           )}
         />
       ))}

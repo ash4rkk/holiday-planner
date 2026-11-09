@@ -143,7 +143,7 @@ export function PackingList({ people }: { people: string[] }) {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-1" role="group" aria-label="kto bierze">
-          <span className="px-1 text-xs text-subtle italic">kto bierze</span>
+          <span className="px-1 text-xs text-subtle">kto bierze</span>
           {[undefined, user.name, ...others].map((name) => (
             <button
               key={name ?? 'wspólne'}
@@ -175,7 +175,7 @@ export function PackingList({ people }: { people: string[] }) {
               <Copy className="size-4" aria-hidden="true" /> z poprzedniego wyjazdu
             </button>
           ) : sources.length === 0 ? (
-            <p className="text-xs text-subtle italic">● inne wyjazdy nie mają list pakowania</p>
+            <p className="text-xs text-subtle">● inne wyjazdy nie mają list pakowania</p>
           ) : (
             <div className="flex flex-col gap-1">
               {sources.map((s) => (
@@ -243,7 +243,7 @@ export function PackingList({ people }: { people: string[] }) {
                     aria-label={`kto bierze: ${ownerLabel(item.owner)}, zmień`}
                     className={cx(
                       'min-h-11 shrink-0 px-2 text-xs',
-                      item.owner === user.name ? 'font-bold text-accent' : 'text-subtle italic',
+                      item.owner === user.name ? 'font-bold text-accent' : 'text-subtle',
                     )}
                   >
                     {ownerLabel(item.owner)}
@@ -254,7 +254,7 @@ export function PackingList({ people }: { people: string[] }) {
                       withUndo(doc, `usunięto: ${item.text}`, () => removePackingItem(doc, item.id))
                     }
                     aria-label={`usuń ${item.text}`}
-                    className="flex size-11 shrink-0 items-center justify-center text-dim hover:text-red"
+                    className="flex size-11 shrink-0 items-center justify-center text-subtle hover:text-red"
                   >
                     <X className="size-4" aria-hidden="true" />
                   </button>
@@ -280,7 +280,7 @@ export function PackingProgress() {
     >
       <Luggage className="size-5 text-accent" aria-hidden="true" />
       <span className="font-bold">lista pakowania</span>
-      <span className="text-xs text-subtle italic">
+      <span className="text-xs text-subtle">
         {items.length ? `spakowane ${packed} z ${items.length}` : 'jeszcze pusta'}
       </span>
       <ChevronRight className="ml-auto size-4 text-muted" aria-hidden="true" />

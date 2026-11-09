@@ -13,6 +13,7 @@ import {
   hasCoords,
   type LegPlan,
   type MappedCard,
+  mainCluster,
   mapDays,
   navigationUrl,
   routeMarks,
@@ -42,10 +43,10 @@ import { loadMapLibre } from './maplibre'
 
 const TYPE_VAR: Record<CardType, string> = {
   stay: '--plum',
-  sight: '--amber',
-  food: '--green',
+  sight: '--teal',
+  food: '--orange',
   transport: '--blue',
-  note: '--teal',
+  note: '--subtle',
 }
 
 const ROUTE_SOURCE = 'day-route'
@@ -76,8 +77,9 @@ const ROUTE_STYLE: Record<RouteKind, { color: string; label: string; dash?: numb
   metro: { color: '--blue', label: 'metro' },
   bus: { color: '--teal', label: 'autobus' },
   rail: { color: '--orange', label: 'pociąg' },
-  ferry: { color: '--amber', label: 'prom' },
-  walk: { color: '--green', label: 'pieszo', dash: [0.5, 2] },
+  // Linie tras bez kolorów stanów; prom jak metro, ale przerywany.
+  ferry: { color: '--blue', label: 'prom', dash: [3, 1.5] },
+  walk: { color: '--muted', label: 'pieszo', dash: [0.5, 2] },
   drive: { color: '--plum', label: 'autem' },
   plan: { color: '--subtle', label: 'brak połączenia', dash: [1.5, 2] },
 }
@@ -155,6 +157,15 @@ export function TripMap() {
   const [zoom, setZoom] = useState(0)
 
   const days = useMemo(() => mapDays(cards, trip), [cards, trip])
+  // W trakcie wyjazdu mapa zaczyna od dzisiejszej trasy; przed i po — od wszystkich miejsc.
+  // Raz, gdy karty się wczytają (dokument Yjs przychodzi po pierwszym rysowaniu); wybór osoby
+  // i zakładka zapamiętana z mapą wygrywają.
+  const autoTab = useRef(true)
+  useEffect(() => {
+    if (!autoTab.current || !days.some((d) => d.hasPlaces)) return
+    autoTab.current = false
+    if (days.some((d) => d.date === today && d.hasPlaces)) setTab(today)
+  }, [days, today])
   const live = useMemo(() => cards.filter((c) => !c.deletedAt), [cards])
   const route = useMemo(() => (tab === 'all' ? null : dayRoute(cards, tab)), [cards, tab])
   const dayPlans = useDayPlans(tab === 'all' ? null : tab)
@@ -194,6 +205,7 @@ export function TripMap() {
     const reused = takeMap(trip.id)
     if (reused) {
       fittedTab.current = reused.tab
+      autoTab.current = false
       setTab(reused.tab as Tab)
       attach(reused)
     } else
@@ -465,7 +477,9 @@ export function TripMap() {
     fittedTab.current = tab
     void loadMapLibre().then(({ LngLatBounds }) => {
       const bounds = new LngLatBounds()
-      for (const { card } of pins) bounds.extend([card.location.lng, card.location.lat])
+      // „Wszystkie”: kadr na największe skupisko; pojedyncze dalekie miejsca widać po oddaleniu.
+      const shown = tab === 'all' ? mainCluster(pins.map((p) => p.card.location)) : null
+      for (const p of shown ?? pins.map((p) => p.card.location)) bounds.extend([p.lng, p.lat])
       m.fitBounds(bounds, {
         padding: { top: 140, bottom: 220, left: 48, right: 48 },
         maxZoom: 15,
@@ -571,7 +585,7 @@ export function TripMap() {
   return (
     <>
       <div inert={!!sheet.openId && !wide} className="fixed inset-0">
-        <div className="absolute inset-0 bg-bg">
+        <div className="trip-map absolute inset-0 bg-bg">
           {/* MapLibre nadaje kontenerowi position: relative — rozmiar daje wrapper. */}
           <div ref={container} className="size-full" />
         </div>
@@ -599,6 +613,7 @@ export function TripMap() {
                 aria-selected={tab === t.id}
                 onClick={() => {
                   setSelected(null)
+                  autoTab.current = false
                   setTab(t.id)
                 }}
                 className={cx(
@@ -665,7 +680,7 @@ export function TripMap() {
                   {CARD_TYPE_LABELS[selectedCard.type]}
                 </span>
               </div>
-              <p className="text-xs text-subtle italic">
+              <p className="text-xs text-subtle">
                 {[
                   selectedCard.date && formatDayHeader(selectedCard.date),
                   fieldsSummary(selectedCard),
@@ -731,7 +746,7 @@ export function TripMap() {
           </div>
           {offMap.length > 0 && (
             <section className="island max-h-40 overflow-y-auto p-3">
-              <p className="text-xs text-subtle italic">poza mapą</p>
+              <p className="text-xs text-subtle">poza mapą</p>
               {offMap.map((c) => (
                 <button
                   key={c.id}

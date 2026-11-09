@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AttachmentMeta } from './attachments'
-import { cardsInRain, composeBriefing, rainSpans } from './briefing'
+import { cardSkies, cardsInRain, composeBriefing, isStormCode, rainSpans } from './briefing'
 import type { CardSnapshot } from './cards'
 
 const card = (p: Partial<CardSnapshot>) => ({ title: '', type: 'note', ...p }) as CardSnapshot
@@ -53,5 +53,38 @@ describe('karty w deszczu', () => {
     expect(cardsInRain(cards, date, ['14', '15']).map((c) => c.id)).toEqual(['park'])
     expect(cardsInRain(cards, date, ['10', '20']).map((c) => c.id)).toEqual(['rano', 'kolacja'])
     expect(cardsInRain(cards, date, [])).toEqual([])
+  })
+})
+
+describe('niebo nad kartami', () => {
+  const date = '2027-07-14'
+  const at = (id: string, time: string, durationMin?: number) =>
+    ({ id, type: 'sight', date, time, durationMin }) as CardSnapshot
+  const hours = [
+    { hour: 10, wet: false, storm: false },
+    { hour: 11, wet: true, storm: false },
+    { hour: 15, wet: true, storm: true },
+  ]
+
+  it('deszcz w godzinach karty, burza wygrywa, sucha karta bez nieba', () => {
+    const skies = cardSkies(
+      [at('muzeum', '10:30', 60), at('park', '14:00', 120), at('kawa', '09:00', 30)],
+      date,
+      hours,
+    )
+    expect(Object.fromEntries(skies)).toEqual({ muzeum: 'rain', park: 'storm' })
+  })
+
+  it('bez czasu trwania liczy godzinę; inny dzień i pominięte bez nieba', () => {
+    const skipped = { ...at('x', '11:00'), skipped: true }
+    const other = { ...at('y', '11:00'), date: '2027-07-15' }
+    expect(Object.fromEntries(cardSkies([at('z', '11:10'), skipped, other], date, hours))).toEqual({
+      z: 'rain',
+    })
+  })
+
+  it('kody burzy WMO', () => {
+    expect([95, 96, 99].every(isStormCode)).toBe(true)
+    expect([61, 80, 94].some(isStormCode)).toBe(false)
   })
 })

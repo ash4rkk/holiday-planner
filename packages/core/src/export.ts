@@ -131,25 +131,25 @@ const PRINT_CSS = `
 body { font-family: 'Atkinson Hyperlegible', 'DejaVu Sans', system-ui, sans-serif; color: #2b2a30; font-size: 10.5pt; line-height: 1.45; margin: 0; padding: 16px; max-width: 820px; margin-inline: auto; }
 header { border-bottom: 2px solid #9c5859; padding-bottom: 6px; margin-bottom: 10px; }
 h1 { font-size: 20pt; margin: 0; }
-.sub { color: #66667a; font-style: italic; margin: 2px 0 0; }
+.sub { color: #686778; margin: 2px 0 0; }
 h2 { font-size: 12.5pt; margin: 16px 0 6px; padding: 4px 0; border-bottom: 1px solid #dcd8d1; break-after: avoid; display: flex; gap: 8px; }
-h2 .total { margin-left: auto; color: #a3621f; font-weight: 700; font-size: 10pt; }
-.empty { color: #a7a5ae; font-style: italic; margin: 2px 0 8px; }
+h2 .total { margin-left: auto; color: #2b2a30; font-weight: 700; font-size: 10pt; font-variant-numeric: tabular-nums; }
+.empty { color: #686778; margin: 2px 0 8px; }
 article { border: 1px solid #dcd8d1; border-left: 4px solid var(--c); border-radius: 6px; padding: 6px 10px; margin: 6px 0; break-inside: avoid; }
 article h3 { font-size: 11pt; margin: 0; }
-.meta { color: #55555f; font-size: 9pt; margin: 1px 0 3px; }
+.meta { color: #4a4954; font-size: 9pt; margin: 1px 0 3px; }
 .meta .type { color: var(--c); font-weight: 700; }
 .content p, .content ul, .content ol, .content blockquote, .content pre { margin: 3px 0; }
 .content ul, .content ol { padding-left: 18px; }
 .content ul.tasks { list-style: none; padding-left: 2px; }
-.content li.done { color: #66667a; text-decoration: line-through; }
-.content blockquote { border-left: 2px solid #dcd8d1; padding-left: 8px; color: #55555f; }
+.content li.done { color: #686778; text-decoration: line-through; }
+.content blockquote { border-left: 2px solid #dcd8d1; padding-left: 8px; color: #4a4954; }
 .content h3, .content h4, .content h5 { font-size: 10.5pt; margin: 4px 0 2px; }
-.files { color: #3f7480; font-size: 9pt; }
+.files { color: #9c5859; font-size: 9pt; }
 a { color: #9c5859; }
 .print { display: block; margin: 0 0 10px auto; font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; background: #9c5859; color: #fbfaf7; font-weight: 700; }
 @media print { .print { display: none; } body { padding: 0; } }
-.t-stay { --c: #85638a; } .t-sight { --c: #9a6a34; } .t-food { --c: #4f7637; } .t-transport { --c: #3f6b8c; } .t-note { --c: #3f7480; }
+.t-stay { --c: #85638a; } .t-sight { --c: #2e7680; } .t-food { --c: #9c5c1c; } .t-transport { --c: #3f6b8c; } .t-note { --c: #686778; }
 `
 
 export function exportHtml(

@@ -118,14 +118,14 @@ function SearchPanel({
             onChange={(e) => change(e.target.value)}
             placeholder="szukaj w kartach, miejscach, plikach…"
             aria-label="szukaj"
-            className="min-h-11 min-w-0 flex-1 bg-transparent px-2 text-text placeholder:text-dim focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+            className="min-h-11 min-w-0 flex-1 bg-transparent px-2 text-text placeholder:text-subtle focus:outline-none [&::-webkit-search-cancel-button]:hidden"
           />
           {query && (
             <button
               type="button"
               onClick={() => change('')}
               aria-label="wyczyść"
-              className="flex size-11 shrink-0 items-center justify-center text-dim hover:text-accent"
+              className="flex size-11 shrink-0 items-center justify-center text-subtle hover:text-accent"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -140,17 +140,17 @@ function SearchPanel({
         </form>
 
         <div className="flex flex-col overflow-y-auto overscroll-contain p-1">
-          {!ready && <p className="px-3 py-4 text-sm text-subtle italic">wczytuję plan…</p>}
+          {!ready && <p className="px-3 py-4 text-sm text-subtle">wczytuję plan…</p>}
           {ready && !searching && (
-            <p className="px-3 py-4 text-sm text-subtle italic">
+            <p className="px-3 py-4 text-sm text-subtle">
               tytuły, treść kart, miejsca, nazwy plików i kwoty · działa też bez zasięgu
             </p>
           )}
           {ready && searching && hits.length === 0 && (
-            <p className="px-3 py-4 text-sm text-subtle italic">● nic nie pasuje do „{deferred}”</p>
+            <p className="px-3 py-4 text-sm text-subtle">● nic nie pasuje do „{deferred}”</p>
           )}
           {hits.length > 0 && (
-            <p className="px-3 pt-2 pb-1 text-2xs text-subtle italic" aria-live="polite">
+            <p className="px-3 pt-2 pb-1 text-2xs text-subtle" aria-live="polite">
               wyniki · {hits.length}
             </p>
           )}
@@ -186,11 +186,11 @@ function SearchPanel({
                             card.title || 'bez tytułu'
                           )}
                         </span>
-                        <span className="shrink-0 text-xs text-subtle italic">{when(hit)}</span>
+                        <span className="shrink-0 text-xs text-subtle">{when(hit)}</span>
                       </span>
                       {hit.field !== 'tytuł' && (
                         <span className="line-clamp-2 text-xs text-muted">
-                          <span className="text-subtle italic">{hit.field} · </span>
+                          <span className="text-subtle">{hit.field} · </span>
                           <Highlighted text={hit.snippet} ranges={hit.ranges} />
                         </span>
                       )}

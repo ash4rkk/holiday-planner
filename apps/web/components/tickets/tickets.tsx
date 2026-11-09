@@ -109,7 +109,7 @@ export function TicketsButton({
         >
           <Ticket className="size-5 text-accent" aria-hidden="true" />
           <span className="font-bold">bilety</span>
-          <span className="text-xs text-subtle italic">
+          <span className="text-xs text-subtle">
             {today ? `dziś · ${today}` : 'w najbliższych dniach'}
           </span>
           <ChevronRight className="ml-auto size-4 text-muted" aria-hidden="true" />
@@ -159,7 +159,7 @@ function TicketsSheet({ days, onClose }: { days: TicketDay[]; onClose: () => voi
               <h3 className="px-3 pt-3 pb-1 text-xs text-subtle italic">
                 {labels[d]} · {formatDayHeader(day.date)}
               </h3>
-              {!day.items.length && <p className="px-3 text-sm text-dim italic">bez biletów</p>}
+              {!day.items.length && <p className="px-3 text-sm text-subtle">bez biletów</p>}
               {day.items.map(({ card, files }) => {
                 const Icon = TYPE_STYLE[card.type].icon
                 return (
@@ -184,7 +184,7 @@ function TicketsSheet({ days, onClose }: { days: TicketDay[]; onClose: () => voi
                             index: slides.findIndex((s) => s.file.id === file.id),
                           })
                         }
-                        className="flex min-h-11 items-center gap-2 rounded-inner px-2 text-left text-sm text-teal hover:bg-raised"
+                        className="flex min-h-11 items-center gap-2 rounded-inner px-2 text-left text-sm text-accent hover:bg-raised"
                       >
                         <span className="min-w-0 flex-1 truncate">{file.name}</span>
                         {missing.has(file.id) && (

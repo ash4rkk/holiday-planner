@@ -29,7 +29,7 @@ export const VariantNode = memo(function VariantNode({
         onClick={() => board.openCard(card.id)}
         className="flex size-full flex-col gap-1 py-2 pr-3 pl-4 text-left"
       >
-        <CardFace card={card} files={files} />
+        <CardFace card={card} files={files} footerSpace />
       </button>
       <ChooseButton onClick={() => board.chooseVariant(card.id)} />
     </div>

@@ -63,7 +63,7 @@ export function CountdownRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-xs text-subtle italic">{label}</span>
+        <span className="text-xs text-subtle">{label}</span>
         {!late && <span className="text-2xl leading-tight font-bold">{formatLeft(left)}</span>}
         <span className="text-xs text-accent">{leaveBy ? `do ${leaveBy}` : startsAt}</span>
       </div>

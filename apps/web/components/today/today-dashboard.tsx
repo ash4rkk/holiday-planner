@@ -94,7 +94,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
   const main = trip.currencies[0] ?? 'PLN'
   const place = weatherPlace(cards, planDate)
   const weather = useWeather(place)
-  const { legs, plans, limited, refresh } = useDayPlans(after ? null : planDate)
+  const { legs, plans, limited, early, refresh } = useDayPlans(after ? null : planDate)
   const stays = stayTimes(todays, legs, plans, trip.travelBufferMin)
   // Minione dojazdy są schowane, ale po zmianie planu w trasie można je odsłonić.
   const [showPast, setShowPast] = useState(false)
@@ -110,6 +110,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
         plan={plans[leg.id]}
         bufferMin={trip.travelBufferMin}
         onRefresh={refresh}
+        early={early.includes(leg.id)}
       />
     )
   const nextLeg = next && legs.find((l) => l.to === next.id)
@@ -171,7 +172,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
             <div className="flex items-baseline justify-between gap-2">
               <p className="min-w-0 truncate text-sm">
                 <span className="font-bold">{weekday(planDate)}</span>
-                <span className="text-subtle italic"> · {status}</span>
+                <span className="text-subtle"> · {status}</span>
               </p>
               <Link href={`/trips/${trip.id}/list`} className="shrink-0 text-xs text-accent">
                 lista ›
@@ -180,11 +181,13 @@ export function TodayDashboard({ userName }: { userName: string }) {
             <div className="grid grid-cols-2 gap-1">
               <WeatherTile at={place} today={planDate} compact />
               <div className="flex flex-col justify-center rounded-small bg-raised px-3 py-2">
-                <p className="text-xs text-subtle italic">wydatki dzisiaj</p>
+                <p className="text-xs text-subtle">wydatki dzisiaj</p>
                 {todays.some((c) => c.amounts?.length) ? (
                   <TotalsText cards={todays} mainCurrency={main} className="text-sm font-bold" />
                 ) : (
-                  <p className="text-sm text-dim">{formatAmount({ value: 0, currency: 'PLN' })}</p>
+                  <p className="text-sm text-subtle">
+                    {formatAmount({ value: 0, currency: 'PLN' })}
+                  </p>
                 )}
               </div>
             </div>
@@ -192,9 +195,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
               <DayAxis cards={todays} now={now} onOpen={(id) => sheet.open(id)} legText={legText} />
             )}
             {stay && (
-              <p className="text-xs text-subtle italic">
-                nocleg: {stay.title || stay.location.name}
-              </p>
+              <p className="text-xs text-subtle">nocleg: {stay.title || stay.location.name}</p>
             )}
           </section>
         </>
@@ -214,9 +215,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
               </Link>
             </p>
             {stay && (
-              <p className="mt-1 text-xs text-subtle italic">
-                nocleg: {stay.title || stay.location.name}
-              </p>
+              <p className="mt-1 text-xs text-subtle">nocleg: {stay.title || stay.location.name}</p>
             )}
             {dayNumber && tripDays && (
               <div className="mt-3 h-1 overflow-hidden rounded-full bg-raised" aria-hidden="true">
@@ -236,7 +235,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
                 (after || (!during && !place)) && 'col-span-2',
               )}
             >
-              <p className="text-xs text-subtle italic">
+              <p className="text-xs text-subtle">
                 {during ? 'wydatki dzisiaj' : 'wydatki wyjazdu'}
               </p>
               {(during ? todays : live).some((c) => c.amounts?.length) ? (
@@ -246,7 +245,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
                   className="text-sm font-bold"
                 />
               ) : (
-                <p className="text-sm text-dim">{formatAmount({ value: 0, currency: 'PLN' })}</p>
+                <p className="text-sm text-subtle">{formatAmount({ value: 0, currency: 'PLN' })}</p>
               )}
             </section>
           </div>
@@ -303,7 +302,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-bold">{card.title || 'bez tytułu'}</span>
-                    <span className="block truncate text-xs text-subtle italic">
+                    <span className="block truncate text-xs text-subtle">
                       {[
                         fieldsSummary({ ...card, time: undefined }),
                         card.location?.name && `⌖ ${card.location.name}`,
@@ -312,7 +311,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
                         .join(' · ')}
                     </span>
                     {stays.has(card.id) && (
-                      <span className="block text-xs text-teal">
+                      <span className="block text-xs text-muted">
                         możesz zostać do {stays.get(card.id)}
                       </span>
                     )}
@@ -330,7 +329,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
           type="button"
           onClick={() => setShowPast((v) => !v)}
           aria-expanded={showPast}
-          className="min-h-11 px-3 text-left text-xs text-subtle italic"
+          className="min-h-11 px-3 text-left text-xs text-subtle"
         >
           {showPast ? 'ukryj minione dojazdy' : `pokaż minione dojazdy (${hiddenLegs})`}
         </button>
@@ -428,7 +427,7 @@ function heroTone(code: number | undefined): string | undefined {
   if (code === undefined) return undefined
   if (code <= 2) return 'bg-amber/10'
   if (code <= 48) return 'bg-blue/10'
-  return 'bg-teal/15'
+  return 'bg-blue/15'
 }
 
 const weekdayFormat = new Intl.DateTimeFormat('pl-PL', {
@@ -466,7 +465,7 @@ function WeatherTile({
           compact ? 'rounded-small bg-raised px-3 py-2' : 'island p-3',
         )}
       >
-        <span className="text-xs text-subtle italic">pogoda</span>
+        <span className="text-xs text-subtle">pogoda</span>
         <span className="flex items-center gap-1 text-sm text-accent">
           <LocateFixed className="size-4" aria-hidden="true" />
           {denied ? 'brak zgody na pozycję' : 'użyj mojej pozycji'}
@@ -544,7 +543,7 @@ function NextPlace({
           {card.title || card.location.name}
           {card.time && <span className="text-muted"> · {card.time}</span>}
         </span>
-        <span className="block text-xs text-subtle italic">
+        <span className="block text-xs text-subtle">
           ⌖ {card.location.name}
           {plan && ` · ${plan.minutes} min ${TRAVEL_MODE_LABELS[plan.mode]}`}
         </span>

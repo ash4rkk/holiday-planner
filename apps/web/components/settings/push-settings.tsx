@@ -121,7 +121,7 @@ export function PushSettings({ publicKey }: { publicKey?: string }) {
         )}
         <div className="text-sm">
           <p className="font-bold">powiadomienia na tym telefonie</p>
-          <p className="text-xs text-subtle italic">
+          <p className="text-xs text-subtle">
             przypomnienia z kart z datą i godziną (np. 3 h przed lotem) i zmiany drugiej osoby
           </p>
         </div>

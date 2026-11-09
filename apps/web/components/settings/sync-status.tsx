@@ -54,7 +54,7 @@ export function SyncStatus() {
       <span
         className={cx(
           'size-2 rounded-full',
-          state === 'live' ? 'bg-green' : state === 'offline' ? 'bg-red' : 'bg-dim',
+          state === 'live' ? 'bg-green' : state === 'offline' ? 'bg-red' : 'bg-subtle',
         )}
         aria-hidden="true"
       />

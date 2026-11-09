@@ -11,7 +11,7 @@ export function ToastStack() {
   return (
     <div
       id={TOAST_STACK}
-      className="pointer-events-none fixed inset-x-1 bottom-[calc(76px+env(safe-area-inset-bottom))] z-(--z-toast) flex flex-col-reverse items-center gap-1 [&>*]:pointer-events-auto"
+      className="pointer-events-none fixed inset-x-1 bottom-[calc(76px+env(safe-area-inset-bottom))] z-(--z-toast) flex flex-col-reverse items-center gap-1 [&>*]:pointer-events-auto [&>*]:shadow-float"
     />
   )
 }

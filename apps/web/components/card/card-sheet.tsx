@@ -229,7 +229,7 @@ export function CardSheet({
             {card.status ? (
               <StatusMark status={card.status} />
             ) : (
-              <span className="flex size-8 items-center justify-center rounded-small border border-dashed border-line text-dim">
+              <span className="flex size-8 items-center justify-center rounded-small border border-dashed border-line text-subtle">
                 <Calendar className="size-5" aria-hidden="true" />
               </span>
             )}
@@ -424,7 +424,7 @@ function SaveAsTemplate({ card, editor }: { card: CardSnapshot; editor: Editor |
       type="button"
       onClick={save}
       disabled={state === 'saving'}
-      className="mt-2 min-h-11 self-start px-3 text-xs text-subtle italic hover:text-accent"
+      className="mt-2 min-h-11 self-start px-3 text-xs text-subtle hover:text-accent"
     >
       {state === 'saved'
         ? '• zapisano jako szablon'

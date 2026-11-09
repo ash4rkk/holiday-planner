@@ -28,7 +28,7 @@ export function LinkPreviewBlock({ preview }: { preview: LinkPreview }) {
         {preview.description && (
           <span className="line-clamp-3 text-xs text-muted">{preview.description}</span>
         )}
-        <span className="mt-1 flex items-center gap-1 text-xs text-teal">
+        <span className="mt-1 flex items-center gap-1 text-xs text-accent">
           <ExternalLink className="size-3" aria-hidden="true" />
           {preview.siteName ?? host}
         </span>

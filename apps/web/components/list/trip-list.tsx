@@ -11,6 +11,7 @@ import {
   cardIsPast,
   createCard,
   type DayGap,
+  dayLegs,
   formatDayHeader,
   formatShortDate,
   groupCardsByDay,
@@ -19,17 +20,26 @@ import {
   moveToIdeas,
   nextStart,
   restoreCard,
+  type Sky,
   stayTimes,
   todayLocal,
   variantsByMain,
 } from '@planer/core'
-import { Lightbulb, Luggage, Plus, WandSparkles } from 'lucide-react'
+import { History, Lightbulb, Luggage, Plus, WandSparkles } from 'lucide-react'
 import Link from 'next/link'
-import { Fragment, type ReactNode, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import {
+  Fragment,
+  type ReactNode,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { AddButton } from '@/components/add-button'
 import { askChat, ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
-import { TotalsText } from '@/components/amounts'
+import { DayTotal } from '@/components/amounts'
 import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
 import { CardTile } from '@/components/card/card-tile'
 import { DayTravelSummary, LegRow } from '@/components/card/leg-row'
@@ -42,7 +52,7 @@ import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { buttonClass, cx, SectionLabel } from '@/components/ui'
-import { DayWeather, RainPlanB } from '@/components/weather'
+import { DayWeather, RainPlanB, useDaySkies } from '@/components/weather'
 import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
@@ -57,6 +67,12 @@ import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { VariantCarousel } from './variant-carousel'
 
 const HOLD_HINT_KEY = 'planer-hint-hold'
+
+const weekdayFmt = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', timeZone: 'UTC' })
+const monthFmt = new Intl.DateTimeFormat('pl-PL', { month: 'long', timeZone: 'UTC' })
+/** „czwartek” i „listopad” do nagłówka dnia (data ISO, bez przesunięć strefy). */
+const weekdayLong = (date: string) => weekdayFmt.format(new Date(`${date}T12:00:00Z`))
+const monthName = (date: string) => monthFmt.format(new Date(`${date}T12:00:00Z`))
 
 export function TripList() {
   const { trip, doc, ready, templates } = useTrip()
@@ -73,6 +89,29 @@ export function TripList() {
   const [showTrash, setShowTrash] = useState(false)
   const [moving, setMoving] = useState<CardSnapshot | null>(null)
   const today = todayLocal()
+  const now = useTripNow()
+  // Dni z odsłoniętymi minionymi dojazdami (ikona w nagłówku dnia).
+  const [pastShown, setPastShown] = useState<Set<string>>(() => new Set())
+
+  // Po wejściu na Listę w trakcie wyjazdu: od razu dzisiejszy dzień. Raz na wejście — router trzyma
+  // widok w <Activity>, więc efekt rusza od nowa po powrocie z innego widoku, a nie przy każdej
+  // zmianie kart. Z otwartą kartą (`?card=`) nie przewijamy, żeby nie ruszać tła pod arkuszem.
+  const listRef = useRef<HTMLElement>(null)
+  const scrolledToToday = useRef(false)
+  // Karty idą przez useDeferredValue: tuż po wczytaniu dni są jeszcze puste, a strona za krótka,
+  // żeby przewinąć — czekamy, aż karty się narysują.
+  const drawn = ready && cards.length > 0
+  useEffect(() => {
+    if (!drawn || scrolledToToday.current) return
+    scrolledToToday.current = true
+    const day = listRef.current?.querySelector<HTMLElement>(`[data-day="${today}"]`)
+    if (day && !new URLSearchParams(window.location.search).has('card'))
+      // Klatka później: router po nawigacji sam ustawia przewinięcie na górę.
+      requestAnimationFrame(() => day.scrollIntoView({ block: 'start' }))
+    return () => {
+      scrolledToToday.current = false
+    }
+  }, [drawn, today])
   // Przytrzymanie karty niczym się nie zdradza, więc raz o nim mówimy.
   const [hint, setHint] = useState(false)
   useEffect(() => {
@@ -111,13 +150,14 @@ export function TripList() {
     update(next)
   }
 
-  const tile = (c: CardSnapshot, stayUntil?: string, inDay?: boolean) => (
+  const tile = (c: CardSnapshot, stayUntil?: string, inDay?: boolean, sky?: Sky) => (
     <CardTile
       key={c.id}
       card={c}
       files={fileCounts.get(c.id)}
       variants={variants.get(c.id)?.length}
       stayUntil={stayUntil}
+      sky={sky}
       inDay={inDay}
       onOpen={() => open(c.id)}
       // Wariant nie ma własnego dnia, więc nie ma czego przenosić.
@@ -140,6 +180,7 @@ export function TripList() {
     <>
       {/* Pod otwartym arkuszem lista jest nieaktywna (fokus i czytniki ekranu zostają w arkuszu). */}
       <main
+        ref={listRef}
         inert={!!openId && !wide}
         className="mx-auto flex max-w-xl flex-col gap-1"
         style={wide && openId ? { marginRight: CARD_PANEL_WIDTH } : undefined}
@@ -196,7 +237,7 @@ export function TripList() {
         </div>
 
         {filtering && (
-          <p className="flex items-center gap-2 px-3 text-xs text-subtle italic">
+          <p className="flex items-center gap-2 px-3 text-xs text-subtle">
             <span className="flex-1">
               {shown ? `pokazane ${shown} z ${live}` : '● żadna karta nie pasuje do filtrów'}
             </span>
@@ -214,7 +255,7 @@ export function TripList() {
         )}
 
         {hint && live > 1 && !filtering && (
-          <p className="flex items-center gap-2 px-3 text-xs text-subtle italic">
+          <p className="flex items-center gap-2 px-3 text-xs text-subtle">
             <span className="flex-1">● przytrzymaj kartę, żeby przenieść ją na inny dzień</span>
             <button
               type="button"
@@ -226,16 +267,9 @@ export function TripList() {
           </p>
         )}
 
-        {cards.some((c) => !c.deletedAt && c.amounts?.length) && (
-          <p className="px-3 text-xs text-subtle italic">
-            wydatki wyjazdu ·{' '}
-            <TotalsText cards={cards} mainCurrency={main} className="not-italic font-bold" />
-          </p>
-        )}
-
         {ready && live === 0 && (
           <section className="island pop-in flex flex-col items-center gap-2 p-6 text-center">
-            <span className="flex size-16 items-center justify-center rounded-full border border-dashed border-teal text-teal">
+            <span className="flex size-16 items-center justify-center rounded-full border border-dashed border-subtle text-subtle">
               <Luggage className="size-7" aria-hidden="true" strokeWidth={1.5} />
             </span>
             <p className="font-bold">pusty plan</p>
@@ -272,24 +306,77 @@ export function TripList() {
             // Przy filtrach puste dni tylko zajmują miejsce.
             if (filtering && !day.cards.length) return null
             const isToday = day.date === today
+            const pastLegs = now
+              ? dayLegs(cards, day.date).filter((l) => legIsPast(l, day.date, now, day.cards))
+                  .length
+              : 0
+            const showingPast = pastShown.has(day.date)
             return (
               <section
                 key={day.date}
+                data-day={day.date}
                 className="flex flex-col gap-1"
                 aria-label={formatDayHeader(day.date)}
               >
-                <div className="flex items-center gap-2 pt-3 pl-3">
-                  <DayWeather date={day.date} cards={cards} className="shrink-0" />
-                  <h2 className={cx('truncate text-sm font-bold', isToday && 'text-accent')}>
-                    {formatDayHeader(day.date)}
-                  </h2>
-                  <span className="shrink-0 text-xs text-subtle italic">
-                    {[isToday && 'dziś', day.dayIndex && `dzień ${day.dayIndex}`]
-                      .filter(Boolean)
-                      .join(' · ')}
+                {/* Nagłówek jak w kalendarzu: duży numer dnia, dzień tygodnia, linia pod spodem. */}
+                <div className="flex items-start gap-2.5 pt-7 pl-3">
+                  <span
+                    className={cx(
+                      'pt-0.5 text-3xl leading-none font-bold tabular-nums',
+                      isToday && 'text-accent',
+                    )}
+                    aria-hidden="true"
+                  >
+                    {Number(day.date.slice(8))}
                   </span>
-                  <RainPlanB date={day.date} cards={day.cards} />
-                  <span className="flex-1" />
+                  {/* Dwa wiersze, żeby nazwa dnia się nie ucinała: dzień tygodnia z miesiącem,
+                      pod nim pogoda | suma i „plan B?”. Ikony dnia zostają z prawej. */}
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <div className="flex flex-wrap items-baseline gap-x-2 leading-tight">
+                      <h2 className={cx('text-sm font-bold', isToday && 'text-accent')}>
+                        <span className="sr-only">{formatDayHeader(day.date)}</span>
+                        <span aria-hidden="true">{weekdayLong(day.date)}</span>
+                      </h2>
+                      <span className="text-xs text-subtle">
+                        {[
+                          monthName(day.date),
+                          isToday && 'dziś',
+                          day.dayIndex && `dzień ${day.dayIndex}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 empty:hidden">
+                      {/* Pogoda | suma dnia: kreska tylko między tym, co jest. */}
+                      <span className="flex shrink-0 items-center gap-2 empty:hidden [&>*+*]:border-sel [&>*+*]:border-l [&>*+*]:pl-2">
+                        <DayWeather date={day.date} cards={cards} className="shrink-0" />
+                        <DayTotal cards={day.cards} mainCurrency={main} />
+                      </span>
+                      <RainPlanB date={day.date} cards={day.cards} />
+                    </div>
+                  </div>
+                  {/* Minione dojazdy są schowane; ikona z liczbą je odsłania (po zmianie planu w trasie). */}
+                  {pastLegs > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => toggle(pastShown, day.date, setPastShown)}
+                      aria-pressed={showingPast}
+                      aria-label={
+                        showingPast
+                          ? 'ukryj minione dojazdy'
+                          : `pokaż minione dojazdy (${pastLegs})`
+                      }
+                      title={showingPast ? 'ukryj minione dojazdy' : 'pokaż minione dojazdy'}
+                      className={cx(
+                        'flex h-11 min-w-11 items-center justify-center gap-0.5 rounded-inner hover:text-accent',
+                        showingPast ? 'bg-active text-accent' : 'text-muted',
+                      )}
+                    >
+                      <History className="size-4" aria-hidden="true" />
+                      <span className="text-2xs font-bold tabular-nums">{pastLegs}</span>
+                    </button>
+                  )}
                   {/* Są pomysły: czat dokłada je do dnia w wolne godziny (zmiany do zatwierdzenia). */}
                   {ideaCount > 0 && (
                     <button
@@ -314,8 +401,10 @@ export function TripList() {
                     <Plus className="size-4" aria-hidden="true" />
                   </button>
                 </div>
-                <TotalsText cards={day.cards} mainCurrency={main} className="-mt-2 px-3 text-xs" />
-                {day.cards.length > 0 && <DayCards date={day.date} cards={day.cards} tile={tile} />}
+                <div className={cx('mx-3 h-0.5 rounded-full', isToday ? 'bg-accent' : 'bg-sel')} />
+                {day.cards.length > 0 && (
+                  <DayCards date={day.date} cards={day.cards} tile={tile} showPast={showingPast} />
+                )}
               </section>
             )
           })}
@@ -333,10 +422,10 @@ export function TripList() {
               type="button"
               onClick={() => setShowTrash((v) => !v)}
               aria-expanded={showTrash}
-              className="px-3 py-2 text-left text-xs text-subtle italic"
+              className="px-3 py-2 text-left text-xs text-subtle"
             >
               kosz · {groups.trash.length} {showTrash ? '' : '›'}
-              <span className="block text-dim">karty znikają po 30 dniach</span>
+              <span className="block text-subtle">karty znikają po 30 dniach</span>
             </button>
             {showTrash &&
               groups.trash.map((c) => (
@@ -398,21 +487,23 @@ function DayCards({
   date,
   cards,
   tile,
+  showPast,
 }: {
   date: string
   cards: CardSnapshot[]
-  tile: (c: CardSnapshot, stayUntil?: string, inDay?: boolean) => ReactNode
+  tile: (c: CardSnapshot, stayUntil?: string, inDay?: boolean, sky?: Sky) => ReactNode
+  /** Minione dojazdy odsłonięte ikoną w nagłówku dnia. */
+  showPast: boolean
 }) {
   const { trip } = useTrip()
-  const { legs, plans, limited, refresh } = useDayPlans(date)
+  const { legs, plans, limited, early, refresh } = useDayPlans(date)
   const everything = useCards()
   const options = useMemo(() => variantsByMain(everything), [everything])
   const stays = stayTimes(cards, legs, plans, trip.travelBufferMin)
+  // Deszcz i burza nad kartami dnia (animacja w tle kafelka); prognoza godzinowa, 7 dni naprzód.
+  const skies = useDaySkies(date, everything)
   const now = useTripNow()
-  // Minione dojazdy są schowane, ale po zmianie planu w trasie można je odsłonić.
-  const [showPast, setShowPast] = useState(false)
   const isPast = (leg: DayGap) => Boolean(now && legIsPast(leg, date, now, cards))
-  const hiddenLegs = legs.filter(isPast).length
   // Linia „teraz” przed pierwszą kartą, której pora jeszcze nie minęła.
   const timed = cards.filter((c) => c.time)
   const upcoming = now && timed.find((c) => (c.time as string) > now.time)
@@ -429,6 +520,7 @@ function DayCards({
           plan={plans[leg.id]}
           bufferMin={trip.travelBufferMin}
           onRefresh={refresh}
+          early={early.includes(leg.id)}
         />
       </div>
     )
@@ -452,13 +544,15 @@ function DayCards({
                     main={c}
                     variants={options.get(c.id) ?? []}
                     time={(card) => <TimeCell card={card} className="pt-3" />}
-                    tile={(card) => tile(card, stays.get(card.id), true)}
+                    tile={(card) => tile(card, stays.get(card.id), true, skies.get(card.id))}
                   />
                 </div>
               ) : (
                 <>
                   <TimeCell card={c} className="pt-3" />
-                  <div className="min-w-0 flex-1">{tile(c, stays.get(c.id), true)}</div>
+                  <div className="min-w-0 flex-1">
+                    {tile(c, stays.get(c.id), true, skies.get(c.id))}
+                  </div>
                 </>
               )}
             </div>
@@ -469,16 +563,6 @@ function DayCards({
         ))}
         {lineAtEnd && now && !endLeg && <NowLine time={now.time} />}
       </div>
-      {hiddenLegs > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowPast((v) => !v)}
-          aria-expanded={showPast}
-          className="min-h-11 px-3 text-left text-xs text-subtle italic"
-        >
-          {showPast ? 'ukryj minione dojazdy' : `pokaż minione dojazdy · ${hiddenLegs}`}
-        </button>
-      )}
       <DayTravelSummary plans={plans} limited={limited} />
     </div>
   )

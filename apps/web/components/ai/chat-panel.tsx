@@ -265,9 +265,7 @@ function Proposals({
               <span className="sr-only">{CARD_TYPE_LABELS[card.type]}</span>
               <span className="min-w-0 flex-1 truncate">{card.title}</span>
             </p>
-            {meta.length > 0 && (
-              <p className="truncate text-xs text-subtle italic">{meta.join(' · ')}</p>
-            )}
+            {meta.length > 0 && <p className="truncate text-xs text-subtle">{meta.join(' · ')}</p>}
             {replaces && (
               <p className="truncate text-xs text-blue">
                 zamiast: {replaces.title || 'bez tytułu'}
@@ -277,7 +275,7 @@ function Proposals({
             {card.description && <p className="mt-1 text-xs text-text">{card.description}</p>}
             {card.notes && (
               <p className="mt-1 rounded-small bg-raised px-2 py-1 text-xs text-muted">
-                <span className="text-subtle italic">uwagi · </span>
+                <span className="text-subtle">uwagi · </span>
                 {card.notes}
               </p>
             )}
@@ -300,12 +298,12 @@ function Proposals({
                   </span>
                 )}
                 {!onMap && (
-                  <span className="text-2xs text-dim">● bez adresu · nie trafi na mapę</span>
+                  <span className="text-2xs text-subtle">● bez adresu · nie trafi na mapę</span>
                 )}
               </p>
             )}
             {twin && (
-              <p className="mt-1 truncate text-xs text-orange">
+              <p className="mt-1 truncate text-xs text-amber">
                 ● już to masz: {twin.title || 'karta bez tytułu'}
               </p>
             )}
@@ -455,13 +453,13 @@ function ChangeProposals({
                 {card.title || 'bez tytułu'}
               </button>
             </p>
-            {change.reason && <p className="text-xs text-subtle italic">{change.reason}</p>}
+            {change.reason && <p className="text-xs text-subtle">{change.reason}</p>}
             <ul className="mt-1 flex flex-col gap-0.5 text-xs">
               {changeRows(change, card).map(([label, before, after]) => (
                 <li key={label} className="flex gap-2">
                   <span className="w-14 shrink-0 text-subtle">{label}</span>
                   <span className="min-w-0 flex-1 break-words">
-                    {before && <span className="text-dim line-through">{before}</span>}
+                    {before && <span className="text-subtle line-through">{before}</span>}
                     {before && ' → '}
                     <span className="text-text">{after}</span>
                   </span>
@@ -803,13 +801,13 @@ function ChatPanel({
         className="flex flex-1 flex-col gap-3 overflow-y-auto p-3 text-sm leading-relaxed"
       >
         {offline && (
-          <p className="text-xs text-subtle italic">
+          <p className="text-xs text-subtle">
             ● offline · rozmowa do czytania, pytać można po powrocie zasięgu
           </p>
         )}
         {loaded && messages.length === 0 && !offline && (
           <div className="flex flex-col gap-2">
-            <p className="text-xs text-subtle italic">
+            <p className="text-xs text-subtle">
               AI czyta cały plan wyjazdu i pliki, szuka w sieci i proponuje karty — do pomysłów albo
               planu trafiają dopiero po Twoim wyborze.
             </p>
@@ -835,7 +833,7 @@ function ChatPanel({
           return (
             <Fragment key={m.id}>
               {newDay && (
-                <p className="flex items-center gap-2 text-2xs text-dim" aria-hidden="true">
+                <p className="flex items-center gap-2 text-2xs text-subtle" aria-hidden="true">
                   <span className="h-px flex-1 bg-line" />
                   {day}
                   <span className="h-px flex-1 bg-line" />
@@ -843,7 +841,7 @@ function ChatPanel({
               )}
               {m.role === 'user' ? (
                 <div className="ml-8 self-end rounded-island bg-active px-3 py-2">
-                  {m.author && <p className="text-2xs text-subtle italic">{m.author}</p>}
+                  {m.author && <p className="text-2xs text-subtle">{m.author}</p>}
                   <p className="whitespace-pre-wrap">{m.text}</p>
                 </div>
               ) : (
@@ -851,7 +849,7 @@ function ChatPanel({
                   {m.text ? (
                     <AiMarkdown text={m.text} onCard={onOpenCard} exists={exists} />
                   ) : (
-                    <p className="text-subtle italic">{status ?? 'myślę…'}</p>
+                    <p className="text-subtle">{status ?? 'myślę…'}</p>
                   )}
                   {m.proposals && m.proposals.length > 0 && (
                     <Proposals
@@ -876,7 +874,7 @@ function ChatPanel({
                             href={s.url}
                             target="_blank"
                             rel="noreferrer noopener"
-                            className="text-teal"
+                            className="text-accent"
                           >
                             ↗ {s.title || s.url}
                           </a>
@@ -890,13 +888,9 @@ function ChatPanel({
           )
         })}
         {/* Stan pracy w trakcie pisania odpowiedzi (np. „czytam bilet.pdf…”) — w tym samym miejscu. */}
-        {busy && status && messages.at(-1)?.text && (
-          <p className="text-xs text-subtle italic">{status}</p>
-        )}
+        {busy && status && messages.at(-1)?.text && <p className="text-xs text-subtle">{status}</p>}
         {otherAsking && (
-          <p className="text-xs text-subtle italic">
-            {otherAsking.author} pyta · odpowiedź w drodze…
-          </p>
+          <p className="text-xs text-subtle">{otherAsking.author} pyta · odpowiedź w drodze…</p>
         )}
         {error && (
           <p className="flex items-center gap-2 text-xs text-red">
@@ -949,7 +943,7 @@ function ChatPanel({
                 : 'zapytaj o plan…'
           }
           disabled={blocked}
-          className="max-h-32 min-h-11 flex-1 resize-none rounded-small border border-line bg-raised px-3 py-2.5 text-text placeholder:text-dim focus:border-accent focus:outline-none"
+          className="max-h-32 min-h-11 flex-1 resize-none rounded-small border border-line bg-raised px-3 py-2.5 text-text placeholder:text-subtle focus:border-accent focus:outline-none"
         />
         {busy ? (
           <button
@@ -973,7 +967,7 @@ function ChatPanel({
       </form>
       {/* Koszt widać dopiero, gdy zaczyna mieć znaczenie; całość jest w ustawieniach. */}
       {budget && budget.spent >= budget.limit / 2 && (
-        <p className="px-3 pb-2 text-2xs text-dim">
+        <p className="px-3 pb-2 text-2xs text-subtle">
           AI w tym miesiącu:{' '}
           {formatAmount({ value: Math.round(budget.spent * 100) / 100, currency: 'PLN' })} z{' '}
           {formatAmount({ value: budget.limit, currency: 'PLN' })}

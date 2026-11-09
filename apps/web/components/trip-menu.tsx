@@ -56,7 +56,7 @@ export function TripMenu() {
       {open && (
         <div
           role="menu"
-          className="island fade-in absolute top-full right-0 z-(--z-nav) mt-2 flex w-56 flex-col p-1"
+          className="island fade-in shadow-float absolute top-full right-0 z-(--z-nav) mt-2 flex w-56 flex-col p-1"
         >
           <Link
             role="menuitem"

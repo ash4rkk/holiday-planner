@@ -90,14 +90,14 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
             <MapPin className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />
             <div className="min-w-0">
               <p className="font-bold">{preview?.name ?? 'miejsce z linku'}</p>
-              {preview?.address && <p className="text-xs text-subtle italic">{preview.address}</p>}
+              {preview?.address && <p className="text-xs text-subtle">{preview.address}</p>}
               {(preview?.mapsUrl ?? preview?.otherUrl) && (
-                <p className="mt-1 truncate text-xs text-teal">
+                <p className="mt-1 truncate text-xs text-accent">
                   {preview?.mapsUrl ?? preview?.otherUrl}
                 </p>
               )}
               {share.files.length > 0 && (
-                <p className="mt-2 flex items-center gap-1 text-xs text-subtle italic">
+                <p className="mt-2 flex items-center gap-1 text-xs text-subtle">
                   <Paperclip className="size-3.5" aria-hidden="true" />
                   {share.files.map((f) => f.name).join(', ')} — AI zrobi z{' '}
                   {share.files.length === 1 ? 'niego' : 'nich'} szkic karty
@@ -142,12 +142,12 @@ export function ShareScreen({ trips }: { trips: TripOption[] }) {
                     <span
                       className={cx(
                         'size-3 shrink-0 rounded-full border-2',
-                        tripId === t.id ? 'border-accent bg-accent' : 'border-dim',
+                        tripId === t.id ? 'border-accent bg-accent' : 'border-subtle',
                       )}
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-bold">{t.title}</span>
-                      <span className="text-xs text-subtle italic">
+                      <span className="text-xs text-subtle">
                         {formatDateSpan(t.startDate, t.endDate)}
                       </span>
                     </span>

@@ -78,7 +78,7 @@ export default async function LogsPage({ searchParams }: PageProps<'/settings/lo
           </ul>
         </section>
       ))}
-      <p className="px-3 pt-2 text-xs text-subtle italic">
+      <p className="px-3 pt-2 text-xs text-subtle">
         Wpisy z workera, serwera sync i usług zewnętrznych; starsze niż 30 dni znikają same.
       </p>
     </main>

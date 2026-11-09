@@ -29,7 +29,7 @@ export default async function AiSettingsPage() {
                   style={{ width: `${Math.min(100, (spent / MONTHLY_BUDGET_PLN) * 100)}%` }}
                 />
               </div>
-              <p className="mt-2 text-xs text-subtle italic">
+              <p className="mt-2 text-xs text-subtle">
                 model {AI_MODEL} · po przekroczeniu limitu AI wyłącza się do końca miesiąca
               </p>
             </>

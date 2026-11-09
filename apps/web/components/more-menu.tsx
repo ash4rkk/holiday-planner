@@ -26,7 +26,7 @@ export function MoreMenu({ children }: { children: ReactNode }) {
           // Wybór akcji zamyka menu (linki i przyciski w środku nie wiedzą o „⋯”).
           <div
             onClick={() => setOpen(false)}
-            className="more-panel island fade-in absolute top-full right-0 z-(--z-popover) mt-2 flex items-center p-1"
+            className="more-panel island fade-in shadow-float absolute top-full right-0 z-(--z-popover) mt-2 flex items-center p-1"
           >
             {children}
           </div>

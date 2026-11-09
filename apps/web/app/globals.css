@@ -7,20 +7,26 @@
   color-scheme: light;
   --bg: #f3f1ed; --panel: #fbfaf7; --raised: #ebe8e3; --attrib: #5e5e5e;
   --line: #dcd8d1; --sel: #cfcac2;
-  --text: #2b2a30; --muted: #55555f; --subtle: #66667a; --dim: #6f6d78;
+  /* Tekst w trzech stopniach: treść, opis, podpis. */
+  --text: #2b2a30; --muted: #4a4954; --subtle: #686778;
   --accent: #9c5859; --accent-hover: #874a4b; --on-accent: #fbfaf7;
-  --plum: #85638a; --blue: #3f6b8c; --lavender: #62629a; --teal: #3f7480;
-  --amber: #9a6a34; --orange: #a3621f; --green: #4f7637; --red: #ad3f58;
+  /* Cień tylko dla warstw pływających nad treścią (menu, okna, komunikaty); wysepki w treści bez cienia. */
+  --float-shadow: 0 8px 24px -8px rgb(43 42 48 / 0.22), 0 2px 6px -2px rgb(43 42 48 / 0.12);
+  /* Typy kart: nocleg, atrakcja, jedzenie, transport (+ lawenda wolna). */
+  --plum: #85638a; --teal: #2e7680; --orange: #9c5c1c; --blue: #3f6b8c; --lavender: #62629a;
+  /* Stany: źle, do zrobienia, dobrze. */
+  --red: #b8382c; --amber: #836608; --green: #4f7637;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
   --bg: #1e1e22; --panel: #26262b; --raised: #2c2c32; --attrib: #ffffff;
   --line: #36363f; --sel: #44444e;
-  --text: #dedede; --muted: #a8a8b6; --subtle: #8f8fa8; --dim: #8b8b9c;
+  --text: #dedede; --muted: #b6b6c3; --subtle: #8f8fa8;
   --accent: #c48282; --accent-hover: #d49a9a; --on-accent: #1e1e22;
-  --plum: #bb9dbd; --blue: #6e94b2; --lavender: #aeaed1; --teal: #9bb4bc;
-  --amber: #e8b589; --orange: #e0a363; --green: #7fa563; --red: #d8647e;
+  --plum: #bb9dbd; --teal: #72b5ba; --orange: #e0a363; --blue: #6e94b2; --lavender: #aeaed1;
+  --red: #ee6d5f; --amber: #ddbd57; --green: #7fa563;
+  --float-shadow: 0 10px 28px -8px rgb(0 0 0 / 0.55), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 
 :root {
@@ -51,7 +57,6 @@
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-subtle: var(--subtle);
-  --color-dim: var(--dim);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-on-accent: var(--on-accent);
@@ -63,6 +68,7 @@
   --color-orange: var(--orange);
   --color-green: var(--green);
   --color-red: var(--red);
+  --shadow-float: var(--float-shadow);
   --radius-island: var(--radius-island);
   --radius-inner: var(--radius-inner);
   --radius-small: var(--radius-small);
@@ -234,7 +240,7 @@ body {
 .card-prose ul[data-type="taskList"] li[data-checked="true"] > label input { animation: check-pop 220ms ease-out; }
 .card-prose p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: var(--dim);
+  color: var(--subtle);
   font-style: italic;
   font-weight: 400;
   float: left;
@@ -356,6 +362,10 @@ body {
 .maplibregl-ctrl-attrib {
   font-size: 10px;
 }
+/* Mapa wyjazdu jest pod dolnym menu: atrybucja nad nim, jak przyciski dni. */
+.trip-map .maplibregl-ctrl-bottom-left {
+  bottom: calc(72px + env(safe-area-inset-bottom));
+}
 /* Strzałka kierunku trasy dnia (obracana wg kursu odcinka). */
 .map-arrow {
   width: 0;
@@ -365,11 +375,37 @@ body {
   border-bottom: 12px solid var(--accent);
 }
 
+/* Pogoda na karcie: scena na canvasie (components/sky/card-sky.tsx) pod treścią, nad tłem wysepki
+   (rodzic ma `isolate`). */
+.card-sky {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+/* Winieta z lewej: tło karty przykrywa scenę pod tekstem i wygasa w prawo — deszcz i błyskawice
+   zostają wyraźne z prawej strony, a tytuł i opis są czytelne. */
+.card-sky::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--panel) 0%,
+    color-mix(in srgb, var(--panel) 88%, transparent) 28%,
+    color-mix(in srgb, var(--panel) 55%, transparent) 55%,
+    transparent 82%
+  );
+}
+
 /* Kwota `/+` w treści karty. */
+/* Bez koloru: pomarańcz należy do typu „jedzenie”. */
 .amount-mark {
-  color: var(--orange);
   font-weight: 700;
-  background: color-mix(in srgb, var(--orange) 14%, transparent);
+  font-variant-numeric: tabular-nums;
+  background: var(--raised);
   border-radius: 4px;
   padding: 0 2px;
 }
@@ -382,7 +418,7 @@ body {
 .public-content ol { padding-left: 1.2em; list-style: disc; }
 .public-content ol { list-style: decimal; }
 .public-content ul.tasks { list-style: none; padding-left: 0; }
-.public-content li.done { text-decoration: line-through; color: var(--dim); }
+.public-content li.done { text-decoration: line-through; color: var(--subtle); }
 .public-content a { color: var(--accent); text-decoration: underline; }
 .public-content blockquote { border-left: 2px solid var(--line); padding-left: 8px; }
 

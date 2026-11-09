@@ -49,7 +49,7 @@ export function FamilyLink({
         <Link2 className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />
         <div>
           <p className="font-bold">link dla rodziny</p>
-          <p className="text-xs text-subtle italic">
+          <p className="text-xs text-subtle">
             plan dzień po dniu, mapa i kwoty, bez załączników i bez edycji — działa bez logowania
           </p>
         </div>
@@ -60,7 +60,7 @@ export function FamilyLink({
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="truncate rounded-small bg-raised px-3 py-2 text-xs text-teal"
+            className="truncate rounded-small bg-raised px-3 py-2 text-xs text-accent"
           >
             {url}
           </a>

@@ -26,7 +26,7 @@ function inline(text: string, links: CardLinks, key: string): ReactNode[] {
       const id = m[4].slice(5)
       if (links.exists && !links.exists(id))
         out.push(
-          <span key={k} className="text-dim line-through" title="karta w koszu albo usunięta">
+          <span key={k} className="text-subtle line-through" title="karta w koszu albo usunięta">
             {m[3]}
           </span>,
         )

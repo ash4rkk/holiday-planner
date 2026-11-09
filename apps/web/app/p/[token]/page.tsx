@@ -23,10 +23,10 @@ export const metadata: Metadata = { title: 'Plan wyjazdu', robots: { index: fals
 
 const TYPE_VAR: Record<CardType, string> = {
   stay: '--plum',
-  sight: '--amber',
-  food: '--green',
+  sight: '--teal',
+  food: '--orange',
   transport: '--blue',
-  note: '--teal',
+  note: '--subtle',
 }
 
 export default async function PublicTripPage({ params }: PageProps<'/p/[token]'>) {
@@ -48,11 +48,11 @@ export default async function PublicTripPage({ params }: PageProps<'/p/[token]'>
     <main className="app mx-auto flex min-h-dvh max-w-xl flex-col gap-1 px-px pt-1 pb-8">
       <header className="island border-t-2 border-t-accent p-4">
         <h1 className="text-xl font-bold">{trip.title}</h1>
-        <p className="text-sm text-subtle italic">
+        <p className="text-sm text-subtle">
           {formatDateSpan(trip.startDate, trip.endDate)}
           {total && ` · wydatki: ${total}`}
         </p>
-        <p className="mt-1 text-2xs text-dim">podgląd planu tylko do odczytu</p>
+        <p className="mt-1 text-2xs text-subtle">podgląd planu tylko do odczytu</p>
       </header>
 
       <PublicMap pins={pins} />
@@ -68,9 +68,11 @@ export default async function PublicTripPage({ params }: PageProps<'/p/[token]'>
           <section key={s.key} className="flex flex-col gap-1">
             <h2 className="flex items-baseline gap-2 px-3 pt-3 text-sm font-bold">
               {s.heading}
-              {dayTotal && <span className="ml-auto text-xs text-orange">{dayTotal}</span>}
+              {dayTotal && (
+                <span className="ml-auto text-xs font-bold tabular-nums">{dayTotal}</span>
+              )}
             </h2>
-            {!s.cards.length && <p className="px-3 text-xs text-dim italic">pusto</p>}
+            {!s.cards.length && <p className="px-3 text-xs text-subtle">pusto</p>}
             {s.cards.map(({ card, blocks }) => {
               const Icon = TYPE_STYLE[card.type].icon
               return (
@@ -90,7 +92,7 @@ export default async function PublicTripPage({ params }: PageProps<'/p/[token]'>
                     </span>
                     <div className="min-w-0">
                       <p className="font-bold">{card.title || 'bez tytułu'}</p>
-                      <p className="text-xs text-subtle italic">{cardMeta(card).join(' · ')}</p>
+                      <p className="text-xs text-subtle">{cardMeta(card).join(' · ')}</p>
                     </div>
                   </div>
                   {blocks.length > 0 && (

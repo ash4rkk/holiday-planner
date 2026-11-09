@@ -16,7 +16,7 @@ export default async function RemindersPage() {
     <main className="mx-auto flex max-w-xl flex-col gap-1">
       <TopBar title="przypomnienia" back={SETTINGS_BACK} />
       <form action={saveReminderDefaults} className="island flex flex-col gap-3 p-4 text-sm">
-        <p className="text-xs text-subtle italic">
+        <p className="text-xs text-subtle">
           ile przed godziną karty przychodzi powiadomienie — dla kart z datą i godziną
         </p>
         {(CARD_TYPES as readonly CardType[]).map((type) => (
@@ -39,7 +39,7 @@ export default async function RemindersPage() {
       </form>
       <form action={saveBriefing} className="island mt-1 flex flex-col gap-3 p-4 text-sm">
         <p className="font-bold">podsumowanie na jutro</p>
-        <p className="text-xs text-subtle italic">
+        <p className="text-xs text-subtle">
           wieczorem push z pierwszą kartą i godziną wyjścia, biletami, rezerwacjami i pogodą — od
           dnia przed wyjazdem, w strefie czasowej wyjazdu
         </p>
@@ -60,7 +60,7 @@ export default async function RemindersPage() {
           zapisz
         </button>
       </form>
-      <p className="px-3 pt-2 text-xs text-subtle italic">
+      <p className="px-3 pt-2 text-xs text-subtle">
         Wspólne dla obu osób. Karty z własnym przypomnieniem (ustawionym w karcie) zostają bez
         zmian.
       </p>

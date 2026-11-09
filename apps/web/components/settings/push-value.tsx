@@ -22,5 +22,6 @@ export function PushValue() {
       .catch(() => setValue('wyłączone'))
     return () => clearTimeout(timer)
   }, [])
-  return value ?? null
+  // Od razu coś w wierszu: sprawdzenie subskrypcji trwa chwilę, a pusty wiersz wygląda na błąd.
+  return value ?? 'sprawdzam…'
 }

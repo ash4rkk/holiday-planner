@@ -81,7 +81,7 @@ export function CurrentTrip({
               <p className="truncate text-2xl font-bold">{trip.title}</p>
             </ViewTransition>
           </div>
-          <p className="text-xs text-subtle italic">
+          <p className="text-xs text-subtle">
             {country && `${country} · `}
             {formatDateSpan(trip.startDate, trip.endDate)}
           </p>
@@ -90,7 +90,7 @@ export function CurrentTrip({
         <div className="grid grid-cols-2 gap-1">
           <div className={cx(tile, 'col-span-2 flex-row items-end gap-3')}>
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-subtle italic">wydatki</p>
+              <p className="text-xs text-subtle">wydatki</p>
               <p className="truncate text-xl font-bold">
                 {formatAmount(summary.main ?? { value: summary.pln, currency: 'PLN' })}
               </p>
@@ -101,37 +101,60 @@ export function CurrentTrip({
               )}
             </div>
             {summary.any && summary.days.length > 1 && (
-              <div className="flex h-10 w-2/5 max-w-40 items-end gap-0.5" aria-hidden="true">
-                {summary.days.map((d) => (
-                  <span
-                    key={d.date}
-                    title={d.date}
-                    className={cx(
-                      'min-h-0.5 flex-1 rounded-[2px]',
-                      d.date === today ? 'bg-accent' : d.date < today ? 'bg-subtle' : 'bg-line',
-                    )}
-                    style={{ height: `${max ? (d.pln / max) * 100 : 0}%` }}
-                  />
-                ))}
-              </div>
+              <figure className="flex w-2/5 max-w-40 flex-col gap-0.5">
+                <figcaption className="truncate text-right text-2xs text-subtle">
+                  najwięcej {formatAmount({ value: Math.round(max), currency: 'PLN' })}
+                </figcaption>
+                <div className="flex h-10 items-end gap-0.5" aria-hidden="true">
+                  {summary.days.map((d) => (
+                    <span
+                      key={d.date}
+                      title={d.date}
+                      className={cx(
+                        'min-h-0.5 flex-1 rounded-[2px]',
+                        d.date === today ? 'bg-accent' : d.date < today ? 'bg-subtle' : 'bg-line',
+                      )}
+                      style={{ height: `${max ? (d.pln / max) * 100 : 0}%` }}
+                    />
+                  ))}
+                </div>
+                {/* Numery dni pod słupkami; przy długim wyjeździe tylko pierwszy i ostatni. */}
+                <div className="flex gap-0.5 text-2xs text-subtle tabular-nums" aria-hidden="true">
+                  {summary.days.map((d, i) => {
+                    const edge = i === 0 || i === summary.days.length - 1
+                    const show = summary.days.length <= 10 || edge
+                    return (
+                      <span
+                        key={d.date}
+                        className={cx(
+                          'flex-1 text-center',
+                          d.date === today && 'font-bold text-accent',
+                        )}
+                      >
+                        {show ? i + 1 : ''}
+                      </span>
+                    )
+                  })}
+                </div>
+              </figure>
             )}
           </div>
 
           {summary.place && (
             <div className={tile}>
-              <p className="text-xs text-subtle italic">pogoda</p>
+              <p className="text-xs text-subtle">pogoda</p>
               {now && icon ? (
                 <p className="flex items-center gap-1.5 font-bold" title={icon.label}>
                   <icon.icon className="size-4 text-muted" aria-hidden="true" />
                   {Math.round(now.temp)}°<span className="sr-only">{icon.label}</span>
                 </p>
               ) : (
-                <p className="text-dim">—</p>
+                <p className="text-subtle">—</p>
               )}
             </div>
           )}
           <div className={cx(tile, !summary.place && 'col-span-2')}>
-            <p className="text-xs text-subtle italic">tam jest</p>
+            <p className="text-xs text-subtle">tam jest</p>
             <p className="font-bold">
               {local?.time ?? '—'}
               {local && (

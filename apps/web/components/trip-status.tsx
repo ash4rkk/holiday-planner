@@ -18,7 +18,7 @@ const STATUS: Record<SyncStatus, { label: string; short?: string; dot: string }>
   connecting: {
     label: 'łączenie…',
     short: 'łączę…',
-    dot: 'bg-dim animate-pulse motion-reduce:animate-none',
+    dot: 'bg-subtle animate-pulse motion-reduce:animate-none',
   },
   offline: { label: 'offline · zmiany zapisane na telefonie', short: 'offline', dot: 'bg-amber' },
   login: { label: 'sesja wygasła', short: 'zaloguj', dot: 'bg-red' },
@@ -53,7 +53,7 @@ export function TripStatus() {
       ))}
       <span className={cx('size-2.5 shrink-0 rounded-full', dot)} aria-hidden="true" />
       {short && (
-        <span className="pr-1 text-xs text-subtle italic" aria-hidden="true">
+        <span className="pr-1 text-xs text-subtle" aria-hidden="true">
           {short}
         </span>
       )}

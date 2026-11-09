@@ -187,7 +187,7 @@ export function TripWeather({ fallback }: { fallback?: LatLng }) {
       />
       <SessionBanner />
       {status && (
-        <p className="px-3 pt-1 text-xs text-subtle italic">
+        <p className="px-3 pt-1 text-xs text-subtle">
           {status} · {formatDateSpan(startDate, endDate)}
         </p>
       )}
@@ -217,7 +217,7 @@ export function TripWeather({ fallback }: { fallback?: LatLng }) {
           {detail.length > 0 && (
             <div className="mt-2 flex items-center gap-2 px-2">
               <span className="flex-1 border-t border-dashed border-line" />
-              <span className="text-xs text-subtle italic">dalej niż tydzień · orientacyjnie</span>
+              <span className="text-xs text-subtle">dalej niż tydzień · orientacyjnie</span>
               <span className="flex-1 border-t border-dashed border-line" />
             </div>
           )}
@@ -233,8 +233,8 @@ export function TripWeather({ fallback }: { fallback?: LatLng }) {
 
       {past.length > 0 && (
         <>
-          <p className="px-3 pt-3 text-xs text-subtle italic">minione dni</p>
-          <p className="flex flex-wrap gap-x-3 px-3 text-xs text-dim">
+          <p className="px-3 pt-3 text-xs text-subtle">minione dni</p>
+          <p className="flex flex-wrap gap-x-3 px-3 text-xs text-subtle">
             {past.map((d) => {
               const { icon: Icon, label } = weatherIcon(d.day?.code ?? 0)
               return (
@@ -305,12 +305,12 @@ function DetailDay({
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm">
           <span className="font-bold">{date === today ? 'dziś' : dayLabel(date)}</span>
-          <span className="text-subtle italic"> · dzień {dayNo}</span>
+          <span className="text-subtle"> · dzień {dayNo}</span>
         </p>
         {day && icon && (
           <span className="flex items-center gap-1 text-sm" title={icon.label}>
             <icon.icon className="size-4 text-amber" aria-hidden="true" />
-            {Math.round(day.max)}° <span className="text-dim">/ {Math.round(day.min)}°</span>
+            {Math.round(day.max)}° <span className="text-subtle">/ {Math.round(day.min)}°</span>
           </span>
         )}
       </div>
@@ -324,7 +324,8 @@ function DetailDay({
               <li
                 key={h.time}
                 className={cx(
-                  'flex min-w-11 flex-col items-center gap-0.5 rounded-small py-1 text-xs',
+                  // flex-1: wieczorem zostaje kilka godzin — wypełniają szerokość zamiast stać z lewej.
+                  'flex min-w-11 flex-1 flex-col items-center gap-0.5 rounded-small py-1 text-xs',
                   wetHour && 'bg-raised',
                 )}
                 title={label}
@@ -343,7 +344,7 @@ function DetailDay({
           })}
         </ol>
       ) : (
-        <p className="text-xs text-dim">● ładuję prognozę…</p>
+        <p className="text-xs text-subtle">● ładuję prognozę…</p>
       )}
 
       {wet.length > 0 && rainFrom && (
@@ -364,7 +365,7 @@ function DetailDay({
         </p>
       )}
       {day && (
-        <p className="text-xs text-subtle italic">
+        <p className="text-xs text-subtle">
           wschód {day.sunrise} · zachód {day.sunset} · wiatr do {Math.round(day.wind)} km/h
         </p>
       )}
@@ -400,14 +401,14 @@ function LaterDays({ days, detailFrom }: { days: LaterDay[]; detailFrom?: string
     <section className="island mt-1 flex flex-col gap-2 p-3" aria-label="pogoda orientacyjna">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-bold">orientacyjnie</p>
-        <p className="text-xs text-subtle italic">{source}</p>
+        <p className="text-xs text-subtle">{source}</p>
       </div>
 
       {temps.length > 2 && (
         <div>
           <BandChart days={days} lo={lo} hi={hi} />
           <div
-            className="mt-0.5 grid text-center text-2xs text-dim"
+            className="mt-0.5 grid text-center text-2xs text-subtle"
             style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
             aria-hidden="true"
           >
@@ -435,11 +436,11 @@ function LaterDays({ days, detailFrom }: { days: LaterDay[]; detailFrom?: string
               <span className="text-right tabular-nums">
                 {ok ? (
                   <>
-                    <span className="text-dim">{deg(d.min as number)}</span> /{' '}
+                    <span className="text-subtle">{deg(d.min as number)}</span> /{' '}
                     {deg(d.max as number)}
                   </>
                 ) : (
-                  <span className="text-xs text-dim">brak danych</span>
+                  <span className="text-xs text-subtle">brak danych</span>
                 )}
               </span>
               <span className="relative h-1 rounded-full bg-raised" aria-hidden="true">
@@ -471,7 +472,7 @@ function LaterDays({ days, detailFrom }: { days: LaterDay[]; detailFrom?: string
         })}
       </ul>
 
-      <p className="text-xs text-subtle italic">
+      <p className="text-xs text-subtle">
         {[normalWet && 'parasol: padało w co najmniej 1 z 3 lat', detailFrom]
           .filter(Boolean)
           .join(' · ')}
@@ -509,24 +510,24 @@ function BandChart({ days, lo, hi }: { days: LaterDay[]; lo: number; hi: number 
             vectorEffect="non-scaling-stroke"
           />
         )}
-        <polygon points={[...max, ...[...min].reverse()].join(' ')} className="fill-teal/15" />
+        <polygon points={[...max, ...[...min].reverse()].join(' ')} className="fill-blue/10" />
         <polyline
           points={max.join(' ')}
           fill="none"
-          className={cx('stroke-amber', line)}
+          className={cx('stroke-muted', line)}
           vectorEffect="non-scaling-stroke"
         />
         <polyline
           points={min.join(' ')}
           fill="none"
-          className={cx('stroke-teal', line)}
+          className={cx('stroke-blue', line)}
           vectorEffect="non-scaling-stroke"
         />
       </svg>
-      <span className="absolute top-0 left-0 -translate-y-1/2 text-2xs text-amber">{deg(hi)}</span>
+      <span className="absolute top-0 left-0 -translate-y-1/2 text-2xs text-muted">{deg(hi)}</span>
       {zero !== undefined && (
         <span
-          className="absolute right-0 -translate-y-full text-2xs text-dim"
+          className="absolute right-0 -translate-y-full text-2xs text-subtle"
           style={{ top: `${(zero / H) * 100}%` }}
         >
           0°

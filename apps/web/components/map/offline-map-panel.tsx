@@ -75,12 +75,12 @@ export function OfflineMapPanel() {
     <section id="mapa" className="island mt-1 flex scroll-mt-2 flex-col gap-2 p-4 text-sm">
       <p className="font-bold">mapa offline</p>
       {!ready ? (
-        <p className="text-xs text-subtle italic">wczytuję plan…</p>
+        <p className="text-xs text-subtle">wczytuję plan…</p>
       ) : !places.length ? (
-        <p className="text-xs text-subtle italic">● karty nie mają jeszcze miejsc na mapie</p>
+        <p className="text-xs text-subtle">● karty nie mają jeszcze miejsc na mapie</p>
       ) : (
         <>
-          <p className="text-xs text-subtle italic">
+          <p className="text-xs text-subtle">
             zarys okolicy miast i szczegóły ulic w promieniu ok. 1 km od {places.length}{' '}
             {places.length === 1 ? 'miejsca' : 'miejsc'} · ok. {size.tiles} kafelków, ~{size.mb} MB
           </p>

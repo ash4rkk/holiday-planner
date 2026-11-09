@@ -30,7 +30,7 @@ export function TripRow({ trip, countdown }: { trip: Trip; countdown?: number })
               <p className="truncate font-bold">{trip.title}</p>
             </ViewTransition>
           </div>
-          <p className="text-xs text-subtle italic">
+          <p className="text-xs text-subtle">
             {formatDateSpan(trip.startDate, trip.endDate)}
             {trip.currencies.length > 0 && ` · ${trip.currencies.join(', ')}`}
           </p>
