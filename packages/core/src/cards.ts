@@ -151,4 +151,16 @@ export function byTime(
   return (a.time ?? '').localeCompare(b.time ?? '') || a.createdAt.localeCompare(b.createdAt)
 }
 
+/**
+ * Miejsce w kolumnie dnia: przypięte na górze (ważne na cały dzień, np. bilety), dalej wg godziny.
+ * Plan dnia, dojazdy i linia „teraz” liczą się dalej wg godziny (`byTime`).
+ */
+export function byDayPlace(
+  a: Pick<CardFields, 'time' | 'createdAt'> & { pinned?: boolean },
+  b: Pick<CardFields, 'time' | 'createdAt'> & { pinned?: boolean },
+): number {
+  if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1
+  return byTime(a, b)
+}
+
 export const TRASH_DAYS = 30

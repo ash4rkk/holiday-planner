@@ -525,37 +525,48 @@ function DayCards({
       </div>
     )
 
+  const cardRow = (c: CardSnapshot) => (
+    <div
+      className={cx(
+        'flex gap-1 transition-opacity duration-500',
+        now && cardIsPast(c, now, nextStart(c, cards)) && 'opacity-60',
+      )}
+    >
+      {options.has(c.id) ? (
+        <div className="min-w-0 flex-1">
+          <VariantCarousel
+            main={c}
+            variants={options.get(c.id) ?? []}
+            time={(card) => <TimeCell card={card} className="pt-3" />}
+            tile={(card) => tile(card, stays.get(card.id), true, skies.get(card.id))}
+          />
+        </div>
+      ) : (
+        <>
+          <TimeCell card={c} className="pt-3" />
+          <div className="min-w-0 flex-1">{tile(c, stays.get(c.id), true, skies.get(c.id))}</div>
+        </>
+      )}
+    </div>
+  )
+  // Przypięte stoją na górze dnia; ich dojazdy i linia „teraz” zostają w porządku godzin.
+  const pinned = cards.filter((c) => c.pinned)
+
   return (
     <div className="flex flex-col gap-1">
+      {pinned.length > 0 && (
+        <div className="flex flex-col gap-1 border-b border-line pb-1">
+          {pinned.map((c) => (
+            <Fragment key={c.id}>{cardRow(c)}</Fragment>
+          ))}
+        </div>
+      )}
       <div className="flex flex-col gap-1">
         {row(legs.find((l) => l.kind === 'start'))}
         {cards.map((c) => (
           <Fragment key={c.id}>
             {lineBefore === c.id && now && <NowLine time={now.time} />}
-            <div
-              className={cx(
-                'flex gap-1 transition-opacity duration-500',
-                now && cardIsPast(c, now, nextStart(c, cards)) && 'opacity-60',
-              )}
-            >
-              {options.has(c.id) ? (
-                <div className="min-w-0 flex-1">
-                  <VariantCarousel
-                    main={c}
-                    variants={options.get(c.id) ?? []}
-                    time={(card) => <TimeCell card={card} className="pt-3" />}
-                    tile={(card) => tile(card, stays.get(card.id), true, skies.get(card.id))}
-                  />
-                </div>
-              ) : (
-                <>
-                  <TimeCell card={c} className="pt-3" />
-                  <div className="min-w-0 flex-1">
-                    {tile(c, stays.get(c.id), true, skies.get(c.id))}
-                  </div>
-                </>
-              )}
-            </div>
+            {!c.pinned && cardRow(c)}
             {/* Powrót do noclegu jest jeszcze przed Wami, więc „teraz” stoi nad nim. */}
             {lineAtEnd && now && endLeg?.from === c.id && <NowLine time={now.time} />}
             {row(legs.find((l) => l.from === c.id))}

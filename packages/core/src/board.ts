@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
-import { byTime, CARD_SIZE, type CardSnapshot, GRID, snapToGrid } from './cards'
+import { byDayPlace, byTime, CARD_SIZE, type CardSnapshot, GRID, snapToGrid } from './cards'
 import { dateRange } from './dates'
 import { roundClock, shiftClock, TYPICAL_STAY_MIN } from './gaps'
 import { cardsOf } from './trip-doc'
@@ -407,7 +407,8 @@ export function arrangeByDays(
 
   doc.transact(() => {
     for (const [col, date] of columns.entries()) {
-      const day = dated.filter((c) => c.date === date).sort(byTime)
+      // Przypięte na górze kolumny, dalej wg godziny.
+      const day = dated.filter((c) => c.date === date).sort(byDayPlace)
       let y = originY
       for (const card of day) {
         previous[card.id] = { x: card.x, y: card.y, frameId: card.frameId }

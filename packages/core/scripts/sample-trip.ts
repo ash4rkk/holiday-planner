@@ -212,6 +212,7 @@ const CARDS: Sample[] = [
     time: '09:30',
     durationMin: 180,
     status: 'booked',
+    pinned: true,
     location: place('Palácio da Pena', 38.7876, -9.3906, 'Estrada da Pena, Sintra'),
     body: ['Pałac Pena', 'Bilet z wejściem o 9:30, potem park i Zamek Maurów. /+40 EUR'],
   },

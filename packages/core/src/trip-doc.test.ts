@@ -238,3 +238,20 @@ describe('undoable', () => {
     expect(readCards(doc).find((c) => c.id === a)?.date).toBe('2027-07-14')
   })
 })
+
+describe('przypięte w dniu', () => {
+  it('przypięta karta z dniem staje na górze kolumny i zostaje w swoim dniu na Liście', () => {
+    const doc = new Y.Doc()
+    const a = createCard(doc, { type: 'sight', date: '2027-07-14', time: '09:00' })
+    const b = createCard(doc, { type: 'transport', date: '2027-07-14', time: '10:05' })
+    const note = createCard(doc, { type: 'note', pinned: true })
+    updateCard(doc, b, { pinned: true })
+    const cards = readCards(doc)
+    const y = (id: string) => cards.find((c) => c.id === id)?.y as number
+    expect(y(b)).toBeLessThan(y(a))
+    const g = groupCardsByDay(cards)
+    expect(g.pinned.map((c) => c.id)).toEqual([note])
+    // Na Liście dzień zostaje wg godziny; przypięte rysuje widok.
+    expect(g.days[0]?.cards.map((c) => c.id)).toEqual([a, b])
+  })
+})

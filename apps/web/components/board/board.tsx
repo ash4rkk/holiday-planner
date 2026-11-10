@@ -456,6 +456,25 @@ function BoardCanvas() {
     })
   }, [live, dayNodes, now])
 
+  // Przypięte bez dnia: rząd nad dniami i noclegami. Miejsce liczone tylko przy rysowaniu (jak
+  // belki noclegów), więc nie nakładają się na kolumny dni, które „ułóż wg dni” przesuwa.
+  const pinnedBand = useMemo(() => {
+    const band = new Map<string, { x: number; y: number }>()
+    const pinned = onBoard
+      .filter((c) => c.pinned && !c.date && !c.frameId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    const frames = [...dayNodes, ...stayNodes]
+    if (!pinned.length || !frames.length) return band
+    const top = Math.min(...frames.map((n) => n.position.y))
+    const tallest = Math.max(...pinned.map((c) => c.h ?? CARD_SIZE.h))
+    let x = Math.min(...dayNodes.map((n) => n.position.x)) + DAY_PAD.left
+    for (const c of pinned) {
+      band.set(c.id, { x, y: top - DAY_SPACE - tallest })
+      x += (c.w ?? CARD_SIZE.w) + DAY_SPACE
+    }
+    return band
+  }, [onBoard, dayNodes, stayNodes])
+
   // Linia „teraz” w dzisiejszej kolumnie wg godziny: w trakcie karty ją przecina, w przerwie stoi
   // proporcjonalnie do czasu, który z przerwy minął.
   const nowNode = useMemo((): Node[] => {
@@ -466,7 +485,8 @@ function BoardCanvas() {
       .flatMap((id) => {
         const n = byId.get(id)
         const card = live.find((c) => c.id === id)
-        if (!n || !card?.time || card.skipped) return []
+        // Przypięta stoi na górze kolumny, nie w swojej godzinie — linia „teraz” jej nie liczy.
+        if (!n || !card?.time || card.skipped || card.pinned) return []
         const h = n.measured?.height ?? n.height ?? CARD_SIZE.h
         return [
           {
@@ -529,8 +549,9 @@ function BoardCanvas() {
               right: x + (n.width ?? CARD_SIZE.w),
               top: y,
               bottom: y + (n.measured?.height ?? n.height ?? CARD_SIZE.h),
-              time: card.time,
-              durationMin: card.durationMin,
+              // Przypięta na górze kolumny: dla podpowiedzi godziny jest jak karta bez godziny.
+              time: card.pinned ? undefined : card.time,
+              durationMin: card.pinned ? undefined : card.durationMin,
             },
           ]
         }),
@@ -721,6 +742,7 @@ function BoardCanvas() {
         const card = (n.data as { card?: CardSnapshot }).card
         const past = Boolean(now && card && cardIsPast(card, now, nextStart(card, live)))
         const target = drop?.kind === 'variant' && drop.id === n.id
+        const banded = pinnedBand.get(n.id)
         const by = shiftAt(n.position.x) + (insets.get(n.id) ?? 0)
         const branch = Boolean(card && branches(card))
         const stayUntil = stays.get(n.id)
@@ -731,6 +753,7 @@ function BoardCanvas() {
           !target &&
           !by &&
           !branch &&
+          !banded &&
           !grouped &&
           !stayUntil &&
           !sky
@@ -738,7 +761,7 @@ function BoardCanvas() {
             : {
                 ...n,
                 selected,
-                position: { x: n.position.x + by, y: n.position.y },
+                position: banded ?? { x: n.position.x + by, y: n.position.y },
                 className: cx(past && 'is-past', target && 'is-drop') || undefined,
                 data: { ...n.data, branch, grouped, stayUntil, sky },
               }
@@ -794,6 +817,7 @@ function BoardCanvas() {
       fileCounts,
       stays,
       live,
+      pinnedBand,
     ],
   )
 
@@ -1064,6 +1088,8 @@ function BoardCanvas() {
     dragStart: (kind, id) => {
       setMenu(null)
       setCardMenu(null)
+      // Przypięta bez dnia ma stałe miejsce w pasie nad dniami; żeby ją przenieść, trzeba odpiąć.
+      if (kind === 'card' && pinnedBand.has(id)) return
       const many = kind === 'card' && group.size > 1 && group.has(id)
       if (!many) {
         setGroup(new Set())

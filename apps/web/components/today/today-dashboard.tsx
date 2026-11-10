@@ -23,7 +23,6 @@ import {
   weatherPlace,
 } from '@planer/core'
 import { LocateFixed, Navigation } from 'lucide-react'
-import Link from 'next/link'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { PlanResponse } from '@/app/api/route/plan/route'
 import type { Route } from '@/app/api/route/route'
@@ -169,15 +168,10 @@ export function TodayDashboard({ userName }: { userName: string }) {
             />
           )}
           <section className="island flex flex-col gap-3 p-3" aria-label="dzień">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="min-w-0 truncate text-sm">
-                <span className="font-bold">{weekday(planDate)}</span>
-                <span className="text-subtle"> · {status}</span>
-              </p>
-              <Link href={`/trips/${trip.id}/list`} className="shrink-0 text-xs text-accent">
-                lista ›
-              </Link>
-            </div>
+            <p className="min-w-0 truncate text-sm">
+              <span className="font-bold">{weekday(planDate)}</span>
+              <span className="text-subtle"> · {status}</span>
+            </p>
             <div className="grid grid-cols-2 gap-1">
               <WeatherTile at={place} today={planDate} compact />
               <div className="flex flex-col justify-center rounded-small bg-raised px-3 py-2">
@@ -208,12 +202,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
             )}
           >
             <p className="text-xl font-bold">cześć, {userName}</p>
-            <p className="mt-1 text-sm text-muted">
-              {status} ·{' '}
-              <Link href={`/trips/${trip.id}/list`} className="text-accent">
-                lista ›
-              </Link>
-            </p>
+            <p className="mt-1 text-sm text-muted">{status}</p>
             {stay && (
               <p className="mt-1 text-xs text-subtle">nocleg: {stay.title || stay.location.name}</p>
             )}

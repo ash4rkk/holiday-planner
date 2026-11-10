@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
 import { parseAmounts, withoutAmounts } from './amounts'
 import {
-  byTime,
+  byDayPlace,
   CARD_SIZE,
   CARD_STATUSES,
   type CardFields,
@@ -37,7 +37,7 @@ function daySlot(doc: Y.Doc, date: string, except?: string): { x: number; y: num
 }
 
 /**
- * Przywraca kolejność godzin w kolumnie dnia. Zmienia tylko `y` i tylko wtedy, gdy kolejność się
+ * Przywraca kolejność w kolumnie dnia (przypięte na górze, dalej wg godzin). Zmienia tylko `y` i tylko wtedy, gdy kolejność się
  * rozjechała. Dzień ułożony ręcznie (karty w różnych miejscach albo w ramkach) zostaje bez zmian.
  */
 function tidyDay(doc: Y.Doc, date: string) {
@@ -47,11 +47,12 @@ function tidyDay(doc: Y.Doc, date: string) {
       card,
       time: card.get('time') as string | undefined,
       createdAt: card.get('createdAt') as string,
+      pinned: card.get('pinned') as boolean | undefined,
       x: card.get('x') as number,
       y: card.get('y') as number,
       h: (card.get('h') as number) ?? CARD_SIZE.h,
     }))
-    .sort(byTime)
+    .sort(byDayPlace)
   const xs = day.map((c) => c.x)
   if (Math.max(...xs) - Math.min(...xs) >= CARD_SIZE.w / 2) return
   if (day.some((c) => c.card.get('frameId'))) return
@@ -160,6 +161,7 @@ export function updateCard(
   doc.transact(() => {
     const slot = patch.date && patch.date !== card.get('date') && daySlot(doc, patch.date, id)
     const timeBefore = card.get('time')
+    const pinnedBefore = Boolean(card.get('pinned'))
     for (const [key, value] of Object.entries(patch)) {
       if (value === undefined || value === '') card.delete(key)
       else card.set(key, value)
@@ -169,7 +171,8 @@ export function updateCard(
       card.set('y', slot.y)
     }
     const date = card.get('date') as string | undefined
-    if (date && (slot || card.get('time') !== timeBefore)) tidyDay(doc, date)
+    const moved = card.get('time') !== timeBefore || Boolean(card.get('pinned')) !== pinnedBefore
+    if (date && (slot || moved)) tidyDay(doc, date)
     card.set('updatedAt', now.toISOString())
   })
 }
@@ -418,7 +421,7 @@ function byTimeThenCreated(a: CardSnapshot, b: CardSnapshot): number {
 }
 
 /**
- * Grupy Listy: przypięte na górze, potem dni (wszystkie dni wyjazdu, także puste, plus dni spoza
+ * Grupy Listy: przypięte bez dnia na górze (przypięte z dniem zostają w swoim dniu), potem dni (wszystkie dni wyjazdu, także puste, plus dni spoza
  * zakresu, w których są karty), na końcu „bez daty”. Karty z kosza osobno.
  */
 export function groupCardsByDay(
@@ -430,8 +433,8 @@ export function groupCardsByDay(
   const trash = cards
     .filter((c) => c.deletedAt)
     .sort((a, b) => ((a.deletedAt ?? '') < (b.deletedAt ?? '') ? 1 : -1))
-  const pinned = live.filter((c) => c.pinned).sort(byTimeThenCreated)
-  const rest = live.filter((c) => !c.pinned)
+  const pinned = live.filter((c) => c.pinned && !c.date).sort(byTimeThenCreated)
+  const rest = live.filter((c) => !(c.pinned && !c.date))
 
   const byDate = new Map<string, CardSnapshot[]>()
   if (trip.startDate) {
