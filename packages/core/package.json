@@ -21,7 +21,8 @@
     "typecheck": "tsc",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:sample": "tsx --env-file-if-exists=../../apps/web/.env.local scripts/sample-trip.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

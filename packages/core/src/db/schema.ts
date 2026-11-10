@@ -14,6 +14,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core'
+import type { DemoWeatherDay } from '../demo-weather'
 import type { CardChange, CardProposal, ProposalDecision } from '../proposals'
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
@@ -49,6 +50,8 @@ export const trips = pgTable('trips', {
     .notNull()
     .default('transit'),
   travelBufferMin: integer('travel_buffer_min').notNull().default(10),
+  // Tylko przykładowy wyjazd (`pnpm db:sample`): pogoda na pokaz zamiast Open-Meteo.
+  demoWeather: jsonb('demo_weather').$type<DemoWeatherDay[]>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

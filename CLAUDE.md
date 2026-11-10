@@ -58,6 +58,7 @@ pnpm typecheck
 pnpm test
 pnpm db:generate         # po zmianie schema.ts → nowa migracja w packages/core/drizzle
 pnpm db:migrate          # wymaga DATABASE_URL
+pnpm db:sample           # przykład „Lizbona (przykład)” z datami od dziś (--day N: dziś = dzień N), pogoda na pokaz z deszczem i burzą
 /srv/scripts/deploy.sh planer   # na serwerze, po git pull --ff-only (docs/deploy.md)
 ```
 

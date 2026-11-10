@@ -5,6 +5,8 @@ import {
   type CardSnapshot,
   dateRange,
   daysBetween,
+  demoDaily,
+  demoHourly,
   formatDateSpan,
   type LatLng,
   todayLocal,
@@ -78,6 +80,8 @@ function useFetchMany<T>(urls: string[], maxAgeMs: number): Record<string, T> {
   return data
 }
 
+const NO_URLS = { hourly: [], daily: [], normal: [] }
+
 type Day = {
   date: string
   kind: 'past' | 'detail' | 'forecast' | 'normal'
@@ -133,9 +137,22 @@ export function TripWeather({ fallback }: { fallback?: LatLng }) {
       ),
     }
   }, [days, today])
-  const hourly = useFetchMany<HourlyWeather>(urls.hourly, 60 * 60_000)
-  const daily = useFetchMany<Weather>(urls.daily, 3 * 60 * 60_000)
-  const normal = useFetchMany<NormalWeather>(urls.normal, 7 * 24 * 60 * 60_000)
+  // Przykładowy wyjazd: pogoda na pokaz pod tymi samymi adresami, bez zapytań.
+  const demo = trip.demoWeather
+  const asked = demo ? NO_URLS : urls
+  const fetchedHourly = useFetchMany<HourlyWeather>(asked.hourly, 60 * 60_000)
+  const fetchedDaily = useFetchMany<Weather>(asked.daily, 3 * 60 * 60_000)
+  const normal = useFetchMany<NormalWeather>(asked.normal, 7 * 24 * 60 * 60_000)
+  const fake = useMemo(
+    () =>
+      demo && {
+        hourly: Object.fromEntries(urls.hourly.map((u) => [u, demoHourly(demo)])),
+        daily: Object.fromEntries(urls.daily.map((u) => [u, demoDaily(demo)])),
+      },
+    [demo, urls],
+  )
+  const hourly = fake ? fake.hourly : fetchedHourly
+  const daily = fake ? fake.daily : fetchedDaily
 
   const find = <T,>(map: Record<string, T>, prefix: string, place?: LatLng) =>
     place

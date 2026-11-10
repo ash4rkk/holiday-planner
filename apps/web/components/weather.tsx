@@ -5,6 +5,9 @@ import {
   type CardSnapshot,
   cardSkies,
   cardsInRain,
+  type DemoWeatherDay,
+  demoDaily,
+  demoHourly,
   formatDayHeader,
   isStormCode,
   isWetHour,
@@ -33,6 +36,7 @@ import { askChat } from '@/components/ai/chat-panel'
 import { CardSky } from '@/components/sky/card-sky'
 import { cx } from '@/components/ui'
 import { useFetchCached } from '@/lib/use-fetch-cached'
+import { useDemoWeather } from '@/lib/yjs/trip-doc'
 
 /** Kody pogody WMO (Open-Meteo) → ikona i opis. */
 export function weatherIcon(code: number): { icon: LucideIcon; label: string } {
@@ -46,9 +50,24 @@ export function weatherIcon(code: number): { icon: LucideIcon; label: string } {
   return { icon: CloudLightning, label: 'burza' }
 }
 
-export function useWeather(at: LatLng | undefined): Weather | undefined {
-  const url = at ? `/api/weather?at=${at.lat.toFixed(2)},${at.lng.toFixed(2)}` : null
-  return useFetchCached<Weather>(url, 3 * 60 * 60_000)
+/** `demo` dla widoków poza wyjazdem (lista wyjazdów); w wyjeździe bierze go z kontekstu. */
+export function useWeather(at: LatLng | undefined, demo?: DemoWeatherDay[]): Weather | undefined {
+  const ctxDemo = useDemoWeather()
+  const fake = demo ?? ctxDemo
+  const url = at && !fake ? `/api/weather?at=${at.lat.toFixed(2)},${at.lng.toFixed(2)}` : null
+  const fetched = useFetchCached<Weather>(url, 3 * 60 * 60_000)
+  const shown = useMemo(() => (fake ? demoDaily(fake) : undefined), [fake])
+  return fake ? (at ? shown : undefined) : fetched
+}
+
+/** Prognoza godzinowa miejsca (albo pogoda na pokaz przykładowego wyjazdu). */
+function useHourly(at: LatLng | undefined): HourlyWeather | undefined {
+  const fake = useDemoWeather()
+  const url =
+    at && !fake ? `/api/weather/hourly?at=${at.lat.toFixed(2)},${at.lng.toFixed(2)}` : null
+  const fetched = useFetchCached<HourlyWeather>(url, 60 * 60_000)
+  const shown = useMemo(() => (fake ? demoHourly(fake) : undefined), [fake])
+  return fake ? (at ? shown : undefined) : fetched
 }
 
 /** Ikona i temperatura dnia: Lista i obrys dnia na Tablicy (Open-Meteo: 7 dni wstecz, 16 naprzód). */
@@ -81,8 +100,7 @@ export function useRainHours(date: string, cards: CardSnapshot[]): string[] {
   const today = todayLocal()
   const inRange = date >= today && date <= addDays(today, 6)
   const at = inRange ? weatherPlace(cards, date) : undefined
-  const url = at ? `/api/weather/hourly?at=${at.lat.toFixed(2)},${at.lng.toFixed(2)}` : null
-  const hourly = useFetchCached<HourlyWeather>(url, 60 * 60_000)
+  const hourly = useHourly(at)
   return useMemo(
     () =>
       (hourly?.hours ?? [])
@@ -102,8 +120,7 @@ export function useDaySkies(date: string | undefined, cards: CardSnapshot[]): Ma
   const today = todayLocal()
   const inRange = Boolean(date && date >= today && date <= addDays(today, 6))
   const at = inRange && date ? weatherPlace(cards, date) : undefined
-  const url = at ? `/api/weather/hourly?at=${at.lat.toFixed(2)},${at.lng.toFixed(2)}` : null
-  const hourly = useFetchCached<HourlyWeather>(url, 60 * 60_000)
+  const hourly = useHourly(at)
   return useMemo(() => {
     if (!date || !hourly) return new Map<string, Sky>()
     const hours = hourly.hours

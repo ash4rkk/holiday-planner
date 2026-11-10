@@ -1,7 +1,7 @@
 'use client'
 
 import { HocuspocusProvider, WebSocketStatus } from '@hocuspocus/provider'
-import type { TravelMode } from '@planer/core'
+import type { DemoWeatherDay, TravelMode } from '@planer/core'
 import {
   type AttachmentMeta,
   type CardSnapshot,
@@ -154,6 +154,8 @@ export type TripMeta = {
   travelMode: TravelMode
   travelBufferMin: number
   timezone: string
+  /** Przykładowy wyjazd: pogoda na pokaz zamiast Open-Meteo. */
+  demoWeather?: DemoWeatherDay[]
   /** Flaga kraju (komponent serwerowy z layoutu, żeby zestaw flag nie trafiał do bundla klienta). */
   flag?: ReactNode
 }
@@ -221,6 +223,11 @@ export function useTrip(): Ctx {
   const ctx = useContext(TripContext)
   if (!ctx) throw new Error('useTrip poza TripProvider')
   return ctx
+}
+
+/** Pogoda na pokaz wyjazdu (przykład); poza wyjazdem i w zwykłym wyjeździe — brak. */
+export function useDemoWeather(): DemoWeatherDay[] | undefined {
+  return useContext(TripContext)?.trip.demoWeather
 }
 
 export function useSyncStatus(): SyncStatus {

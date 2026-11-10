@@ -1,9 +1,20 @@
-// Przykładowy wyjazd do ręcznych testów: Lizbona 2–6 listopada 2026, karty z miejscami, kwotami i listami.
-// Uruchomienie: DATABASE_URL=… pnpm --filter @planer/core exec tsx scripts/sample-trip.ts
+// Przykładowy wyjazd do ręcznych testów: 5 dni w Lizbonie, karty z miejscami, kwotami i listami.
+// Daty liczone od dziś (domyślnie dziś = 3. dzień), więc zawsze widać „dziś”, miniony dzień i plan
+// na kolejne. Każde uruchomienie usuwa poprzedni przykład i tworzy go od nowa pod nowym id —
+// stary dokument Yjs z IndexedDB telefonu nie zleje się wtedy z nowym.
+// Uruchomienie: pnpm db:sample [--day N]   (N = który dzień wyjazdu to dziś, 1–5)
+import { parseArgs } from 'node:util'
 import * as Y from 'yjs'
 import { arrangeByDays } from '../src/board'
 import type { CardLocation, CardStatus, CardType } from '../src/cards'
-import { getDb, tripDocs, trips } from '../src/db'
+import { addDays } from '../src/dates'
+import { eq, getDb, tripDocs, trips } from '../src/db'
+import type { DemoWeatherDay } from '../src/demo-weather'
+
+const TITLE = 'Lizbona (przykład)'
+const TIMEZONE = 'Europe/Lisbon'
+const DAYS = 5
+
 import { cardsOf, contentOf, createCard, readCards } from '../src/trip-doc'
 
 type Block = string | { ul: string[] } | { tasks: [string, boolean][] }
@@ -46,8 +57,9 @@ const place = (name: string, lat: number, lng: number, address?: string): CardLo
 
 type Sample = {
   type: CardType
-  date?: string
-  endDate?: string
+  /** Dzień wyjazdu od 0. */
+  day?: number
+  endDay?: number
   time?: string
   durationMin?: number
   status?: CardStatus
@@ -74,7 +86,7 @@ const CARDS: Sample[] = [
   },
   {
     type: 'transport',
-    date: '2026-11-02',
+    day: 0,
     time: '10:05',
     durationMin: 255,
     status: 'booked',
@@ -87,8 +99,8 @@ const CARDS: Sample[] = [
   },
   {
     type: 'stay',
-    date: '2026-11-02',
-    endDate: '2026-11-06',
+    day: 0,
+    endDay: 4,
     time: '15:00',
     status: 'booked',
     location: place(
@@ -105,7 +117,7 @@ const CARDS: Sample[] = [
   },
   {
     type: 'food',
-    date: '2026-11-02',
+    day: 0,
     time: '20:00',
     status: 'booked',
     location: place('Taberna da Rua das Flores', 38.7104, -9.1427, 'Rua das Flores 103, Lizbona'),
@@ -113,7 +125,7 @@ const CARDS: Sample[] = [
   },
   {
     type: 'sight',
-    date: '2026-11-03',
+    day: 1,
     time: '10:00',
     durationMin: 60,
     location: place('Tramwaj 28 — Martim Moniz', 38.7155, -9.1361),
@@ -121,7 +133,7 @@ const CARDS: Sample[] = [
   },
   {
     type: 'sight',
-    date: '2026-11-03',
+    day: 1,
     time: '11:30',
     durationMin: 120,
     status: 'booked',
@@ -139,7 +151,7 @@ const CARDS: Sample[] = [
   },
   {
     type: 'food',
-    date: '2026-11-03',
+    day: 1,
     time: '14:00',
     location: place('Time Out Market', 38.7069, -9.1458, 'Av. 24 de Julho 49, Lizbona'),
     body: [
@@ -150,21 +162,21 @@ const CARDS: Sample[] = [
   },
   {
     type: 'sight',
-    date: '2026-11-03',
+    day: 1,
     time: '17:00',
     location: place('Miradouro da Senhora do Monte', 38.7193, -9.1328),
     body: ['Zachód słońca na Senhora do Monte', 'Najwyższy punkt widokowy, wziąć coś ciepłego.'],
   },
   {
     type: 'transport',
-    date: '2026-11-04',
+    day: 2,
     time: '09:30',
     location: place('Praça da Figueira', 38.7139, -9.1378),
     body: ['Tramwaj 15 do Belém', 'Karta Viva Viagem, doładować na 24 h. /+6,80 EUR'],
   },
   {
     type: 'sight',
-    date: '2026-11-04',
+    day: 2,
     time: '10:00',
     durationMin: 90,
     status: 'booked',
@@ -173,14 +185,14 @@ const CARDS: Sample[] = [
   },
   {
     type: 'food',
-    date: '2026-11-04',
+    day: 2,
     time: '12:00',
     location: place('Pastéis de Belém', 38.6975, -9.2032, 'R. de Belém 84, Lizbona'),
     body: ['Pastéis de Belém', 'Kolejka idzie szybko, w środku są stoliki. /+12 EUR'],
   },
   {
     type: 'sight',
-    date: '2026-11-04',
+    day: 2,
     time: '14:00',
     durationMin: 60,
     location: place('Torre de Belém', 38.6916, -9.216),
@@ -188,7 +200,7 @@ const CARDS: Sample[] = [
   },
   {
     type: 'transport',
-    date: '2026-11-05',
+    day: 3,
     time: '08:15',
     durationMin: 40,
     location: place('Estação do Rossio', 38.7142, -9.141),
@@ -196,7 +208,7 @@ const CARDS: Sample[] = [
   },
   {
     type: 'sight',
-    date: '2026-11-05',
+    day: 3,
     time: '09:30',
     durationMin: 180,
     status: 'booked',
@@ -205,7 +217,7 @@ const CARDS: Sample[] = [
   },
   {
     type: 'transport',
-    date: '2026-11-06',
+    day: 4,
     time: '18:40',
     durationMin: 265,
     status: 'booked',
@@ -226,22 +238,50 @@ const CARDS: Sample[] = [
   },
 ]
 
+const { values } = parseArgs({ options: { day: { type: 'string', default: '3' } } })
+const todayIndex = Number(values.day)
+if (!Number.isInteger(todayIndex) || todayIndex < 1 || todayIndex > DAYS) {
+  throw new Error(`--day musi być od 1 do ${DAYS}`)
+}
+
+// Dziś w strefie wyjazdu, nie serwera.
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE }).format(new Date())
+const startDate = addDays(today, 1 - todayIndex)
+const endDate = addDays(startDate, DAYS - 1)
+
+// Pogoda na pokaz (zamiast Open-Meteo): domyślnie dziś w Belém pada, jutro w Sintrze burza.
+const WEATHER: Omit<DemoWeatherDay, 'date'>[] = [
+  { code: 0, max: 21, min: 13 },
+  { code: 2, max: 20, min: 14 },
+  { code: 63, max: 17, min: 13, wet: [11, 17] },
+  { code: 95, max: 16, min: 12, wet: [10, 16] },
+  { code: 3, max: 18, min: 12 },
+]
+
 const db = getDb()
+const removed = await db.delete(trips).where(eq(trips.title, TITLE)).returning({ id: trips.id })
+
 const [trip] = await db
   .insert(trips)
   .values({
-    title: 'Lizbona',
-    startDate: '2026-11-02',
-    endDate: '2026-11-06',
+    title: TITLE,
+    startDate,
+    endDate,
+    country: 'PT',
     currencies: ['EUR'],
-    timezone: 'Europe/Lisbon',
+    timezone: TIMEZONE,
+    demoWeather: WEATHER.map((w, i) => ({ ...w, date: addDays(startDate, i) })),
   })
   .returning()
 if (!trip) throw new Error('nie udało się utworzyć wyjazdu')
 
 const doc = new Y.Doc()
-for (const { body, ...fields } of CARDS) {
-  const id = createCard(doc, fields)
+for (const { body, day, endDay, ...fields } of CARDS) {
+  const id = createCard(doc, {
+    ...fields,
+    date: day === undefined ? undefined : addDays(startDate, day),
+    endDate: endDay === undefined ? undefined : addDays(startDate, endDay),
+  })
   const content = contentOf(cardsOf(doc).get(id) as Y.Map<unknown>)
   doc.transact(() => content.push(body.map(block)))
 }
@@ -250,5 +290,8 @@ arrangeByDays(doc, readCards(doc), trip)
 await db
   .insert(tripDocs)
   .values({ tripId: trip.id, state: Buffer.from(Y.encodeStateAsUpdate(doc)) })
-console.log(`wyjazd „${trip.title}” (${CARDS.length} kart): /trips/${trip.id}/list`)
+if (removed.length) console.log(`usunięto poprzedni przykład (${removed.length})`)
+console.log(
+  `wyjazd „${trip.title}” ${startDate} – ${endDate}, dziś = dzień ${todayIndex} (${CARDS.length} kart): /trips/${trip.id}/list`,
+)
 process.exit(0)

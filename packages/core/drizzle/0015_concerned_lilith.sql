@@ -1,0 +1,1 @@
+ALTER TABLE "trips" ADD COLUMN "demo_weather" jsonb;

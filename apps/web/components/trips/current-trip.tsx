@@ -56,7 +56,7 @@ export function CurrentTrip({
   const start = trip.startDate ?? today
   const dayNo = daysBetween(start, today) + 1
   const dayCount = daysBetween(start, trip.endDate ?? start) + 1
-  const weather = useWeather(summary.place)
+  const weather = useWeather(summary.place, trip.demoWeather ?? undefined)
   const local = useLocalTime(trip.timezone)
   const now = weather?.current
   const icon = now ? weatherIcon(now.code) : undefined

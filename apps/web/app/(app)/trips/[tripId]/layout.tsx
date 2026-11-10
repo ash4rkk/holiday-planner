@@ -33,6 +33,7 @@ export default async function TripLayout({ params, children }: LayoutProps<'/tri
         travelMode,
         travelBufferMin,
         timezone,
+        demoWeather: trip.demoWeather ?? undefined,
         flag: trip.country ? <Flag country={trip.country} className="h-3.5 w-[21px]" /> : undefined,
       }}
       user={{ name: user.name, color: user.color }}
