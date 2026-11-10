@@ -18,6 +18,23 @@ export function isAppOrigin(origin: string | null, env: NodeJS.ProcessEnv = proc
   return origin === (env.APP_ORIGIN ?? 'https://planer.wiergowsky.com')
 }
 
+const PUBLIC_EXACT = new Set([
+  '/api/health',
+  '/manifest.webmanifest',
+  '/offline',
+  '/maplibre-gl-worker.mjs',
+])
+const PUBLIC_PREFIXES = ['/p/', '/icons/']
+
+/**
+ * Ścieżki poza logowaniem: zdrowie dla healthchecku, link dla rodziny, manifest, ikony, strona
+ * offline, worker mapy. Proxy i tak przez nie przechodzi, żeby usunąć nagłówek z e-mailem: akcję
+ * serwera da się wywołać POST-em na dowolny adres, więc bez tego obcy podałby się tu za osobę.
+ */
+export function isPublicPath(pathname: string): boolean {
+  return PUBLIC_EXACT.has(pathname) || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
+}
+
 export type AccessConfig = {
   teamDomain: string
   aud: string

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAppOrigin } from './access'
+import { isAppOrigin, isPublicPath } from './access'
 
 const prod = { NODE_ENV: 'production' } as NodeJS.ProcessEnv
 
@@ -20,5 +20,31 @@ describe('isAppOrigin', () => {
     expect(
       isAppOrigin('http://192.168.1.5:3000', { NODE_ENV: 'development' } as NodeJS.ProcessEnv),
     ).toBe(true)
+  })
+})
+
+describe('isPublicPath', () => {
+  it('przepuszcza tylko ścieżki bez danych i link dla rodziny', () => {
+    for (const p of [
+      '/api/health',
+      '/p/abc',
+      '/manifest.webmanifest',
+      '/icons/192.png',
+      '/offline',
+    ])
+      expect(isPublicPath(p)).toBe(true)
+  })
+
+  it('reszta wymaga logowania, także adresy podobne do publicznych', () => {
+    for (const p of [
+      '/',
+      '/trips',
+      '/p',
+      '/packing',
+      '/offline-x',
+      '/api/health/x',
+      '/api/ai/chat',
+    ])
+      expect(isPublicPath(p)).toBe(false)
   })
 })

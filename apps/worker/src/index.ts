@@ -60,7 +60,8 @@ async function leaveReminders() {
       continue
     const clock = now.hour * 60 + now.minute
     for (const leg of legsFromDoc(state, date)) {
-      if (!leg.route || !leg.arriveBy) continue
+      // Odcinek z innego dnia (zapas przed nocnym lotem) nie pasuje do dzisiejszego zegara.
+      if (!leg.route || !leg.arriveBy || leg.dayOffset) continue
       const arrive = toMinutes(leg.arriveBy)
       if (arrive <= clock || arrive - clock > LEAVE_LOOKAHEAD_MIN) continue
       const request = {
@@ -121,7 +122,13 @@ async function eveningBriefing() {
     let leaveBy: string | undefined
     if (start?.route && start.arriveBy) {
       const { plan } = await planLeg(
-        { ...start.route, date: tomorrow, arriveBy: start.arriveBy, mode: start.mode },
+        {
+          ...start.route,
+          date: tomorrow,
+          arriveBy: start.arriveBy,
+          mode: start.mode,
+          dayOffset: start.dayOffset,
+        },
         trip,
       ).catch(() => ({ plan: null }))
       if (plan)

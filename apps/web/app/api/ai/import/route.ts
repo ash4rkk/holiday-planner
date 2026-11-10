@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk'
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
 import { CARD_TYPES, formatDateSpan, isIsoDate, isIsoTime, withoutAmounts } from '@planer/core'
 import { z } from 'zod'
@@ -59,29 +60,43 @@ export async function POST(request: Request) {
 
   let response: Awaited<ReturnType<ReturnType<typeof anthropic>['beta']['messages']['parse']>>
   try {
-    response = await anthropic().beta.messages.parse({
-      model: AI_MODEL,
-      max_tokens: 16000,
-      ...fallback(),
-      output_config: { effort: 'medium', format: betaZodOutputFormat(Extracted) },
-      system: IMPORT_INSTRUCTIONS,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            file.block,
-            {
-              type: 'text',
-              text: `Wyjazd: ${trip.title} (${formatDateSpan(trip.startDate, trip.endDate)}), waluty: PLN${
-                trip.currencies.length ? `, ${trip.currencies.join(', ')}` : ''
-              }. Teraz: ${nowInTrip(trip.timezone)}. Plik: ${file.name}. Zamień ten dokument na kartę planu.`,
-            },
-          ],
-        },
-      ],
-    })
+    response = await anthropic().beta.messages.parse(
+      {
+        model: AI_MODEL,
+        max_tokens: 16000,
+        ...fallback(),
+        output_config: { effort: 'medium', format: betaZodOutputFormat(Extracted) },
+        system: IMPORT_INSTRUCTIONS,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              file.block,
+              {
+                type: 'text',
+                text: `Wyjazd: ${trip.title} (${formatDateSpan(trip.startDate, trip.endDate)}), waluty: PLN${
+                  trip.currencies.length ? `, ${trip.currencies.join(', ')}` : ''
+                }. Teraz: ${nowInTrip(trip.timezone)}. Plik: ${file.name}. Zamień ten dokument na kartę planu.`,
+              },
+            ],
+          },
+        ],
+      },
+      // Bez ponowień w SDK (każde kosztuje, a kolejka w telefonie i tak ponawia) i z limitem
+      // krótszym niż 100 s Cloudflare, żeby telefon dostał odpowiedź, a nie zerwane połączenie.
+      { maxRetries: 0, timeout: 90_000 },
+    )
   } catch (error) {
     console.warn('[ai] import', String(error))
+    // Błąd trwały (plik za duży, za dużo stron, nieczytelny PDF): ponawianie nic nie da.
+    if (
+      error instanceof Anthropic.BadRequestError ||
+      (error instanceof Anthropic.APIError && error.status === 413)
+    )
+      return Response.json(
+        { error: 'AI nie przyjęło tego pliku (za duży albo za dużo stron)' },
+        { status: 422 },
+      )
     return Response.json({ error: 'AI nie odczytało pliku — spróbuj ponownie' }, { status: 502 })
   }
   await recordUsage({

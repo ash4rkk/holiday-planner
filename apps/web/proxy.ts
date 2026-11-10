@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import {
   ACCESS_COOKIE,
   ACCESS_HEADER,
+  isPublicPath,
   readAccessConfig,
   USER_EMAIL_HEADER,
   verifyAccessToken,
@@ -11,6 +12,9 @@ export async function proxy(request: NextRequest) {
   const headers = new Headers(request.headers)
   // Nagłówek ustawia wyłącznie proxy — nigdy nie ufamy wartości z zewnątrz.
   headers.delete(USER_EMAIL_HEADER)
+
+  // Bez logowania i bez tożsamości, także w dev: kod za tymi adresami nigdy nie widzi e-maila.
+  if (isPublicPath(request.nextUrl.pathname)) return NextResponse.next({ request: { headers } })
 
   const devEmail = process.env.AUTH_DEV_EMAIL
   if (process.env.NODE_ENV === 'development' && devEmail) {
@@ -32,10 +36,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Poza logowaniem: statyki Next, zdrowie dla healthchecku, publiczny link /p/* (etap 8),
-  // manifest, ikony i strona offline (przeglądarka pobiera manifest bez cookie Access), worker mapy
-  // (potrzebny też stronie publicznej).
-  matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|api/health|p/|manifest\\.webmanifest|icons/|offline|maplibre-gl-worker\\.mjs).*)',
-  ],
+  // Proxy pomija tylko statyki Next. Ścieżki publiczne (`isPublicPath`) też przez nie przechodzą:
+  // bez weryfikacji JWT, ale z usuniętym nagłówkiem e-maila.
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico).*)'],
 }

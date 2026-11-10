@@ -104,6 +104,21 @@ describe('dayLegs', () => {
     expect(legs[2]).toMatchObject({ from: 'b', leaveAt: '14:00' })
   })
 
+  it('powrót po północy i zapas przed nocnym lotem wypadają w sąsiednim dniu', () => {
+    const late = dayLegs(
+      [stay, card('a', { time: '23:00', durationMin: 120, location: place })],
+      '2027-07-14',
+    )
+    expect(late.at(-1)).toMatchObject({ kind: 'end', leaveAt: '01:00', dayOffset: 1 })
+    expect(late[0]?.dayOffset).toBeUndefined()
+
+    const flight = dayLegs(
+      [stay, card('f', { type: 'transport', title: 'lot', time: '01:00', location: place })],
+      '2027-07-14',
+    )
+    expect(flight[0]).toMatchObject({ kind: 'start', arriveBy: '23:00', dayOffset: -1 })
+  })
+
   it('tryb dojazdu z karty docelowej, przy powrocie z noclegu', () => {
     const legs = dayLegs(
       [

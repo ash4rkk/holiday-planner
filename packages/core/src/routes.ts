@@ -1,4 +1,5 @@
 import * as Y from 'yjs'
+import { addDays } from './dates'
 import { eq, getDb, leaveAlerts, lt, or, routeCache, routesDaily, routesUsage, sql } from './db'
 import type { DayGap } from './gaps'
 import { dayLegs, shiftClock } from './gaps'
@@ -28,6 +29,10 @@ const DAILY_LIMIT = 300
 const KEY_VERSION = 'v3'
 /** „Rozkład za wcześnie” sprawdzamy ponownie po tylu godzinach. */
 const EARLY_RECHECK_MS = 48 * 60 * 60_000
+/** Po błędzie Google pytamy ponownie najwcześniej po tylu minutach. */
+const ERROR_RECHECK_MS = 10 * 60_000
+/** Odcinek, który minął dawniej niż tyle, zostaje przy zapisanym wyniku: rozkład już go nie zmieni. */
+const PAST_LEG_MS = 60 * 60_000
 
 const today = () => Temporal.Now.plainDateISO('Europe/Warsaw')
 const month = () => today().toPlainYearMonth().toString()
@@ -247,6 +252,8 @@ export type LegRequest = {
   arriveBy?: string
   /** Tryb ustawiony na karcie; bez niego tryb wyjazdu. */
   mode?: TravelMode
+  /** Godzina odcinka wypada dzień później (+1) albo wcześniej (-1) niż `date`. */
+  dayOffset?: number
 }
 export type TripTravel = { timezone: string; travelMode: TravelMode }
 
@@ -286,14 +293,27 @@ type EarlyMark = { early: true; checkedAt: string }
 const isEarlyMark = (plan: unknown): plan is EarlyMark =>
   typeof plan === 'object' && plan !== null && 'early' in plan
 
+/**
+ * Znacznik w cache: Google nie dał połączenia (pusta odpowiedź albo błąd). Bez niego każde otwarcie
+ * dnia i każdy obrót workera pytałyby Google od nowa. `plan` to wynik zastępczy (dojście pieszo,
+ * starszy wynik) albo null.
+ */
+type MissMark = { miss: 'empty' | 'error'; plan: LegPlan | null; checkedAt: string }
+const isMissMark = (plan: unknown): plan is MissMark =>
+  typeof plan === 'object' && plan !== null && 'miss' in plan
+
 /** Plan odcinka: z bazy, gdy wynik jest świeży; inaczej liczony od nowa i zapisany dla obu telefonów. */
 export async function planLeg(
-  leg: LegRequest,
+  request: LegRequest,
   trip: TripTravel,
   // ride: tylko przejazd (inne połączenie), bez zamiany na dojście pieszo.
   // live: z bieżącej pozycji; ta się zmienia, więc wyniku nie ma po co czytać ani zapisywać.
   options: { refresh?: boolean; ride?: boolean; live?: boolean } = {},
 ): Promise<PlanResult> {
+  // Powrót po północy albo zapas przed nocnym lotem: liczymy na dzień, w którym odcinek naprawdę jest.
+  const leg = request.dayOffset
+    ? { ...request, date: addDays(request.date, request.dayOffset) }
+    : request
   const mode = leg.mode ?? trip.travelMode
   const key = legKey(leg, mode, options.ride)
   const db = getDb()
@@ -305,13 +325,17 @@ export async function planLeg(
   const age = row ? Date.now() - row.checkedAt.getTime() : Number.POSITIVE_INFINITY
   if (row && isEarlyMark(row.plan) && !options.refresh && age < EARLY_RECHECK_MS)
     return { plan: null, early: true }
+  const miss = row && isMissMark(row.plan) ? row.plan : null
+  const stored = miss ? miss.plan : row && !isEarlyMark(row.plan) ? (row.plan as LegPlan) : null
   // Stare wpisy mogą mieć awaryjną trasę pieszą przez pół kraju; takiej nie pokazujemy.
-  const cached =
-    row && !isEarlyMark(row.plan) && !isFarWalk(row.plan as LegPlan, mode)
-      ? (row.plan as LegPlan)
-      : null
-  if (cached && !options.refresh && age < planMaxAgeMs(departure - Date.now()))
-    return { plan: cached }
+  const cached = stored && !isFarWalk(stored, mode) ? stored : null
+  const toDeparture = departure - Date.now()
+  const maxAge = toDeparture < -PAST_LEG_MS ? Number.POSITIVE_INFINITY : planMaxAgeMs(toDeparture)
+  if (!options.refresh && row && !isEarlyMark(row.plan)) {
+    if (miss && age < (miss.miss === 'error' ? Math.min(ERROR_RECHECK_MS, maxAge) : maxAge))
+      return { plan: cached }
+    if (!miss && cached && age < maxAge) return { plan: cached }
+  }
 
   const osrmRoute = await osrm(mode === 'drive' ? 'car' : 'foot', leg.from, leg.to)
   const input: PlanInput = {
@@ -351,15 +375,33 @@ export async function planLeg(
     }
     return { plan: null, early: true }
   }
-  // Nie udało się policzyć: lepszy starszy wynik niż żaden.
-  if (!choice.plan) return { plan: cached, limited: choice.limited }
+  const save = (plan: LegPlan | MissMark) =>
+    db
+      .insert(routeCache)
+      .values({ key, plan, checkedAt })
+      .onConflictDoUpdate({ target: routeCache.key, set: { plan, checkedAt } })
+  // Google zapytany i bez wyniku do zapisania: zostaje znacznik, żeby nie pytać w kółko.
+  // Limit i brak klucza znacznika nie dostają: po ich ustąpieniu wynik ma przyjść od razu.
+  const missKind =
+    outcome?.kind === 'error'
+      ? 'error'
+      : outcome?.kind === 'empty' || outcome?.kind === 'ok'
+        ? 'empty'
+        : null
+  const mark = (plan: LegPlan | null) =>
+    missKind && !options.live
+      ? save({ miss: missKind, plan, checkedAt: checkedAt.toISOString() })
+      : undefined
 
+  // Nie udało się policzyć: lepszy starszy wynik niż żaden.
+  if (!choice.plan) {
+    await mark(cached)
+    return { plan: cached, limited: choice.limited }
+  }
   const saved: LegPlan = { ...choice.plan, checkedAt: checkedAt.toISOString() }
-  if (options.live || !choice.keep) return { plan: saved, limited: choice.limited }
-  await db
-    .insert(routeCache)
-    .values({ key, plan: saved, checkedAt })
-    .onConflictDoUpdate({ target: routeCache.key, set: { plan: saved, checkedAt } })
+  if (options.live) return { plan: saved, limited: choice.limited }
+  if (choice.keep) await save(saved)
+  else await mark(saved)
   return { plan: saved, limited: choice.limited }
 }
 

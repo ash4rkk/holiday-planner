@@ -13,8 +13,9 @@ const PRICES: Record<string, Price> = {
   'claude-sonnet-5': { input: 2, output: 10, cacheRead: 0.2 },
   'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01 },
 }
-// Nieznany model liczymy po cenach Opusa (ostrożnie — limit raczej za wcześnie niż za późno).
-const FALLBACK_PRICE = PRICES['claude-opus-5-5'] as Price
+// Nieznany model (inny w ANTHROPIC_MODEL, zapasowy po odmowie) liczymy po najdroższym Opusie:
+// limit raczej za wcześnie niż za późno.
+const FALLBACK_PRICE = PRICES['claude-opus-5'] as Price
 const WEB_SEARCH_USD = 0.01
 const USD_PLN_FALLBACK = 4.2
 
@@ -46,10 +47,11 @@ async function usdPln(): Promise<number> {
   return (rates as Record<string, number>)[`USD|${today}`] ?? USD_PLN_FALLBACK
 }
 
-const monthStart = () => {
-  const now = Temporal.Now.plainDateISO('Europe/Warsaw')
-  return new Date(`${now.toPlainYearMonth().toString()}-01T00:00:00+01:00`)
-}
+// Początek miesiąca w Warszawie; przesunięcie strefy zależy od pory roku (zimą +1, latem +2).
+const monthStart = () =>
+  new Date(
+    Temporal.Now.zonedDateTimeISO('Europe/Warsaw').with({ day: 1 }).startOfDay().epochMilliseconds,
+  )
 
 /** Wydatki AI w bieżącym miesiącu (zł). */
 export async function spentThisMonthPln(): Promise<number> {

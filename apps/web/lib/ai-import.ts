@@ -47,7 +47,10 @@ export function draftLines(d: ImportDraft): string {
 
 class PermanentError extends Error {}
 
-async function processJob(doc: Y.Doc, job: ImportJob): Promise<string> {
+/** Tyle razy serwer może nie odczytać pliku, zanim zadanie odpadnie (każda próba kosztuje). */
+const MAX_ATTEMPTS = 3
+
+async function upload(job: ImportJob): Promise<NonNullable<ImportJob['attachment']>> {
   const form = new FormData()
   form.set('tripId', job.tripId)
   form.set('file', job.file)
@@ -58,6 +61,13 @@ async function processJob(doc: Y.Doc, job: ImportJob): Promise<string> {
       throw new PermanentError(meta.error ?? 'nie udało się wysłać pliku')
     throw new Error('upload')
   }
+  // Zapis od razu: gdy odczyt AI się nie uda, ponowienie nie wyśle pliku drugi raz.
+  await shareStore.put('imports', { ...job, attachment: meta })
+  return meta
+}
+
+async function processJob(doc: Y.Doc, job: ImportJob): Promise<string> {
+  const meta = job.attachment ?? (await upload(job))
   const res = await fetch('/api/ai/import', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -67,6 +77,12 @@ async function processJob(doc: Y.Doc, job: ImportJob): Promise<string> {
   if (!res.ok) {
     if (res.status >= 400 && res.status < 500 && res.status !== 401 && res.status !== 403) {
       throw new PermanentError(body.error ?? 'AI nie odczytało pliku')
+    }
+    // Serwer odpowiedział błędem (nie brak sieci): liczymy próby, żeby plik nie krążył bez końca.
+    const attempts = (job.attempts ?? 0) + 1
+    if (res.status !== 401 && res.status !== 403) {
+      if (attempts >= MAX_ATTEMPTS) throw new PermanentError(body.error ?? 'AI nie odczytało pliku')
+      await shareStore.put('imports', { ...job, attachment: meta, attempts })
     }
     throw new Error('import')
   }
@@ -86,7 +102,7 @@ async function processJob(doc: Y.Doc, job: ImportJob): Promise<string> {
     new Date(),
     draftLines(d),
   )
-  attachFile(doc, { ...meta, cardId: id })
+  attachFile(doc, { ...(meta as unknown as Parameters<typeof attachFile>[1]), cardId: id })
   void caches
     ?.open('attachments')
     .then((c) => c.add(attachmentUrl(meta.id)))

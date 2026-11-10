@@ -60,6 +60,8 @@ const DECISION_LABELS: Record<ProposalDecision, string> = {
 // Odświeżanie rozmowy przy otwartym czacie (pytania drugiej osoby) i przy cudzej odpowiedzi w toku.
 const REFRESH_MS = 15_000
 const PENDING_MS = 3_000
+// Po zerwanym połączeniu: tak świeże pytanie na serwerze to to, które właśnie wysłano.
+const RECENT_MS = 15 * 60_000
 // Rozmowa na telefonie do czytania bez zasięgu: ostatnie wiadomości wyjazdu.
 const OFFLINE_KEY = (tripId: string) => `planer-chat-${tripId}`
 const OFFLINE_MAX = 60
@@ -553,7 +555,7 @@ function ChatPanel({
       setOffline(!navigator.onLine)
       if (navigator.onLine && !memory.get(trip.id)?.length)
         setError({ text: 'nie udało się wczytać rozmowy' })
-      return
+      return null
     }
     const b = (await r.json()) as {
       messages: ServerMsg[]
@@ -566,6 +568,7 @@ function ChatPanel({
     setBudget(b.budget)
     setPending(b.pending)
     setMessages(() => fromServer(b.messages))
+    return b
   }
 
   const sentInitial = useRef(false)
@@ -652,6 +655,7 @@ function ChatPanel({
       // Odpowiedź w formacie SSE: event: text|status|proposal|changes|done|error.
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
       let buffer = ''
+      let finished = false
       for (;;) {
         const { value, done } = await reader.read()
         if (done) break
@@ -670,6 +674,7 @@ function ChatPanel({
           else if (event === 'changes')
             patch((m) => ({ ...m, changes: [...(m.changes ?? []), ...data.changes] }))
           else if (event === 'done') {
+            finished = true
             const waiting = queued.current.get(answerId) ?? []
             queued.current.delete(answerId)
             setMessages((all) =>
@@ -691,21 +696,31 @@ function ChatPanel({
             setBudget(data.budget)
             setAnnounce(data.stopped ? 'odpowiedź przerwana' : 'odpowiedź gotowa')
           } else if (event === 'error') {
+            finished = true
             drop()
             setError({ text: data.message, retry: data.retry ? question : undefined })
           }
         }
       }
+      // Strumień zamknięty bez „done” (np. przez serwer pośredni): stan bierzemy z serwera.
+      if (!finished) void refresh()
     } catch (e) {
       // Zamknięcie czatu przerywa tylko czytanie — serwer dokończy i zapisze odpowiedź.
       if ((e as Error).name !== 'AbortError') {
-        drop()
-        setError({
-          text: navigator.onLine ? 'połączenie przerwane' : 'brak zasięgu',
-          retry: question,
-        })
-        // Serwer mógł dokończyć mimo zerwanego połączenia.
-        void refresh()
+        // Serwer nie zależy od połączenia: pytanie mogło dojść, a odpowiedź trwa albo już jest.
+        // „Ponów” tylko wtedy, gdy pytania na serwerze nie ma, inaczej poszłoby drugi raz.
+        const state = await refresh()
+        const last = state?.messages.findLast((m) => m.role === 'user')
+        const arrived =
+          Boolean(state?.pending) ||
+          (last?.text === question && Date.now() - Date.parse(last.createdAt) < RECENT_MS)
+        if (!arrived) {
+          drop()
+          setError({
+            text: navigator.onLine ? 'połączenie przerwane' : 'brak zasięgu',
+            retry: question,
+          })
+        }
       }
     } finally {
       setBusy(false)

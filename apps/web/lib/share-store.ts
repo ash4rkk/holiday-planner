@@ -27,6 +27,10 @@ export type ImportJob = {
   tripId: string
   file: File
   createdAt: number
+  /** Załącznik już wysłany: ponowienie nie wysyła pliku drugi raz. */
+  attachment?: Record<string, unknown> & { id: string }
+  /** Ile razy serwer nie odczytał pliku; po kilku próbach zadanie odpada. */
+  attempts?: number
 }
 
 type Stores = { pending: PendingShare; outbox: OutboxShare; imports: ImportJob }

@@ -4,6 +4,7 @@ export {
   ACCESS_HEADER,
   type AccessConfig,
   type AccessResult,
+  isPublicPath,
   readAccessConfig,
   USER_EMAIL_HEADER,
   verifyAccessToken,

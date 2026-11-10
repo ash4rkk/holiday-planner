@@ -28,6 +28,11 @@ export type DayGap = {
   modeCardId?: string
   /** O tyle minut przed godziną karty trzeba być na miejscu; `arriveBy` już to uwzględnia. */
   earlyMin?: number
+  /**
+   * Godzina odcinka wypada w innym dniu niż dzień kart: +1 = powrót po północy, -1 = trzeba być
+   * na miejscu jeszcze poprzedniego wieczoru (zapas przed nocnym lotem).
+   */
+  dayOffset?: number
 }
 
 /** Dalej niż tyle (w linii prostej) to już nie dojazd, tylko podróż: lot albo pociąg dalekobieżny. */
@@ -107,6 +112,7 @@ export function dayGaps(cards: CardSnapshot[]): DayGap[] {
       leaveAt: clock(end),
       arriveBy: shiftClock(to.time as string, -early),
       ...(early ? { earlyMin: early } : {}),
+      ...(minutes(to.time as string) < early ? { dayOffset: -1 } : {}),
     }
     return withMode(withRoute(gap, departurePoint(from), point(to.location)), to)
   })
@@ -135,6 +141,7 @@ export function dayLegs(cards: CardSnapshot[], date: string): DayGap[] {
       to: first.id,
       arriveBy: shiftClock(first.time as string, -early),
       ...(early ? { earlyMin: early } : {}),
+      ...(minutes(first.time as string) < early ? { dayOffset: -1 } : {}),
     }
     legs.unshift(withMode(withRoute(start, home, firstStop), first))
   }
@@ -146,6 +153,7 @@ export function dayLegs(cards: CardSnapshot[], date: string): DayGap[] {
       kind: 'end',
       from: last.id,
       leaveAt: clock(endOf(last)),
+      ...(endOf(last) >= 1440 ? { dayOffset: Math.floor(endOf(last) / 1440) } : {}),
     }
     legs.push(withMode(withRoute(end, lastStop, bed), night))
   }

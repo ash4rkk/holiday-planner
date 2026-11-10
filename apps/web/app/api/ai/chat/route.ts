@@ -23,9 +23,13 @@ import { getTrip } from '@/lib/trips'
 
 type Param = Anthropic.Beta.BetaMessageParam
 const MAX_ROUNDS = 6
-// Do modelu idzie najwyżej tyle ostatnich wiadomości (20 pytań z odpowiedziami) — dłuższa rozmowa
-// drożałaby z każdym pytaniem.
-const MAX_HISTORY = 40
+// Do modelu idzie najwyżej 2 × tyle ostatnich wiadomości — dłuższa rozmowa drożałaby z każdym
+// pytaniem. Tniemy skokami o ten krok, nie o jedną wiadomość: początek historii jest wtedy ten sam
+// przez 10 kolejnych pytań i cache promptu ją czyta, zamiast zapisywać od nowa.
+const HISTORY_STEP = 20
+// Cisza w strumieniu (wyszukiwanie, rozumowanie): Cloudflare zrywa połączenie po 100 s bez danych.
+const PING_MS = 15_000
+const CUT_NOTE = '\n\n_(odpowiedź urwana — zapytaj o dalszy ciąg)_'
 
 const READ_ATTACHMENT: Anthropic.Beta.BetaTool = {
   name: 'read_attachment',
@@ -301,13 +305,16 @@ export async function POST(request: Request) {
   try {
     doc = await loadTripDoc(tripId)
     context = await tripContextFor(trip, doc)
-    const recent = await db
+    const live = and(eq(aiMessages.tripId, tripId), eq(aiMessages.archived, false))
+    const [count] = await db.select({ n: sql<number>`count(*)::int` }).from(aiMessages).where(live)
+    const total = count?.n ?? 0
+    const skip = Math.max(0, Math.floor((total - HISTORY_STEP) / HISTORY_STEP) * HISTORY_STEP)
+    history = await db
       .select({ role: aiMessages.role, content: aiMessages.content })
       .from(aiMessages)
-      .where(and(eq(aiMessages.tripId, tripId), eq(aiMessages.archived, false)))
-      .orderBy(desc(aiMessages.createdAt), asc(aiMessages.role))
-      .limit(MAX_HISTORY)
-    history = recent.reverse()
+      .where(live)
+      .orderBy(...chronological)
+      .offset(skip)
     // Ucięta historia musi zaczynać się od pytania.
     while (history[0]?.role === 'assistant') history.shift()
     const [row] = await db
@@ -341,7 +348,16 @@ export async function POST(request: Request) {
           connected = false
         }
       }
+      const ping = setInterval(() => {
+        if (!connected) return
+        try {
+          controller.enqueue(encoder.encode(': ping\n\n'))
+        } catch {
+          connected = false
+        }
+      }, PING_MS)
       void answerInBackground(send).finally(() => {
+        clearInterval(ping)
         if (!connected) return
         try {
           controller.close()
@@ -417,7 +433,13 @@ export async function POST(request: Request) {
           }
           break
         }
-        if (msg.stop_reason !== 'tool_use') break
+        if (msg.stop_reason !== 'tool_use') {
+          if (msg.stop_reason === 'max_tokens') {
+            answer += CUT_NOTE
+            send('text', { delta: CUT_NOTE })
+          }
+          break
+        }
 
         const calls = msg.content.filter(
           (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use',
@@ -489,6 +511,12 @@ export async function POST(request: Request) {
           results.push({ type: 'tool_result', tool_use_id: call.id, content: [file.block] })
         }
         turn.push({ role: 'user', content: results })
+        // Ostatnia runda skończyła się na narzędziu: podsumowania już nie będzie.
+        if (round === MAX_ROUNDS - 1) {
+          answer += CUT_NOTE
+          send('text', { delta: CUT_NOTE })
+          break
+        }
         if (answer && !answer.endsWith('\n')) {
           answer += '\n\n'
           send('text', { delta: '\n\n' })

@@ -28,7 +28,16 @@ export function useDayPlans(date: string | null) {
     () =>
       legs.flatMap((l) =>
         l.route
-          ? [{ id: l.id, ...l.route, leaveAt: l.leaveAt, arriveBy: l.arriveBy, mode: l.mode }]
+          ? [
+              {
+                id: l.id,
+                ...l.route,
+                leaveAt: l.leaveAt,
+                arriveBy: l.arriveBy,
+                mode: l.mode,
+                dayOffset: l.dayOffset,
+              },
+            ]
           : [],
       ),
     [legs],

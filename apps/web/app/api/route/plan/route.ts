@@ -20,6 +20,7 @@ const body = z.object({
         leaveAt: time,
         arriveBy: time,
         mode: z.enum(['transit', 'walk', 'drive']).optional(),
+        dayOffset: z.number().int().min(-1).max(1).optional(),
       }),
     )
     .max(16),
@@ -52,7 +53,9 @@ export async function POST(request: Request) {
   const early: string[] = []
   // Kolejno: publiczny serwer OSRM nie lubi serii równoległych zapytań.
   for (const { id, ...leg } of legs) {
-    const request = live ? { ...leg, date, leaveAt: now, arriveBy: undefined } : { ...leg, date }
+    const request = live
+      ? { ...leg, date, leaveAt: now, arriveBy: undefined, dayOffset: undefined }
+      : { ...leg, date }
     const result = await planLeg(request, trip, { refresh, ride, live }).catch((error) => {
       console.warn('[routes] plan', String(error))
       return { plan: null, limited: false, early: false }
