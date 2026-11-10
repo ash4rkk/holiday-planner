@@ -1,34 +1,35 @@
 'use client'
 
 import {
-  CARD_STATUS_LABELS,
-  CARD_STATUSES,
   CARD_TYPE_LABELS,
   CARD_TYPES,
   type CardSnapshot,
   cardsOf,
   contentOf,
+  daysBetween,
   type EditableCardFields,
+  formatShortDate,
   fragmentLines,
   moveToIdeas,
   trashCard,
   updateCard,
 } from '@planer/core'
 import type { Editor } from '@tiptap/react'
-import { Calendar, ChevronDown, ChevronRight, Lightbulb, Pin, Trash2 } from 'lucide-react'
-import { type PointerEvent, useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, Lightbulb, Pin, Trash2 } from 'lucide-react'
+import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AmountBadge } from '@/components/amounts'
 import { CardAttachments } from '@/components/attachments/card-attachments'
 import { askText } from '@/components/confirm-dialog'
 import { cx } from '@/components/ui'
 import { withUndo } from '@/lib/undo'
+import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
 import { useWide } from '@/lib/use-wide'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { CardEditor } from './card-editor'
 import { CardSections, Section } from './card-fields'
 import { FormatToolbar, useKeyboardInset } from './format-toolbar'
 import { LinkPreviewBlock } from './link-preview'
-import { StatusMark } from './status-mark'
 import { TYPE_STYLE } from './type-style'
 import { AddVariantChip, VariantBar } from './variant-bar'
 
@@ -59,7 +60,7 @@ export function CardSheet({
   isNew: boolean
   onClose: () => void
 }) {
-  const { doc } = useTrip()
+  const { doc, trip } = useTrip()
   const wide = useWide()
   const card = useCards().find((c) => c.id === cardId)
   const cardMap = cardsOf(doc).get(cardId)
@@ -67,8 +68,9 @@ export function CardSheet({
   const [expanded, setExpanded] = useState(false)
   const [typing, setTyping] = useState(isNew)
   const tall = expanded || typing
-  // Pod nagłówkiem rozwija się jeden wybór naraz: typ albo status.
-  const [picker, setPicker] = useState<'type' | 'status' | null>(null)
+  // Typy jako chipy pod tytułem: od razu w nowej karcie, w starej po dotknięciu kafla typu.
+  const [typesOpen, setTypesOpen] = useState(false)
+  const showTypes = isNew || typesOpen
   const [closing, setClosing] = useState(false)
   const [dragY, setDragY] = useState(0)
   const dragFrom = useRef<number | null>(null)
@@ -152,13 +154,26 @@ export function CardSheet({
     },
   }
 
-  const toggle = (p: 'type' | 'status') => setPicker((v) => (v === p ? null : p))
   const style = TYPE_STYLE[card.type]
   const TypeIcon = style.icon
   const Close = wide ? ChevronRight : ChevronDown
+  const idea = !card.date && card.variantOf === undefined
+  const summary = [
+    CARD_TYPE_LABELS[card.type],
+    card.variantOf !== undefined
+      ? 'wariant'
+      : card.date
+        ? [dayNumber(trip.startDate, card.date), formatShortDate(card.date)]
+            .filter(Boolean)
+            .join(' · ')
+        : 'pomysł',
+    card.time,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
-    <>
+    <SheetPortal>
       {!wide && !tall && (
         <button
           type="button"
@@ -205,35 +220,8 @@ export function CardSheet({
           >
             <Close className="size-5" aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            onClick={() => toggle('type')}
-            aria-expanded={picker === 'type'}
-            className={cx(
-              'flex h-11 min-w-0 items-center gap-2 rounded-island px-3 text-sm transition-colors',
-              style.chip,
-            )}
-          >
-            <TypeIcon className="size-5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{CARD_TYPE_LABELS[card.type]}</span>
-          </button>
+          {isNew && <span className="px-2 font-bold">nowa karta</span>}
           <span className="flex-1" />
-          <button
-            type="button"
-            onClick={() => toggle('status')}
-            aria-expanded={picker === 'status'}
-            aria-label={`status: ${card.status ? CARD_STATUS_LABELS[card.status] : 'bez statusu'}`}
-            title={card.status ? CARD_STATUS_LABELS[card.status] : 'bez statusu'}
-            className="flex size-11 items-center justify-center"
-          >
-            {card.status ? (
-              <StatusMark status={card.status} />
-            ) : (
-              <span className="flex size-8 items-center justify-center rounded-small border border-dashed border-line text-subtle">
-                <Calendar className="size-5" aria-hidden="true" />
-              </span>
-            )}
-          </button>
           <button
             type="button"
             onClick={() => change({ pinned: !card.pinned })}
@@ -247,17 +235,6 @@ export function CardSheet({
           >
             <Pin className="size-5" aria-hidden="true" />
           </button>
-          {(card.date || card.variantOf) && (
-            <button
-              type="button"
-              onClick={toIdeas}
-              aria-label="do pomysłów"
-              title="do pomysłów"
-              className="flex size-11 items-center justify-center text-muted hover:text-accent"
-            >
-              <Lightbulb className="size-5" aria-hidden="true" />
-            </button>
-          )}
           {/* Kosz zawsze ostatni: inne przyciski mogą znikać, a ten nie zmienia miejsca. */}
           <button
             type="button"
@@ -269,57 +246,6 @@ export function CardSheet({
             <Trash2 className="size-5" aria-hidden="true" />
           </button>
         </div>
-        {picker === 'type' && (
-          <div className="fade-in flex shrink-0 gap-1 overflow-x-auto px-1 pb-1">
-            {CARD_TYPES.map((t) => {
-              const { icon: Icon, chip } = TYPE_STYLE[t]
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={card.type === t}
-                  onClick={() => {
-                    change({ type: t })
-                    setPicker(null)
-                  }}
-                  className={cx(
-                    'flex h-11 shrink-0 items-center gap-1 rounded-small px-3 text-xs',
-                    card.type === t ? chip : 'text-muted',
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                  {CARD_TYPE_LABELS[t]}
-                </button>
-              )
-            })}
-          </div>
-        )}
-        {picker === 'status' && (
-          <div className="fade-in flex shrink-0 justify-end gap-1 overflow-x-auto px-1 pb-1">
-            {[undefined, ...CARD_STATUSES].map((st) => (
-              <button
-                key={st ?? 'none'}
-                type="button"
-                aria-pressed={card.status === st}
-                onClick={() => {
-                  change({ status: st })
-                  setPicker(null)
-                }}
-                className={cx(
-                  'flex h-11 shrink-0 items-center gap-2 rounded-small px-3 text-xs',
-                  card.status === st ? 'bg-active font-bold text-accent' : 'text-muted',
-                )}
-              >
-                {st ? (
-                  <StatusMark status={st} />
-                ) : (
-                  <Calendar className="size-4" aria-hidden="true" />
-                )}
-                {st ? CARD_STATUS_LABELS[st] : 'bez statusu'}
-              </button>
-            ))}
-          </div>
-        )}
 
         <div
           onFocusCapture={(e) => opensKeyboard(e.target) && setTyping(true)}
@@ -327,7 +253,7 @@ export function CardSheet({
           onBlurCapture={(e) => {
             if (!e.relatedTarget || !opensKeyboard(e.relatedTarget)) setTyping(false)
           }}
-          className="flex flex-1 flex-col gap-1 overflow-y-auto overscroll-y-contain px-1 pb-24 [&>*]:shrink-0"
+          className="flex flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain px-1 pb-24 [&>*]:shrink-0"
         >
           <VariantBar card={card} />
           <div
@@ -352,16 +278,68 @@ export function CardSheet({
                 </button>
               </div>
             )}
-            {/* Panel zostaje przy zmianie karty, żeby nie grał animacji; edytor i pola są per karta. */}
-            <CardEditor
-              key={cardId}
-              cardId={cardId}
-              fragment={contentOf(cardMap)}
-              autoFocus={isNew}
-              onEditor={setEditor}
-            />
+            <div className="flex items-start pt-3 pl-3">
+              <button
+                type="button"
+                onClick={() => setTypesOpen((v) => !v)}
+                aria-expanded={showTypes}
+                aria-label={`typ: ${CARD_TYPE_LABELS[card.type]}, zmień`}
+                title={CARD_TYPE_LABELS[card.type]}
+                className={cx(
+                  'flex size-14 shrink-0 items-center justify-center rounded-island transition-colors',
+                  style.chip,
+                )}
+              >
+                <TypeIcon className="size-7" aria-hidden="true" />
+              </button>
+              <div className="min-w-0 flex-1 -mt-3">
+                {/* Panel zostaje przy zmianie karty, żeby nie grał animacji; edytor i pola są per karta. */}
+                <CardEditor
+                  key={cardId}
+                  cardId={cardId}
+                  fragment={contentOf(cardMap)}
+                  autoFocus={isNew}
+                  onEditor={setEditor}
+                />
+              </div>
+            </div>
+            <p className={cx('pr-4 pb-3 pl-[84px] text-xs', style.text)}>{summary}</p>
             {card.linkPreview && <LinkPreviewBlock preview={card.linkPreview} />}
           </div>
+
+          {showTypes && (
+            <div
+              className="fade-in -mx-1 flex gap-1 overflow-x-auto px-1"
+              role="group"
+              aria-label="typ"
+            >
+              {CARD_TYPES.map((t) => {
+                const { icon: Icon, chip } = TYPE_STYLE[t]
+                const active = card.type === t
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      change({ type: t })
+                      if (!isNew) setTypesOpen(false)
+                    }}
+                    className={cx(
+                      'flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm transition-colors',
+                      active
+                        ? cx('border-transparent font-bold', chip)
+                        : 'border-line bg-panel text-muted',
+                    )}
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                    {CARD_TYPE_LABELS[t]}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           <CardSections
             key={cardId}
             card={card}
@@ -380,10 +358,61 @@ export function CardSheet({
           <SaveAsTemplate card={card} editor={editor} />
         </div>
 
+        {!typing && (
+          <div className="island shadow-float fade-in absolute inset-x-2 bottom-[max(8px,env(safe-area-inset-bottom))] flex items-center gap-1 rounded-full p-1">
+            {card.variantOf === undefined &&
+              (idea ? (
+                <span className="flex min-h-11 items-center gap-2 rounded-full bg-active px-4 text-sm text-accent">
+                  <Lightbulb className="size-4" aria-hidden="true" />w pomysłach
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={toIdeas}
+                  className="flex min-h-11 items-center gap-2 rounded-full px-4 text-sm text-muted hover:text-accent"
+                >
+                  <Lightbulb className="size-4" aria-hidden="true" />
+                  do pomysłów
+                </button>
+              ))}
+            <button
+              type="button"
+              onClick={dismiss}
+              className="flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full bg-accent px-4 text-sm font-bold text-on-accent"
+            >
+              <span className="truncate">
+                {card.date
+                  ? `gotowe · ${formatShortDate(card.date)}${card.time ? `, ${card.time}` : ''}`
+                  : 'gotowe'}
+              </span>
+            </button>
+          </div>
+        )}
+
         {editor && <FormatToolbar editor={editor} />}
       </div>
-    </>
+    </SheetPortal>
   )
+}
+
+/** „dzień 3” dla daty w wyjeździe (bez dat wyjazdu albo poza nim — nic). */
+function dayNumber(start: string | null, date: string): string | undefined {
+  if (!start) return undefined
+  const n = daysBetween(start, date) + 1
+  return n >= 1 ? `dzień ${n}` : undefined
+}
+
+/**
+ * Arkusz w portalu do body: wrapper widoku tworzy kontekst warstw, w którym przegrywał z dolnym
+ * menu (zasłaniało pasek formatowania). Z ukrytego widoku (<Activity>) chowa się sam.
+ */
+function SheetPortal({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useHideWhenInactive(ref)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  if (!mounted) return null
+  return createPortal(<div ref={ref}>{children}</div>, document.body)
 }
 
 /** „Zapisz jako szablon”: treść karty jako Markdown + typ i część pól (bez dat i miejsca). */

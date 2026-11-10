@@ -2,18 +2,35 @@
 
 import {
   arriveEarlyMin,
+  CARD_STATUS_LABELS,
   type CardLocation,
   type CardSnapshot,
+  dateRange,
   type EditableCardFields,
   formatShortDate,
   navigationUrl,
   placeUrl,
 } from '@planer/core'
-import { Navigation, X } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import {
+  Bell,
+  CalendarCheck,
+  CalendarDays,
+  CalendarRange,
+  Clock,
+  Flag,
+  Hourglass,
+  Lightbulb,
+  type LucideIcon,
+  MapPin,
+  Navigation,
+  TimerReset,
+  X,
+} from 'lucide-react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { MiniMap } from '@/components/map/mini-map'
-import { cx, inputClass } from '@/components/ui'
+import { cx, inputClass, SectionLabel } from '@/components/ui'
 import { resolvePastedPlace } from '@/lib/place-card'
+import { useTrip } from '@/lib/yjs/trip-doc'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
 type Key =
@@ -53,7 +70,15 @@ const EARLY_OPTIONS = [0, 10, 15, 30, 45, 60, 90, 120, 150, 180] as const
 
 /** Zapas przed kartą ma sens przy transporcie (odprawa, peron); przy innych kartach go nie pokazujemy. */
 const whenFields = (card: CardSnapshot) =>
-  WHEN.filter((f) => f.key !== 'arriveEarlyMin' || card.type === 'transport')
+  WHEN.filter(
+    (f) =>
+      (f.key !== 'arriveEarlyMin' || card.type === 'transport') &&
+      // Kilka dni trwa nocleg albo wynajem auta; przy innych kartach tylko, gdy już ustawiona.
+      (f.key !== 'endDate' ||
+        card.type === 'stay' ||
+        card.type === 'transport' ||
+        card.endDate !== undefined),
+  )
 
 /** Wysepka karty z małą etykietą. */
 export function Section({
@@ -76,11 +101,27 @@ export function Section({
   )
 }
 
-const chip = 'min-h-11 rounded-small border px-3 text-xs transition-colors'
+const WEEKDAY = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb']
+const weekday = (date: string) => WEEKDAY[new Date(`${date}T00:00:00Z`).getUTCDay()] as string
+const dayOfMonth = (date: string) => Number(date.slice(8, 10))
+
+const pill = 'flex min-h-10 items-center gap-2 rounded-full border text-sm transition-colors'
+const tile =
+  'flex min-h-20 flex-col items-center justify-center gap-1 rounded-island border p-2 text-center transition-colors'
+
+const WHEN_ICON: Record<TimeKey, LucideIcon> = {
+  date: CalendarDays,
+  endDate: CalendarRange,
+  time: Clock,
+  durationMin: Hourglass,
+  remindMin: Bell,
+  arriveEarlyMin: TimerReset,
+}
 
 /**
- * Pola karty jako wysepki: „kiedy” z chipami (tap otwiera pole pod spodem) i „miejsce”. Dalsze
- * wysepki podaje `children`, a `addons` dokłada chipy na dole.
+ * Pola karty: „kiedy” jako kafelki dni wyjazdu (plus „pomysł” i „inna data”) i pigułki godziny,
+ * czasu i przypomnienia (dotknięcie otwiera pole pod spodem), potem miejsca i dalsze wysepki z
+ * `children`, a na dole kafelki dodatków: miejsce, rezerwacja i `addons`.
  */
 export function CardSections({
   card,
@@ -93,6 +134,7 @@ export function CardSections({
   children?: ReactNode
   addons?: ReactNode
 }) {
+  const { trip } = useTrip()
   const [editing, setEditing] = useState<TimeKey | null>(null)
   const [opened, setOpened] = useState<Set<Key>>(new Set())
   const open = (key: Key) => setOpened((s) => new Set(s).add(key))
@@ -109,40 +151,131 @@ export function CardSections({
   const active = whenFields(card).find((f) => f.key === editing)
   // „Dokąd” ma sens tylko przy transporcie: bez tego nie wiadomo, skąd liczyć następny dojazd.
   const places = [
-    { key: 'location' as const, label: 'miejsce' },
-    ...(card.type === 'transport' ? [{ key: 'destination' as const, label: 'dokąd' }] : []),
+    { key: 'location' as const, label: 'miejsce', icon: MapPin },
+    ...(card.type === 'transport'
+      ? [{ key: 'destination' as const, label: 'dokąd', icon: Flag }]
+      : []),
   ]
+  // Wariant nie ma własnej daty (liczy się karta główna), więc nie ma też wyboru dnia.
+  const variant = card.variantOf !== undefined
+  const days = trip.startDate && trip.endDate ? dateRange(trip.startDate, trip.endDate) : []
+  const otherDate = Boolean(card.date && !days.includes(card.date))
+  const pills = whenFields(card).filter((f) => f.key !== 'date' || !days.length)
+  // Wybrany dzień na środku rzędu (przy długim wyjeździe byłby poza ekranem).
+  const dayRow = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const row = dayRow.current
+    const el = row?.querySelector<HTMLElement>('[aria-pressed="true"]')
+    if (row && el) row.scrollLeft = el.offsetLeft - row.clientWidth / 2 + el.clientWidth / 2
+  }, [])
 
   return (
-    <div className="flex flex-col gap-1">
-      <Section label="kiedy">
-        <div className="flex flex-wrap gap-1">
-          {whenFields(card).map(({ key, label, value }) => {
-            const set = card[key] !== undefined
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={editing === key}
-                onClick={() => setEditing(editing === key ? null : key)}
-                className={cx(
-                  chip,
-                  set
-                    ? 'border-accent bg-active text-accent'
-                    : 'border-dashed border-line text-muted hover:text-accent',
-                )}
+    <div className="flex flex-col gap-2">
+      <section className="flex flex-col gap-2" aria-label="kiedy">
+        <SectionLabel>kiedy</SectionLabel>
+        {!variant && days.length > 0 && (
+          <div
+            ref={dayRow}
+            className="relative -mx-1 flex gap-1 overflow-x-auto px-1"
+            role="group"
+            aria-label="dzień"
+          >
+            <DayTile
+              active={!card.date}
+              onClick={() => {
+                setEditing(null)
+                onChange({ date: undefined, endDate: undefined })
+              }}
+            >
+              <Lightbulb className="size-4" aria-hidden="true" />
+              <span className="text-2xs">pomysł</span>
+            </DayTile>
+            {days.map((d) => (
+              <DayTile
+                key={d}
+                active={card.date === d}
+                onClick={() => {
+                  setEditing(null)
+                  onChange({ date: d })
+                }}
               >
-                {set ? value(card) : `+ ${label}`}
-              </button>
-            )
-          })}
+                <span className="text-2xs">{weekday(d)}</span>
+                <b className="text-base tabular-nums">{dayOfMonth(d)}</b>
+              </DayTile>
+            ))}
+            <DayTile
+              active={otherDate || editing === 'date'}
+              onClick={() => setEditing(editing === 'date' ? null : 'date')}
+              label="inna data"
+            >
+              <CalendarDays className="size-4" aria-hidden="true" />
+              <span className="text-2xs">
+                {otherDate ? formatShortDate(card.date as string) : 'inna'}
+              </span>
+            </DayTile>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-1">
+          {pills
+            .filter((f) => !variant || f.key !== 'date')
+            .map(({ key, label, value }) => {
+              const Icon = WHEN_ICON[key]
+              const set = card[key] !== undefined
+              return set ? (
+                <span
+                  key={key}
+                  className={cx(
+                    pill,
+                    'pr-1 pl-3',
+                    editing === key ? 'border-accent bg-active' : 'border-line bg-panel',
+                  )}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={editing === key}
+                    onClick={() => setEditing(editing === key ? null : key)}
+                    className="flex min-h-10 items-center gap-2"
+                  >
+                    <Icon className="size-4 text-muted" aria-hidden="true" />
+                    <b className="tabular-nums">{value(card)}</b>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => clear(key)}
+                    aria-label={`usuń: ${label}`}
+                    className="hit flex size-8 items-center justify-center rounded-full text-subtle hover:bg-raised hover:text-red"
+                  >
+                    <X className="size-3.5" aria-hidden="true" />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={editing === key}
+                  onClick={() => setEditing(editing === key ? null : key)}
+                  className={cx(
+                    pill,
+                    'px-3',
+                    editing === key
+                      ? 'border-accent bg-active text-accent'
+                      : 'border-dashed border-line text-muted hover:text-accent',
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  {label}
+                </button>
+              )
+            })}
         </div>
         {active && (
-          <Row label={active.label} onClear={() => clear(active.key)}>
-            <FieldInput field={active.key} card={card} onChange={onChange} />
-          </Row>
+          <div className="island fade-in p-2">
+            <Row label={active.label} onClear={() => clear(active.key)}>
+              <FieldInput field={active.key} card={card} onChange={onChange} />
+            </Row>
+          </div>
         )}
-      </Section>
+      </section>
 
       {places
         .filter((p) => shown(p.key))
@@ -167,22 +300,83 @@ export function CardSections({
 
       {children}
 
-      <div className="flex flex-wrap gap-1 pt-1">
+      <div className="grid grid-cols-4 gap-1">
         {places
           .filter((p) => !shown(p.key))
-          .map(({ key, label }) => (
+          .map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               type="button"
               onClick={() => open(key)}
-              className={cx(chip, 'border-dashed border-line text-muted hover:text-accent')}
+              className={cx(tile, 'border-dashed border-line text-muted hover:text-accent')}
             >
-              + {label}
+              <Icon className="size-5" aria-hidden="true" />
+              <span className="text-2xs">{label}</span>
             </button>
           ))}
+        <StatusTile card={card} onChange={onChange} />
         {addons}
       </div>
     </div>
+  )
+}
+
+function DayTile({
+  active,
+  onClick,
+  label,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  label?: string
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={label}
+      onClick={onClick}
+      className={cx(
+        'flex min-h-14 min-w-14 shrink-0 flex-col items-center justify-center rounded-island border px-2 leading-tight transition-colors',
+        active ? 'border-accent bg-active text-accent' : 'border-line bg-panel text-muted',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Rezerwacja jednym kafelkiem: brak → „do rezerwacji” (bursztyn) → „zarezerwowane” (zieleń) → brak. */
+function StatusTile({
+  card,
+  onChange,
+}: {
+  card: CardSnapshot
+  onChange: (patch: Partial<EditableCardFields>) => void
+}) {
+  const next =
+    card.status === undefined ? 'missing' : card.status === 'missing' ? 'booked' : undefined
+  const tone =
+    card.status === 'missing' ? 'text-amber' : card.status === 'booked' ? 'text-green' : ''
+  return (
+    <button
+      type="button"
+      onClick={() => onChange({ status: next })}
+      aria-label={`rezerwacja: ${card.status ? CARD_STATUS_LABELS[card.status] : 'brak'}, zmień`}
+      className={cx(
+        tile,
+        card.status
+          ? 'border-line bg-panel'
+          : 'border-dashed border-line text-muted hover:text-accent',
+      )}
+    >
+      <CalendarCheck className={cx('size-5', tone)} aria-hidden="true" />
+      <span className={cx('text-2xs', card.status && cx('font-bold', tone))}>
+        {card.status ? CARD_STATUS_LABELS[card.status] : 'rezerwacja'}
+      </span>
+    </button>
   )
 }
 

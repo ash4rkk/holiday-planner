@@ -7,7 +7,7 @@ import {
   createCard,
   variantsByMain,
 } from '@planer/core'
-import { Plus } from 'lucide-react'
+import { GitFork, Plus } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { useMemo } from 'react'
 import { cx } from '@/components/ui'
@@ -31,7 +31,7 @@ function useVariants(card: CardSnapshot) {
   return { doc, mainId, main, others, show, addOption }
 }
 
-/** „+ wariant” w rzędzie chipów karty z dniem, dopóki nie ma żadnych wariantów. */
+/** Kafelek „wariant” wśród dodatków karty z dniem, dopóki nie ma żadnych wariantów. */
 export function AddVariantChip({ card }: { card: CardSnapshot }) {
   const { others, addOption } = useVariants(card)
   if (others.length || !card.date) return null
@@ -39,9 +39,10 @@ export function AddVariantChip({ card }: { card: CardSnapshot }) {
     <button
       type="button"
       onClick={addOption}
-      className="min-h-11 rounded-small border border-dashed border-line px-3 text-xs text-muted transition-colors hover:text-accent"
+      className="flex min-h-20 flex-col items-center justify-center gap-1 rounded-island border border-dashed border-line p-2 text-muted transition-colors hover:text-accent"
     >
-      + wariant
+      <GitFork className="size-5" aria-hidden="true" />
+      <span className="text-2xs">wariant</span>
     </button>
   )
 }
