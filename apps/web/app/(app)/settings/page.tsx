@@ -1,8 +1,8 @@
-import { DEFAULT_BRIEFING, formatAmount } from '@planer/core'
+import { DEFAULT_BRIEFING, DEFAULT_PACKING_DAYS, formatAmount } from '@planer/core'
 import { recentEvents } from '@planer/core/events'
 import type { ReminderDefaults } from '@planer/core/reminders'
 import { routesLimit, routesUsedThisMonth } from '@planer/core/routes'
-import { getBriefingSettings, getReminderDefaults } from '@planer/core/settings'
+import { getBriefingSettings, getPackingDays, getReminderDefaults } from '@planer/core/settings'
 import { Bell, Clock, Link2, Route, ScrollText, Sparkles, SunMoon } from 'lucide-react'
 import Link from 'next/link'
 import { connection } from 'next/server'
@@ -19,11 +19,14 @@ import { appSettingsBack } from '@/lib/back'
 import { formatLead } from '@/lib/format-remind'
 import { activeFamilyLinks } from '@/lib/settings-data'
 
+// Ustawienia czytają bazę przy każdym wejściu — wejście może chwilę poczekać (bez szkieletu).
+export const instant = false
+
 export default async function SettingsPage({ searchParams }: PageProps<'/settings'>) {
   await connection()
   const { from } = await searchParams
   const routes = Boolean(process.env.GOOGLE_ROUTES_API_KEY)
-  const [user, spent, checks, defaults, links, events, briefing] = await Promise.all([
+  const [user, spent, checks, defaults, links, events, briefing, packingDays] = await Promise.all([
     getCurrentUser(),
     spentThisMonthPln().catch(() => 0),
     routes ? routesUsedThisMonth().catch(() => 0) : 0,
@@ -31,6 +34,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
     activeFamilyLinks().catch(() => []),
     recentEvents(7 * 24).catch(() => []),
     getBriefingSettings().catch(() => DEFAULT_BRIEFING),
+    getPackingDays().catch(() => DEFAULT_PACKING_DAYS),
   ])
   const dayAgo = Date.now() - 24 * 3_600_000
   const problems = events.filter((e) => e.level !== 'ok' && e.at.getTime() > dayAgo)
@@ -83,6 +87,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
           value={[
             defaults.transport ? `transport ${formatLead(defaults.transport)}` : 'bez przypomnień',
             briefing.enabled && `podsumowanie ${briefing.time}`,
+            packingDays > 0 && `pakowanie ${packingDays} ${packingDays === 1 ? 'dzień' : 'dni'}`,
           ]
             .filter(Boolean)
             .join(' · ')}

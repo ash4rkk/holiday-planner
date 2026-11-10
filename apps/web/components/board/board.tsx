@@ -40,6 +40,8 @@ import {
   nextStart,
   nowLineAt,
   type Positions,
+  placeWidget,
+  removeWidget,
   renameFrame,
   resizeFrame,
   restorePositions,
@@ -55,6 +57,8 @@ import {
   updateCard,
   variantsByMain,
   visibleEdges,
+  WIDGET_SIZE,
+  widgetsOf,
 } from '@planer/core'
 import {
   applyNodeChanges,
@@ -103,14 +107,28 @@ import { useDayPlans } from '@/lib/use-day-plans'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useTripNow } from '@/lib/use-trip-now'
 import { useWide } from '@/lib/use-wide'
-import { useAttachments, useCards, useEdges, useFrames, useTrip } from '@/lib/yjs/trip-doc'
-import { type BoardApi, BoardContext, frameNodeId, type Selection } from './board-context'
+import {
+  useAttachments,
+  useCards,
+  useEdges,
+  useFrames,
+  useTrip,
+  useWidgets,
+} from '@/lib/yjs/trip-doc'
+import {
+  type BoardApi,
+  BoardContext,
+  frameNodeId,
+  type Selection,
+  widgetNodeId,
+} from './board-context'
 import { CardMenu } from './card-menu'
 import { CardNode } from './card-node'
 import { DayNode } from './day-node'
 import { FrameNode } from './frame-node'
 import { controlsBottom, type IdeaDrag, IdeasDrawer, PANEL_WIDTH } from './ideas-drawer'
 import { DropNode, NowNode, SlotNode } from './now-node'
+import { PackingNode } from './packing-node'
 import { RemotePointers } from './remote-pointers'
 import { OrderEdge, SketchEdge } from './sketch-edge'
 import { StayNode } from './stay-node'
@@ -125,6 +143,7 @@ const nodeTypes = {
   variant: VariantNode,
   stay: StayNode,
   slot: SlotNode,
+  packing: PackingNode,
 }
 const edgeTypes = { sketch: SketchEdge, order: OrderEdge }
 // Margines wysepki dnia wokół kart: z lewej kolumna godzin, u góry nagłówek dnia.
@@ -194,6 +213,7 @@ function BoardCanvas() {
   const { trip, doc, ready, provider, templates } = useTrip()
   const cards = useCards()
   const frames = useFrames()
+  const widgets = useWidgets()
   const edges = useEdges()
   const sheet = useCardSheet()
   const rf = useReactFlow()
@@ -293,6 +313,19 @@ function BoardCanvas() {
             },
           }),
         ),
+        // Widżety z „+” (lista pakowania): wysokość z treści, przesuwane jak karty.
+        ...widgets.map(
+          (w): Node => ({
+            id: widgetNodeId(w.kind),
+            type: w.kind,
+            position: { x: w.x, y: w.y },
+            width: WIDGET_SIZE[w.kind].w,
+            zIndex: 1,
+            selectable: false,
+            draggable: false,
+            data: {},
+          }),
+        ),
       ]
       return next.map((n) => {
         const p = prevById.get(n.id)
@@ -310,7 +343,7 @@ function BoardCanvas() {
         }
       })
     })
-  }, [onBoard, variants, frames, fileCounts])
+  }, [onBoard, variants, frames, fileCounts, widgets])
 
   const days = useMemo(() => dayOrder(live.filter((c) => !isBandStay(c))), [live])
   const now = useTripNow()
@@ -738,7 +771,8 @@ function BoardCanvas() {
         const selected =
           grouped ||
           (selection?.kind === 'card' && selection.id === n.id) ||
-          (selection?.kind === 'frame' && frameNodeId(selection.id) === n.id)
+          (selection?.kind === 'frame' && frameNodeId(selection.id) === n.id) ||
+          (selection?.kind === 'widget' && widgetNodeId(selection.id) === n.id)
         const card = (n.data as { card?: CardSnapshot }).card
         const past = Boolean(now && card && cardIsPast(card, now, nextStart(card, live)))
         const target = drop?.kind === 'variant' && drop.id === n.id
@@ -1099,12 +1133,15 @@ function BoardCanvas() {
         ? [...group]
         : kind === 'card'
           ? [id]
-          : [frameNodeId(id), ...live.filter((c) => c.frameId === id).map((c) => c.id)]
+          : kind === 'widget'
+            ? [widgetNodeId(id)]
+            : [frameNodeId(id), ...live.filter((c) => c.frameId === id).map((c) => c.id)]
       const start = new Map<string, { x: number; y: number }>()
       for (const n of nodesRef.current) if (ids.includes(n.id)) start.set(n.id, { ...n.position })
       // Grupa tylko się przesuwa; upuszczanie na dzień i na kartę dotyczy pojedynczej karty.
       const card = kind === 'card' && !many ? live.find((c) => c.id === id) : undefined
-      drag.current = { start, dx: 0, dy: 0, lead: kind === 'card' ? id : frameNodeId(id), card }
+      const lead = kind === 'card' ? id : kind === 'widget' ? widgetNodeId(id) : frameNodeId(id)
+      drag.current = { start, dx: 0, dy: 0, lead, card }
       setBoardDragging(Boolean(card))
       setDragCard(card ?? null)
     },
@@ -1146,10 +1183,15 @@ function BoardCanvas() {
         place(d.card, target)
         return
       }
-      const moves: { cards: Positions; frames: Positions } = { cards: {}, frames: {} }
+      const moves: { cards: Positions; frames: Positions; widgets: Positions } = {
+        cards: {},
+        frames: {},
+        widgets: {},
+      }
       for (const [id, s] of d.start) {
         const p = { x: s.x + d.dx, y: s.y + d.dy }
         if (id.startsWith('frame:')) moves.frames[id.slice(6)] = p
+        else if (id.startsWith('widget:')) moves.widgets[id.slice(7)] = p
         else moves.cards[id] = p
       }
       setUndo(null)
@@ -1201,6 +1243,10 @@ function BoardCanvas() {
       setSelection(null)
       withUndo(doc, 'strzałka usunięta', () => deleteEdge(doc, id))
     },
+    removeWidget: (kind) => {
+      setSelection(null)
+      withUndo(doc, 'zdjęte z tablicy', () => removeWidget(doc, kind))
+    },
   }
 
   // ---------- kursor dla drugiej osoby (awareness, co najwyżej co 50 ms) ----------
@@ -1242,6 +1288,31 @@ function BoardCanvas() {
   }
   const viewportCenter = () =>
     rf.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+
+  /**
+   * „+ › lista pakowania”: stawia widżet z lewej obok planu (na wysokości jego góry), żeby nie
+   * zasłaniał kart, i przesuwa na niego widok; postawiony tylko pokazuje i zaznacza.
+   */
+  const showPacking = () => {
+    const { w, h } = WIDGET_SIZE.packing
+    let placed = widgetsOf(doc).get('packing')
+    if (!placed) {
+      const center = onBoard.length
+        ? {
+            x: Math.min(...onBoard.map((c) => c.x)) - GRID * 4 - w / 2,
+            y: Math.min(...onBoard.map((c) => c.y)) + h / 2,
+          }
+        : viewportCenter()
+      placeWidget(doc, 'packing', center)
+      placed = widgetsOf(doc).get('packing')
+    }
+    if (placed)
+      void rf.setCenter((placed.get('x') as number) + w / 2, (placed.get('y') as number) + h / 2, {
+        zoom: rf.getZoom(),
+        duration: 300,
+      })
+    setSelection({ kind: 'widget', id: 'packing' })
+  }
 
   const menuItems = menu && [
     { label: 'nowa karta', icon: SquarePlus, run: () => addCard(menu.flow) },
@@ -1589,6 +1660,8 @@ function BoardCanvas() {
 
         <AddButton
           onNew={() => addCard(viewportCenter())}
+          onPacking={showPacking}
+          packingPlaced={widgets.some((w) => w.kind === 'packing')}
           templates={templates}
           onImport={(files) =>
             void enqueueImport(trip.id, files).then(() => runImports(trip.id, doc))

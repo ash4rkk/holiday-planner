@@ -1,6 +1,7 @@
 import { type BriefingSettings, DEFAULT_BRIEFING } from './briefing'
 import type { CardType } from './cards'
 import { appSettings, eq, getDb } from './db'
+import { DEFAULT_PACKING_DAYS, MAX_PACKING_DAYS } from './packing'
 import { DEFAULT_REMIND_MIN, type ReminderDefaults } from './reminders'
 
 // Wspólne ustawienia aplikacji w bazie (dla obu osób). Tylko po stronie serwera.
@@ -31,6 +32,28 @@ export async function setReminderDefaults(value: ReminderDefaults): Promise<void
     .values({ key: REMINDERS_KEY, value: clean })
     .onConflictDoUpdate({ target: appSettings.key, set: { value: clean, updatedAt: new Date() } })
   cached = { at: Date.now(), value: clean }
+}
+
+// ---------- lista pakowania ----------
+
+const PACKING_KEY = 'packing'
+
+/** Ile dni przed wyjazdem „dziś” pokazuje pasek listy pakowania. */
+export async function getPackingDays(): Promise<number> {
+  const [row] = await getDb()
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, PACKING_KEY))
+  const days = (row?.value as { days?: unknown } | undefined)?.days
+  return typeof days === 'number' ? days : DEFAULT_PACKING_DAYS
+}
+
+export async function setPackingDays(days: number): Promise<void> {
+  const clean = { days: Math.min(MAX_PACKING_DAYS, Math.max(0, Math.round(days) || 0)) }
+  await getDb()
+    .insert(appSettings)
+    .values({ key: PACKING_KEY, value: clean })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: clean, updatedAt: new Date() } })
 }
 
 // ---------- wieczorne podsumowanie ----------

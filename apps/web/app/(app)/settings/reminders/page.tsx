@@ -1,17 +1,26 @@
-import { CARD_TYPE_LABELS, CARD_TYPES, type CardType } from '@planer/core'
-import { getBriefingSettings, getReminderDefaults } from '@planer/core/settings'
+import { CARD_TYPE_LABELS, CARD_TYPES, type CardType, MAX_PACKING_DAYS } from '@planer/core'
+import { getBriefingSettings, getPackingDays, getReminderDefaults } from '@planer/core/settings'
 import { connection } from 'next/server'
 import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 import { buttonClass, inputClass } from '@/components/ui'
 import { formatLead } from '@/lib/format-remind'
-import { saveBriefing, saveReminderDefaults } from '../actions'
+import { saveBriefing, savePackingDays, saveReminderDefaults } from '../actions'
+
+// Ustawienia czytają bazę przy każdym wejściu — wejście może chwilę poczekać (bez szkieletu).
+export const instant = false
+
+const daysWord = (d: number) => (d === 1 ? 'dzień' : 'dni')
 
 const OPTIONS = [0, 15, 30, 60, 120, 180, 360, 720, 1440]
 
 export default async function RemindersPage() {
   await connection()
-  const [defaults, briefing] = await Promise.all([getReminderDefaults(), getBriefingSettings()])
+  const [defaults, briefing, packingDays] = await Promise.all([
+    getReminderDefaults(),
+    getBriefingSettings(),
+    getPackingDays(),
+  ])
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-1">
       <TopBar title="przypomnienia" back={SETTINGS_BACK} />
@@ -55,6 +64,25 @@ export default async function RemindersPage() {
         <label className="grid grid-cols-[1fr_9rem] items-center gap-3">
           <span>godzina</span>
           <input type="time" name="time" defaultValue={briefing.time} className={inputClass} />
+        </label>
+        <button type="submit" className={buttonClass('primary')}>
+          zapisz
+        </button>
+      </form>
+      <form action={savePackingDays} className="island mt-1 flex flex-col gap-3 p-4 text-sm">
+        <p className="font-bold">lista pakowania</p>
+        <p className="text-xs text-subtle">
+          od kiedy „dziś” pokazuje pasek „spakowane … z …” — w pierwszym dniu wyjazdu znika
+        </p>
+        <label className="grid grid-cols-[1fr_9rem] items-center gap-3">
+          <span>pokazuj w „dziś”</span>
+          <select name="days" defaultValue={packingDays} className={inputClass}>
+            {Array.from({ length: MAX_PACKING_DAYS + 1 }, (_, d) => (
+              <option key={d} value={d}>
+                {d === 0 ? 'nie pokazuj' : `${d} ${daysWord(d)} przed`}
+              </option>
+            ))}
+          </select>
         </label>
         <button type="submit" className={buttonClass('primary')}>
           zapisz

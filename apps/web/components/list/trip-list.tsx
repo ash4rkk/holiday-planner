@@ -61,6 +61,7 @@ import { withUndo } from '@/lib/undo'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
 import { useDismiss } from '@/lib/use-dismiss'
+import { openPacking } from '@/lib/use-packing-drawer'
 import { useTripNow } from '@/lib/use-trip-now'
 import { useWide } from '@/lib/use-wide'
 import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
@@ -447,6 +448,7 @@ export function TripList() {
 
         <AddButton
           onNew={() => add()}
+          onPacking={openPacking}
           templates={templates}
           onImport={(files) =>
             void enqueueImport(trip.id, files).then(() => runImports(trip.id, doc))

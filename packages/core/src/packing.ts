@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid'
 import * as Y from 'yjs'
+import { daysBetween } from './dates'
 
 // Lista pakowania wyjazdu: mapa `packing` w dokumencie Yjs — wspólna dla obu osób i offline.
 
@@ -21,6 +22,17 @@ export type PackingItem = {
   owner?: string
   packed: boolean
   createdAt: string
+}
+
+/** Ile dni przed wyjazdem „dziś” pokazuje pasek listy pakowania (ustawienie wspólne). */
+export const DEFAULT_PACKING_DAYS = 3
+export const MAX_PACKING_DAYS = 14
+
+/** Pasek w „dziś”: tylko przed pierwszym dniem i nie wcześniej niż `days` dni przed; 0 = nigdy. */
+export function showPackingBar(today: string, startDate: string | null, days: number): boolean {
+  if (!startDate || days <= 0) return false
+  const left = daysBetween(today, startDate)
+  return left > 0 && left <= days
 }
 
 export function packingOf(doc: Y.Doc): Y.Map<Y.Map<unknown>> {

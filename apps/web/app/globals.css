@@ -209,6 +209,8 @@ body {
 .pop-in { animation: pop-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
 .pop-menu { transform-origin: bottom right; animation: pop-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both; }
 .pop-menu > * { animation: pop-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i, 0) * 30ms); }
+/* Menu kołowe „+”: pozycje wyskakują po kolei wzdłuż łuku. */
+.pop-radial { animation: pop-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
 
 /* Lista: oś dnia łącząca karty, jak strzałki na Tablicy. */
 /* Treść karty (Tiptap). */

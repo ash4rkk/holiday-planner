@@ -16,6 +16,7 @@ import {
   navigationUrl,
   nextPlace,
   shiftClock,
+  showPackingBar,
   staysOver,
   stayTimes,
   TRAVEL_MODE_LABELS,
@@ -153,7 +154,7 @@ export function TodayDashboard({ userName }: { userName: string }) {
       <SessionBanner />
       <TicketsButton start={planDate} className="mt-1" />
       {/* Przed wyjazdem pakowanie jest ważniejsze niż reszta planu. */}
-      {before && <PackingProgress />}
+      {showPackingBar(today, startDate, trip.packingDays) && <PackingProgress />}
 
       {during ? (
         <>

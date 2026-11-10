@@ -8,6 +8,7 @@ import { cardsOf } from './trip-doc'
 // Tablica w dokumencie wyjazdu:
 //   frames: Y.Map<frameId, Y.Map{ title, x, y, w, h }>   — ramki-grupy
 //   edges:  Y.Map<edgeId, Y.Map{ from, to, label? }>     — strzałki między kartami
+//   widgets: Y.Map<kind, Y.Map{ x, y }>                  — widżety postawione z „+” (lista pakowania)
 // Karty mają pozycje bezwzględne; przynależność do ramki to pole karty `frameId`.
 
 export type FrameSnapshot = {
@@ -23,6 +24,14 @@ export type Rect = { x: number; y: number; w: number; h: number }
 export type Positions = Record<string, { x: number; y: number; frameId?: string }>
 
 export const FRAME_SIZE = { w: 600, h: 400 } as const
+
+/** Widżety Tablicy: każdy rodzaj najwyżej raz (to skrót do czegoś, co wyjazd ma i tak). */
+export const WIDGET_KINDS = ['packing'] as const
+export type WidgetKind = (typeof WIDGET_KINDS)[number]
+export type WidgetSnapshot = { kind: WidgetKind; x: number; y: number }
+export const WIDGET_SIZE: Record<WidgetKind, { w: number; h: number }> = {
+  packing: { w: 240, h: 200 },
+}
 // „Ułóż wg dni”: odstęp kolumn mieści obrysy dni (web: DAY_PAD), a pionowy — strzałki kolejności.
 const DAY_GAP = { x: GRID * 6, y: GRID * 3 }
 
@@ -32,6 +41,10 @@ export function framesOf(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
 
 export function edgesOf(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
   return doc.getMap<Y.Map<unknown>>('edges')
+}
+
+export function widgetsOf(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
+  return doc.getMap<Y.Map<unknown>>('widgets')
 }
 
 function toYMap(values: Record<string, unknown>): Y.Map<unknown> {
@@ -52,6 +65,30 @@ export function readEdges(doc: Y.Doc): EdgeSnapshot[] {
     id,
     ...(e.toJSON() as Omit<EdgeSnapshot, 'id'>),
   }))
+}
+
+export function readWidgets(doc: Y.Doc): WidgetSnapshot[] {
+  return [...widgetsOf(doc).entries()]
+    .filter(([kind]) => (WIDGET_KINDS as readonly string[]).includes(kind))
+    .map(([kind, w]) => ({
+      kind: kind as WidgetKind,
+      x: (w.get('x') as number) ?? 0,
+      y: (w.get('y') as number) ?? 0,
+    }))
+}
+
+/** Stawia widżet w punkcie (środek widżetu); już postawiony zostaje tam, gdzie był. */
+export function placeWidget(doc: Y.Doc, kind: WidgetKind, center: { x: number; y: number }) {
+  if (widgetsOf(doc).has(kind)) return
+  const { w, h } = WIDGET_SIZE[kind]
+  widgetsOf(doc).set(
+    kind,
+    toYMap({ x: snapToGrid(center.x - w / 2), y: snapToGrid(center.y - h / 2) }),
+  )
+}
+
+export function removeWidget(doc: Y.Doc, kind: WidgetKind) {
+  widgetsOf(doc).delete(kind)
 }
 
 // ---------- ramki ----------
@@ -93,8 +130,16 @@ export function deleteFrame(doc: Y.Doc, id: string) {
 // ---------- przesuwanie ----------
 
 /** Zapis pozycji po przeciągnięciu kart i ramek. Ramka niesie swoje karty (przesuwa je wywołujący). */
-export function moveItems(doc: Y.Doc, moves: { cards?: Positions; frames?: Positions }) {
+export function moveItems(
+  doc: Y.Doc,
+  moves: { cards?: Positions; frames?: Positions; widgets?: Positions },
+) {
   doc.transact(() => {
+    for (const [kind, p] of Object.entries(moves.widgets ?? {})) {
+      const widget = widgetsOf(doc).get(kind)
+      widget?.set('x', Math.round(p.x))
+      widget?.set('y', Math.round(p.y))
+    }
     for (const [id, p] of Object.entries(moves.cards ?? {})) {
       const card = cardsOf(doc).get(id)
       card?.set('x', Math.round(p.x))

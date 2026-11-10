@@ -1,13 +1,14 @@
 'use client'
 
+import type { WidgetKind } from '@planer/core'
 import { createContext, useContext } from 'react'
 
-export type Selection = { kind: 'card' | 'frame' | 'edge'; id: string } | null
+export type Selection = { kind: 'card' | 'frame' | 'edge' | 'widget'; id: string } | null
 
 export type BoardApi = {
   select: (sel: Selection) => void
   openCard: (id: string) => void
-  dragStart: (kind: 'card' | 'frame', id: string) => void
+  dragStart: (kind: 'card' | 'frame' | 'widget', id: string) => void
   dragMove: (dx: number, dy: number) => void
   dragEnd: () => void
   panBy: (dx: number, dy: number) => void
@@ -22,6 +23,8 @@ export type BoardApi = {
   resizeFrame: (id: string, rect: { x: number; y: number; w: number; h: number }) => void
   labelEdge: (id: string) => void
   deleteEdge: (id: string) => void
+  /** Zdejmuje widżet z Tablicy (z „cofnij”); sama lista zostaje. */
+  removeWidget: (kind: WidgetKind) => void
 }
 
 export const BoardContext = createContext<BoardApi | null>(null)
@@ -33,3 +36,4 @@ export function useBoard(): BoardApi {
 }
 
 export const frameNodeId = (id: string) => `frame:${id}`
+export const widgetNodeId = (kind: string) => `widget:${kind}`

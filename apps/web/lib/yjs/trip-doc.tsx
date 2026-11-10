@@ -14,6 +14,8 @@ import {
   readEdges,
   readFrames,
   readPacking,
+  readWidgets,
+  type WidgetSnapshot,
 } from '@planer/core'
 import {
   createContext,
@@ -154,6 +156,8 @@ export type TripMeta = {
   travelMode: TravelMode
   travelBufferMin: number
   timezone: string
+  /** Ile dni przed wyjazdem „dziś” pokazuje pasek listy pakowania (ustawienie wspólne). */
+  packingDays: number
   /** Przykładowy wyjazd: pogoda na pokaz zamiast Open-Meteo. */
   demoWeather?: DemoWeatherDay[]
   /** Flaga kraju (komponent serwerowy z layoutu, żeby zestaw flag nie trafiał do bundla klienta). */
@@ -270,13 +274,14 @@ export function usePresence<T = Record<string, unknown>>(): (T & { clientId: num
 // odczycie — nie obserwator subskrybenta. Inaczej zmiana z IndexedDB albo sync, która przyjdzie
 // między renderem a podpięciem subskrypcji (wejście w wyjazd), zostawiała pustą migawkę na stałe,
 // aż do odświeżenia strony.
-type Key = 'cards' | 'frames' | 'edges' | 'attachments' | 'packing'
+type Key = 'cards' | 'frames' | 'edges' | 'attachments' | 'packing' | 'widgets'
 const READERS = {
   cards: readCards,
   frames: readFrames,
   edges: readEdges,
   attachments: readAttachments,
   packing: readPacking,
+  widgets: readWidgets,
 }
 const KEYS = Object.keys(READERS) as Key[]
 const versions = new WeakMap<Y.Doc, Record<Key, number>>()
@@ -286,7 +291,7 @@ const EMPTY: never[] = []
 function versionsOf(doc: Y.Doc): Record<Key, number> {
   let v = versions.get(doc)
   if (!v) {
-    const created = { cards: 0, frames: 0, edges: 0, attachments: 0, packing: 0 }
+    const created = { cards: 0, frames: 0, edges: 0, attachments: 0, packing: 0, widgets: 0 }
     for (const key of KEYS) doc.getMap(key).observeDeep(() => created[key]++)
     versions.set(doc, created)
     v = created
@@ -371,4 +376,8 @@ export function useAttachments(): AttachmentMeta[] {
 
 export function usePacking(): PackingItem[] {
   return useDocMap('packing')
+}
+
+export function useWidgets(): WidgetSnapshot[] {
+  return useDocMap('widgets')
 }

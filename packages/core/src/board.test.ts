@@ -12,8 +12,11 @@ import {
   moveItems,
   nowLineAt,
   nowLineY,
+  placeWidget,
   readEdges,
   readFrames,
+  readWidgets,
+  removeWidget,
   restorePositions,
   segmentHitsRect,
   setEdgeLabel,
@@ -394,5 +397,18 @@ describe('miejsca do upuszczenia', () => {
     expect(slots).toHaveLength(3)
     expect(slots[1]?.time).toBe('11:10')
     expect(slots[2]?.time).toBe('16:10')
+  })
+})
+
+describe('widżety', () => {
+  it('lista pakowania stoi raz, środkiem w punkcie, przesuwa się i znika', () => {
+    const doc = new Y.Doc()
+    placeWidget(doc, 'packing', { x: 500, y: 300 })
+    placeWidget(doc, 'packing', { x: 0, y: 0 })
+    expect(readWidgets(doc)).toEqual([{ kind: 'packing', x: 380, y: 200 }])
+    moveItems(doc, { widgets: { packing: { x: 40.4, y: 60 } } })
+    expect(readWidgets(doc)).toEqual([{ kind: 'packing', x: 40, y: 60 }])
+    removeWidget(doc, 'packing')
+    expect(readWidgets(doc)).toEqual([])
   })
 })

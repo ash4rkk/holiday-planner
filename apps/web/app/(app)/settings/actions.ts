@@ -2,7 +2,7 @@
 
 import { CARD_TYPES, type CardType } from '@planer/core'
 import type { ReminderDefaults } from '@planer/core/reminders'
-import { setBriefingSettings, setReminderDefaults } from '@planer/core/settings'
+import { setBriefingSettings, setPackingDays, setReminderDefaults } from '@planer/core/settings'
 import { revalidatePath } from 'next/cache'
 import { getCurrentUser } from '@/lib/auth/user'
 import { recomputeAllReminders, revokeFamilyLinkByToken } from '@/lib/settings-data'
@@ -30,6 +30,13 @@ export async function saveBriefing(form: FormData) {
     time: String(form.get('time') ?? ''),
   })
   revalidatePath('/settings', 'layout')
+}
+
+export async function savePackingDays(form: FormData) {
+  await getCurrentUser()
+  await setPackingDays(Number(form.get('days') ?? 0))
+  revalidatePath('/settings', 'layout')
+  revalidatePath('/trips', 'layout')
 }
 
 export async function revokeLink(token: string) {
