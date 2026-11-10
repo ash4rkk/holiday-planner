@@ -6,6 +6,9 @@ import { TopBar } from '@/components/top-bar'
 import { MONTHLY_BUDGET_PLN, spentThisMonthPln } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured } from '@/lib/ai/client'
 
+// Ustawienia czytają bazę przy każdym wejściu — wejście może chwilę poczekać (bez szkieletu).
+export const instant = false
+
 export default async function AiSettingsPage() {
   await connection()
   const spent = await spentThisMonthPln().catch(() => 0)

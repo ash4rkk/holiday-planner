@@ -5,6 +5,9 @@ import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 import { cx } from '@/components/ui'
 
+// Ustawienia czytają bazę przy każdym wejściu — wejście może chwilę poczekać (bez szkieletu).
+export const instant = false
+
 const TZ = 'Europe/Warsaw'
 const day = new Intl.DateTimeFormat('pl-PL', {
   weekday: 'long',

@@ -6,6 +6,9 @@ import { TopBar } from '@/components/top-bar'
 import { activeFamilyLinks } from '@/lib/settings-data'
 import { revokeLink } from '../actions'
 
+// Ustawienia czytają bazę przy każdym wejściu — wejście może chwilę poczekać (bez szkieletu).
+export const instant = false
+
 const created = new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'short' })
 
 export default async function LinksPage() {

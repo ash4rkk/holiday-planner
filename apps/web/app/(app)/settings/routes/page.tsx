@@ -5,6 +5,9 @@ import { connection } from 'next/server'
 import { SETTINGS_BACK } from '@/components/settings/settings-row'
 import { TopBar } from '@/components/top-bar'
 
+// Ustawienia czytają bazę przy każdym wejściu — wejście może chwilę poczekać (bez szkieletu).
+export const instant = false
+
 export default async function RoutesSettingsPage() {
   await connection()
   const routes = Boolean(process.env.GOOGLE_ROUTES_API_KEY)

@@ -3,7 +3,7 @@
 import { CloudSun, LayoutDashboard, List, Map as MapIcon, Sun } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cx } from '@/components/ui'
 import { useScrollHidden } from '@/lib/use-scroll-direction'
 
@@ -24,6 +24,12 @@ export function navDirection(from: number, to: number): string[] | undefined {
 const SWIPE_MIN_PX = 70
 const SWIPE_MAX_MS = 600
 export const NAV_SLOT = 'nav-slot'
+/**
+ * Zdarzenie „miejsce na „+” gotowe”. Widok wstawia tam „+” portalem dopiero po hydratacji menu:
+ * menu jest w osobnym <Suspense>, więc widok bywa gotowy wcześniej, a obcy element w jeszcze
+ * nieuwodnionym menu to błąd hydratacji (React buduje menu od nowa i „+” zostaje w odpiętym węźle).
+ */
+export const NAV_SLOT_READY = 'nav-slot-ready'
 
 /** Widoczny ekran (ukryte przez router widoki mają display: none). */
 function activePage(): HTMLElement | null {
@@ -37,6 +43,16 @@ function activePage(): HTMLElement | null {
  * otwartego, a bez żadnego wyjazdu do listy wyjazdów. Na wyborze profilu jej nie ma.
  */
 export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
+  const slot = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = slot.current
+    if (!el) return
+    el.dataset.ready = '1'
+    window.dispatchEvent(new Event(NAV_SLOT_READY))
+    return () => {
+      delete el.dataset.ready
+    }
+  })
   const pathname = usePathname()
   const params = useParams<{ tripId?: string }>()
   // Na Tablicy i Mapie menu się nie chowa — przesuwanie palcem rusza widokiem.
@@ -190,7 +206,7 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
       </ul>
       {/* Osobna wysepka na „+” (AddButton) z widoku. Bez niego zostaje puste miejsce tej samej
           wielkości, żeby menu stało w jednym miejscu na każdym ekranie. */}
-      <div id={NAV_SLOT} className="pointer-events-auto ml-1 size-[54px] shrink-0" />
+      <div ref={slot} id={NAV_SLOT} className="pointer-events-auto ml-1 size-[54px] shrink-0" />
     </nav>
   )
 }
