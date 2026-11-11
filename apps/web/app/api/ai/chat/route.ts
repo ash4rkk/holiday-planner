@@ -155,7 +155,9 @@ const PROPOSE_CHANGES: Anthropic.Beta.BetaTool = {
     required: ['changes'],
     additionalProperties: false,
   },
-  strict: true,
+  // Bez strict: API dopuszcza najwyżej 16 pól z unią typów (nullable/anyOf) we wszystkich narzędziach
+  // strict razem — propose_cards ma ich 12, z tymi 7 było 19 i każde pytanie kończyło się 400.
+  // normalizeChanges i tak sprawdza każde pole.
 }
 
 const WEB_SEARCH: Anthropic.Beta.BetaWebSearchTool20260209 = {
