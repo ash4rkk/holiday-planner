@@ -1,10 +1,11 @@
 'use client'
 
-import { CloudSun, LayoutDashboard, List, Map as MapIcon, Sun } from 'lucide-react'
+import { LayoutDashboard, List, Luggage, Map as MapIcon, Sun } from 'lucide-react'
 import Link from 'next/link'
 import { useParams, usePathname, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { cx } from '@/components/ui'
+import { useDismiss } from '@/lib/use-dismiss'
 import { useScrollHidden } from '@/lib/use-scroll-direction'
 
 const LAST_TRIP_KEY = 'planer-last-trip'
@@ -13,7 +14,6 @@ const VIEWS = [
   { view: 'list', label: 'lista', icon: List },
   { view: 'board', label: 'tablica', icon: LayoutDashboard },
   { view: 'map', label: 'mapa', icon: MapIcon },
-  { view: 'weather', label: 'pogoda', icon: CloudSun },
 ] as const
 
 /** Kierunek przejścia między widokami wyjazdu: nowy widok wjeżdża od strony, w którą idziemy. */
@@ -21,6 +21,9 @@ export function navDirection(from: number, to: number): string[] | undefined {
   if (from < 0 || to < 0 || from === to) return undefined
   return [to > from ? 'nav-forward' : 'nav-back']
 }
+/** Wysepka menu: pełne tło `raised`, obwódka `sel`, cień warstwy pływającej. */
+export const NAV_ISLAND =
+  'pointer-events-auto flex items-center gap-0.5 rounded-full border border-sel bg-raised p-1 shadow-float'
 const SWIPE_MIN_PX = 70
 const SWIPE_MAX_MS = 600
 export const NAV_SLOT = 'nav-slot'
@@ -39,10 +42,19 @@ function activePage(): HTMLElement | null {
 }
 
 /**
- * Pływająca kapsuła wyjazdu: dziś, lista, tablica, mapa, pogoda. Poza wyjazdem prowadzi do ostatnio
+ * Menu wyjazdu w dwóch wysepkach: dziś, lista, „+” widoku, tablica, mapa (pogoda jest w „dziś”). Poza wyjazdem prowadzi do ostatnio
  * otwartego, a bez żadnego wyjazdu do listy wyjazdów. Na wyborze profilu jej nie ma.
  */
-export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
+/** Wyjazd w przełączniku menu (flaga gotowa z serwera). */
+export type NavTrip = { id: string; title: string; sub: string; flag?: ReactNode }
+
+export function BottomNav({
+  fallbackTripId,
+  trips = [],
+}: {
+  fallbackTripId?: string
+  trips?: NavTrip[]
+}) {
   const slot = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = slot.current
@@ -83,7 +95,7 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
   const order = tripId ? items.map((i) => i.href) : []
   const orderKey = order.join()
   useEffect(() => {
-    if (!/\/(today|list|weather)$/.test(pathname) || !orderKey) return
+    if (!/\/(today|list)$/.test(pathname) || !orderKey) return
     const hrefs = orderKey.split(',')
     let start: { x: number; y: number; at: number } | null = null
     // Widok idzie za palcem (z oporem), więc widać, że gest działa i dokąd prowadzi.
@@ -183,30 +195,159 @@ export function BottomNav({ fallbackTripId }: { fallbackTripId?: string }) {
         hidden && 'translate-y-[calc(100%+8px)]',
       )}
     >
-      {/* Stała szerokość: wybrana pozycja wypełnia resztę, więc kapsuła nie skacze między ekranami. */}
-      <ul className="pointer-events-auto flex w-[292px] items-center justify-between gap-0.5 rounded-island border border-line bg-panel/82 p-1 shadow-float backdrop-blur-[14px]">
-        {items.map(({ href, label, icon: Icon, active }, i) => (
-          <li key={label} className={cx(active && 'flex-1')}>
+      {/* Dwie wysepki z „+” pośrodku. Siatka 1fr · auto · 1fr trzyma „+” na środku ekranu,
+          a wysepki rosną na zewnątrz, gdy wybrana pozycja rozwija się z nazwą. */}
+      <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4">
+        <ul className={cx(NAV_ISLAND, 'justify-self-end')}>
+          {items.slice(0, 2).map((item, i) => (
+            <NavItem
+              key={item.view}
+              {...item}
+              dir={navDirection(activeIndex, i)}
+              onTap={setTapped}
+            />
+          ))}
+        </ul>
+        {/* Środek: „+” (AddButton) z widoku. Bez niego (lista wyjazdów, pogoda) flaga wyjazdu,
+            do którego prowadzi menu — dotknięcie przełącza wyjazd. */}
+        <div className="pointer-events-auto relative flex items-center justify-center [&:has(>#nav-slot:not(:empty))>.trip-switch]:hidden">
+          <div
+            ref={slot}
+            id={NAV_SLOT}
+            className="flex size-14 items-center justify-center empty:hidden"
+          />
+          <TripSwitch
+            trips={trips}
+            current={tripId}
+            view={tripView(pathname)}
+            inTrip={!!params.tripId}
+          />
+        </div>
+        <ul className={cx(NAV_ISLAND, 'justify-self-start')}>
+          {items.slice(2).map((item, i) => (
+            <NavItem
+              key={item.view}
+              {...item}
+              dir={navDirection(activeIndex, i + 2)}
+              onTap={setTapped}
+            />
+          ))}
+        </ul>
+      </div>
+    </nav>
+  )
+}
+
+function NavItem({
+  href,
+  label,
+  icon: Icon,
+  active,
+  dir,
+  onTap,
+}: {
+  href: string
+  label: string
+  icon: (typeof VIEWS)[number]['icon']
+  active: boolean
+  dir?: string[]
+  onTap: (href: string) => void
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        transitionTypes={dir}
+        onNavigate={() => onTap(href)}
+        aria-label={label}
+        aria-current={active ? 'page' : undefined}
+        className={cx(
+          'flex h-11 items-center justify-center gap-1.5 rounded-full transition-colors',
+          active ? 'bg-active px-3.5 text-accent' : 'w-11 text-muted hover:text-text',
+        )}
+      >
+        <Icon className="size-5" aria-hidden="true" strokeWidth={1.8} />
+        {active && <span className="text-sm font-bold">{label}</span>}
+      </Link>
+    </li>
+  )
+}
+
+/** Ostatni człon ścieżki widoku wyjazdu, także pogody (zostaje przy przełączeniu wyjazdu). */
+function tripView(pathname: string): string | undefined {
+  return /^\/trips\/[\w-]+\/(\w+)$/.exec(pathname)?.[1]
+}
+
+/** Flaga wyjazdu w środku menu i lista wyjazdów nad nią. */
+function TripSwitch({
+  trips,
+  current,
+  view,
+  inTrip,
+}: {
+  trips: NavTrip[]
+  current?: string
+  view?: string
+  inTrip: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useDismiss(open, () => setOpen(false), ref)
+  const trip = trips.find((t) => t.id === current)
+  if (!trip) return null
+  return (
+    <div ref={ref} className="trip-switch relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`wyjazd: ${trip.title} · zmień`}
+        title={trip.title}
+        className="flex size-14 items-center justify-center rounded-full border-2 border-accent bg-raised shadow-float"
+      >
+        {trip.flag ?? <Luggage className="size-5 text-accent" aria-hidden="true" />}
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="wyjazdy"
+          className="island pop-menu shadow-float absolute bottom-[calc(100%+8px)] left-1/2 origin-bottom flex w-64 -translate-x-1/2 flex-col p-1"
+        >
+          <p className="px-3 pt-1.5 pb-1 text-xs text-subtle italic">menu prowadzi do</p>
+          {trips.map((t) => (
             <Link
-              href={href}
-              transitionTypes={navDirection(activeIndex, i)}
-              onNavigate={() => setTapped(href)}
-              aria-label={label}
-              aria-current={active ? 'page' : undefined}
+              key={t.id}
+              role="menuitem"
+              href={`/trips/${t.id}/${view ?? 'today'}`}
+              onClick={() => setOpen(false)}
+              aria-current={t.id === current ? 'true' : undefined}
               className={cx(
-                'flex h-11 items-center justify-center gap-1.5 rounded-inner transition-colors',
-                active ? 'bg-active px-2.5 text-accent' : 'w-11 text-muted hover:text-text',
+                'flex min-h-11 items-center gap-2.5 rounded-inner px-3 py-1.5',
+                t.id === current ? 'bg-active text-accent' : 'hover:bg-raised',
               )}
             >
-              <Icon className="size-5" aria-hidden="true" strokeWidth={1.8} />
-              {active && <span className="text-sm font-bold">{label}</span>}
+              <span className="flex w-6 shrink-0 justify-center">
+                {t.flag ?? <Luggage className="size-4 text-subtle" aria-hidden="true" />}
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-bold">{t.title}</span>
+                <span className="truncate text-xs text-subtle">{t.sub}</span>
+              </span>
             </Link>
-          </li>
-        ))}
-      </ul>
-      {/* Osobna wysepka na „+” (AddButton) z widoku. Bez niego zostaje puste miejsce tej samej
-          wielkości, żeby menu stało w jednym miejscu na każdym ekranie. */}
-      <div ref={slot} id={NAV_SLOT} className="pointer-events-auto ml-1 size-[54px] shrink-0" />
-    </nav>
+          ))}
+          {inTrip && (
+            <Link
+              role="menuitem"
+              href="/trips"
+              onClick={() => setOpen(false)}
+              className="flex min-h-11 items-center px-3 text-sm text-muted hover:text-accent"
+            >
+              wszystkie wyjazdy ›
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

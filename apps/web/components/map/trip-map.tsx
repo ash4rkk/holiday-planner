@@ -9,7 +9,6 @@ import {
   dayRoute,
   decodePolyline,
   formatDayHeader,
-  formatShortDate,
   hasCoords,
   type LegPlan,
   type MappedCard,
@@ -20,7 +19,7 @@ import {
   todayLocal,
   vehicleKind,
 } from '@planer/core'
-import { ChevronLeft, ChevronRight, Navigation, SquarePen } from 'lucide-react'
+import { Navigation, SquarePen } from 'lucide-react'
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -28,8 +27,11 @@ import { ChatButton } from '@/components/ai/chat-panel'
 import { fieldsSummary } from '@/components/card/card-fields'
 import { CardSheet } from '@/components/card/card-sheet'
 import { TYPE_STYLE } from '@/components/card/type-style'
+import { DaySwitcher, dayLabel } from '@/components/day-switcher'
+import { NAV_ISLAND } from '@/components/nav/bottom-nav'
 import { SearchButton } from '@/components/search/search-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
+import { TripAddButton } from '@/components/trip-add-button'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx } from '@/components/ui'
@@ -506,8 +508,10 @@ export function TripMap() {
     dayPlans.legs.some((leg) => dayPlans.plans[leg.id]?.steps.some((s) => s.kind === 'transit'))
 
   // Strzałki jak na Tablicy: pierwsze naciśnięcie dzisiejszy dzień, potem kolejne dni z miejscami.
+  // Przełącznik dni chodzi tylko po dniach z miejscami.
+  const placeDates = days.filter((d) => d.hasPlaces).map((d) => d.date)
   const jump = (step: number) => {
-    const dates = days.filter((d) => d.hasPlaces).map((d) => d.date)
+    const dates = placeDates
     if (!dates.length) return
     const index = dates.indexOf(tab)
     const start = dates.findIndex((d) => d >= today)
@@ -604,7 +608,14 @@ export function TripMap() {
               </>
             }
           />
-          <div role="tablist" aria-label="dni" className="island flex gap-1 overflow-x-auto p-1">
+          <div
+            role="tablist"
+            aria-label="dni"
+            className={cx(
+              NAV_ISLAND,
+              'mx-1 gap-1 self-start overflow-x-auto max-w-[calc(100%-8px)]',
+            )}
+          >
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -617,8 +628,8 @@ export function TripMap() {
                   setTab(t.id)
                 }}
                 className={cx(
-                  'hit flex h-9 shrink-0 flex-col items-center justify-center rounded-inner px-3 text-xs transition-colors',
-                  tab === t.id ? 'bg-raised font-bold text-accent' : 'text-muted',
+                  'hit flex h-9 shrink-0 flex-col items-center justify-center rounded-full px-3 text-xs transition-colors',
+                  tab === t.id ? 'bg-active font-bold text-accent' : 'text-muted hover:text-text',
                 )}
               >
                 {t.label}
@@ -637,7 +648,7 @@ export function TripMap() {
         {legendKinds.length > 0 && (
           <ul
             aria-label="legenda trasy"
-            className="island absolute top-[112px] right-1 z-(--z-overlay) flex flex-col gap-1 px-2 py-1.5 text-2xs text-muted"
+            className="absolute top-[116px] right-2 z-(--z-overlay) flex flex-col gap-1 rounded-island border border-sel bg-raised px-2.5 py-2 text-2xs text-muted shadow-float"
           >
             {legendKinds.map((kind) => (
               <li key={kind} className="flex items-center gap-1.5">
@@ -719,33 +730,33 @@ export function TripMap() {
           )}
 
         <SessionBanner />
+        <TripAddButton date={tab === 'all' ? undefined : tab} onOpen={sheet.open} />
 
         <div className="pointer-events-none absolute inset-x-px bottom-[calc(80px+env(safe-area-inset-bottom))] z-(--z-overlay) flex flex-col gap-1 [&>*]:pointer-events-auto">
-          <div className="island flex items-center self-end">
-            <button
-              type="button"
-              onClick={() => jump(-1)}
-              aria-label="poprzedni dzień"
-              className="flex size-11 items-center justify-center text-muted hover:text-accent"
-            >
-              <ChevronLeft className="size-5" aria-hidden="true" />
-            </button>
-            {tab !== 'all' && (
-              <span className="px-1 text-xs whitespace-nowrap text-subtle">
-                {formatShortDate(tab)}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => jump(1)}
-              aria-label="następny dzień"
-              className="flex size-11 items-center justify-center text-muted hover:text-accent"
-            >
-              <ChevronRight className="size-5" aria-hidden="true" />
-            </button>
-          </div>
+          <DaySwitcher
+            className="mr-1 self-end"
+            label={tab === 'all' ? 'wszystkie dni' : dayLabel(tab)}
+            sub={
+              placeDates.includes(tab)
+                ? `${placeDates.indexOf(tab) + 1} z ${placeDates.length}`
+                : `${placeDates.length} z miejscami`
+            }
+            isToday={tab === today}
+            onPrev={() => jump(-1)}
+            onNext={() => jump(1)}
+            canPrev={placeDates.length > 0 && placeDates.indexOf(tab) !== 0}
+            canNext={placeDates.length > 0 && placeDates.indexOf(tab) !== placeDates.length - 1}
+            onLabel={() => {
+              setSelected(null)
+              autoTab.current = false
+              setTab(tab === today || !placeDates.includes(today) ? 'all' : today)
+            }}
+            labelAria={
+              tab === today || !placeDates.includes(today) ? 'wszystkie dni' : 'pokaż dziś'
+            }
+          />
           {offMap.length > 0 && (
-            <section className="island max-h-40 overflow-y-auto p-3">
+            <section className="mx-1 max-h-40 overflow-y-auto rounded-island border border-sel bg-raised p-3 shadow-float">
               <p className="text-xs text-subtle">poza mapą</p>
               {offMap.map((c) => (
                 <button

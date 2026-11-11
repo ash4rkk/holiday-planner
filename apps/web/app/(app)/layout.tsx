@@ -1,3 +1,4 @@
+import { formatDateSpan } from '@planer/core'
 import { connection } from 'next/server'
 import { type ReactNode, Suspense, ViewTransition } from 'react'
 import { DialogHost } from '@/components/confirm-dialog'
@@ -5,13 +6,23 @@ import { BottomNav } from '@/components/nav/bottom-nav'
 import { OutboxFlusher } from '@/components/share/outbox-flusher'
 import { ScreenSkeleton } from '@/components/skeleton'
 import { ToastStack } from '@/components/toast-stack'
-import { defaultTrip } from '@/lib/trips'
+import { Flag } from '@/components/trips/flag'
+import { listTrips } from '@/lib/trips'
 
-/** Menu dolne z wyjazdem domyślnym — jedyna część layoutu, która pyta bazę. */
+/**
+ * Menu dolne z wyjazdem domyślnym i listą do przełącznika wyjazdów (flagi renderuje serwer) —
+ * jedyna część layoutu, która pyta bazę.
+ */
 async function NavWithTrip() {
   await connection()
-  const trip = await defaultTrip()
-  return <BottomNav fallbackTripId={trip?.id} />
+  const { current, upcoming, past } = await listTrips()
+  const trips = [...current, ...upcoming, ...past.slice(0, 3)].map((t) => ({
+    id: t.id,
+    title: t.title,
+    sub: formatDateSpan(t.startDate, t.endDate),
+    flag: t.country ? <Flag country={t.country} className="h-4 w-6" /> : undefined,
+  }))
+  return <BottomNav fallbackTripId={trips[0]?.id} trips={trips} />
 }
 
 export default function AppLayout({ children }: { children: ReactNode }) {

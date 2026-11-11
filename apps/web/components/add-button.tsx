@@ -151,10 +151,7 @@ export function AddButton({
   return (
     <>
       {createPortal(
-        <div
-          ref={root}
-          className="island relative bg-panel/82 p-1 shadow-float backdrop-blur-[14px]"
-        >
+        <div ref={root} className="relative">
           {onImport && (
             <input
               ref={fileInput}
@@ -176,10 +173,10 @@ export function AddButton({
             onClick={toggle}
             aria-label="dodaj"
             aria-expanded={open}
-            className="flex size-11 items-center justify-center rounded-inner bg-accent text-on-accent transition-colors hover:bg-accent-hover"
+            className="flex size-14 items-center justify-center rounded-full bg-accent text-on-accent shadow-float transition-colors hover:bg-accent-hover"
           >
             <Plus
-              className={cx('size-6 transition-transform duration-200', open && 'rotate-45')}
+              className={cx('size-7 transition-transform duration-200', open && 'rotate-45')}
               aria-hidden="true"
             />
           </button>
@@ -227,7 +224,7 @@ export function AddButton({
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="zamknij menu"
-                className="fixed flex items-center justify-center rounded-inner bg-accent text-on-accent"
+                className="fixed flex items-center justify-center rounded-full bg-accent text-on-accent"
                 style={{
                   left: plusAt.left,
                   top: plusAt.top,
@@ -235,7 +232,7 @@ export function AddButton({
                   height: plusAt.height,
                 }}
               >
-                <X className="size-6" aria-hidden="true" />
+                <X className="size-7" aria-hidden="true" />
               </button>
             )}
           </div>,

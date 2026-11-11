@@ -23,7 +23,8 @@ import {
   todayLocal,
   weatherPlace,
 } from '@planer/core'
-import { LocateFixed, Navigation } from 'lucide-react'
+import { ChevronRight, LocateFixed, Navigation } from 'lucide-react'
+import Link from 'next/link'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { PlanResponse } from '@/app/api/route/plan/route'
 import type { Route } from '@/app/api/route/route'
@@ -39,6 +40,7 @@ import { TicketsButton } from '@/components/tickets/tickets'
 import { CountdownRing } from '@/components/today/countdown-ring'
 import { DayAxis } from '@/components/today/day-axis'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
+import { TripAddButton } from '@/components/trip-add-button'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
 import { SessionBanner, TripStatus } from '@/components/trip-status'
 import { cx, SectionLabel } from '@/components/ui'
@@ -326,6 +328,8 @@ export function TodayDashboard({ userName }: { userName: string }) {
       )}
       {!after && <DayTravelSummary plans={plans} limited={limited} />}
 
+      {/* Nowa karta trafia na dzień z planu (w trakcie dziś, przed wyjazdem pierwszy dzień). */}
+      <TripAddButton date={after ? undefined : planDate} onOpen={sheet.open} />
       {sheet.openId && (
         <CardSheet cardId={sheet.openId} isNew={sheet.isNew} onClose={sheet.close} />
       )}
@@ -439,6 +443,7 @@ function WeatherTile({
   /** Wewnątrz karty dnia: tło `raised` zamiast osobnej wysepki. */
   compact?: boolean
 }) {
+  const { trip } = useTrip()
   const { position, request, denied } = usePosition()
   const place = at ?? position
   const weather = useWeather(place)
@@ -466,12 +471,14 @@ function WeatherTile({
   const code = weather?.current?.code ?? day?.code
   const { icon: Icon, label } = weatherIcon(code ?? 0)
   return (
-    <section
+    // Pogoda wyjazdu nie ma miejsca w menu dolnym — otwiera ją ten kafelek.
+    <Link
+      href={`/trips/${trip.id}/weather`}
       className={cx(
         'flex items-center gap-3',
         compact ? 'rounded-small bg-raised px-3 py-2' : 'island p-3',
       )}
-      aria-label={`pogoda: ${label}`}
+      aria-label={`pogoda: ${label}, prognoza wyjazdu`}
     >
       <Icon
         className={cx('shrink-0 text-amber', compact ? 'size-6' : 'size-7')}
@@ -487,7 +494,8 @@ function WeatherTile({
           </p>
         )}
       </div>
-    </section>
+      <ChevronRight className="ml-auto size-4 shrink-0 text-subtle" aria-hidden="true" />
+    </Link>
   )
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import type { CardSnapshot } from '@planer/core'
-import { ChevronDown, ChevronRight, Lightbulb } from 'lucide-react'
+import { ChevronDown, Lightbulb, Minus } from 'lucide-react'
 import { type PointerEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { fieldsSummary } from '@/components/card/card-fields'
@@ -10,7 +10,10 @@ import { VariantBadge } from '@/components/card/variant-badge'
 import { cx } from '@/components/ui'
 import { useHoldDrag } from './use-hold-drag'
 
-export const PANEL_WIDTH = 320
+/** Szerokość wysepki pomysłów na szerokim ekranie. */
+export const PANEL_WIDTH = 300
+/** Wysepka pomysłów pod górnym paskiem (h-11 + odstępy). */
+const ISLAND_TOP = 'calc(64px + env(safe-area-inset-top))'
 /** Tyle trzeba pociągnąć w dół, żeby schować drawer (jak arkusz karty). */
 const DRAG_CLOSE_PX = 110
 
@@ -63,41 +66,39 @@ function IdeaCard({
       tabIndex={0}
       aria-label={card.title || 'karta bez tytułu'}
       onKeyDown={(e) => e.key === 'Enter' && onOpen()}
-      className="relative flex min-h-20 touch-pan-y flex-col gap-1 overflow-hidden rounded-island border border-line bg-panel py-2 pr-2 pl-3 select-none"
+      className="relative flex min-h-14 touch-pan-y items-center gap-2 overflow-hidden rounded-inner border border-line bg-panel py-1.5 pr-2 pl-3 select-none"
     >
       <span className={cx('absolute inset-y-0 left-0 w-1', style.bar)} aria-hidden="true" />
-      <div className="flex items-start gap-2">
+      <span
+        className={cx('flex size-7 shrink-0 items-center justify-center rounded-small', style.chip)}
+      >
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
         <span
           className={cx(
-            'flex size-6 shrink-0 items-center justify-center rounded-small',
-            style.chip,
-          )}
-        >
-          <Icon className="size-3.5" aria-hidden="true" />
-        </span>
-        <span
-          className={cx(
-            'line-clamp-2 min-w-0 flex-1 text-sm font-bold leading-tight',
+            'truncate text-sm font-bold leading-tight',
             !card.title && 'font-normal text-subtle',
           )}
         >
           {card.title || 'bez tytułu'}
         </span>
-      </div>
-      <span className="truncate text-xs text-subtle">
-        {card.location?.name ?? fieldsSummary(card)}
+        <span className="truncate text-xs text-subtle">
+          {card.location?.name ?? fieldsSummary(card)}
+        </span>
       </span>
-      <div className="flex items-center gap-2">
+      <span className="flex shrink-0 items-center gap-1.5">
         <AmountBadge amounts={card.amounts ?? []} />
         {variants > 0 && <VariantBadge card={card} count={variants} />}
-      </div>
+      </span>
     </div>
   )
 }
 
 /**
- * Pomysły, czyli karty bez dnia: na telefonie wysuwane od dołu, na szerokim ekranie stały panel obok
- * Tablicy. Miejsca oznaczone `data-ideas-drop` przyjmują karty przeciągnięte z Tablicy.
+ * Pomysły, czyli karty bez dnia, w pływającej wysepce o wysokości treści: na szerokim ekranie
+ * w prawym górnym rogu, na telefonie nad menu dolnym (rośnie z pigułki „pomysły N”).
+ * Miejsca oznaczone `data-ideas-drop` przyjmują karty przeciągnięte z Tablicy.
  */
 export function IdeasDrawer({
   ideas,
@@ -119,7 +120,7 @@ export function IdeasDrawer({
   onToggle: () => void
   onOpenCard: (id: string) => void
 }) {
-  const Close = wide ? ChevronRight : ChevronDown
+  const Close = wide ? Minus : ChevronDown
 
   // Przeciągnięcie w dół chowa drawer (telefon): za uchwyt i nagłówek albo z listy przewiniętej do góry.
   const [dragY, setDragY] = useState(0)
@@ -188,16 +189,23 @@ export function IdeasDrawer({
           data-ideas-drop
           onClick={onToggle}
           aria-label={`pomysły (${ideas.length})`}
-          style={{ bottom: controlsBottom(wide) }}
+          style={wide ? { top: ISLAND_TOP } : { bottom: controlsBottom(wide) }}
           className={cx(
-            'island absolute left-1 z-(--z-overlay) flex h-11 items-center gap-2 px-3 text-sm',
+            'absolute z-(--z-overlay) flex items-center gap-2 text-sm',
+            wide
+              ? 'right-2 h-11 rounded-full border border-sel bg-raised px-4 shadow-float'
+              : // Ta sama wysepka co przełącznik dni po prawej (wysokość, kształt, cień).
+                'left-2 h-[50px] rounded-full border border-sel bg-raised px-4 shadow-float',
             dragging
-              ? 'right-1 justify-center border-dashed border-accent text-accent'
-              : 'text-muted',
+              ? cx(
+                  'justify-center border-dashed border-accent text-accent',
+                  wide ? 'h-16 w-[300px]' : 'right-2',
+                )
+              : 'text-muted hover:text-text',
           )}
         >
-          <Lightbulb className="size-5" aria-hidden="true" />
-          {dragging ? 'do pomysłów' : ideas.length}
+          <Lightbulb className={cx('size-5', !dragging && 'text-accent')} aria-hidden="true" />
+          {dragging ? 'do pomysłów' : wide ? `pomysły ${ideas.length}` : ideas.length}
         </button>
       )}
       <aside
@@ -206,49 +214,44 @@ export function IdeasDrawer({
         inert={!open}
         data-ideas-drop
         className={cx(
-          'fixed z-(--z-drawer) flex flex-col bg-bg motion-reduce:transition-none',
-          from.current === null && 'transition-transform duration-200',
+          'fixed z-(--z-drawer) flex flex-col rounded-island border border-sel bg-raised p-1 shadow-float',
+          // Puszczony po pociągnięciu wraca płynnie; w trakcie idzie za palcem bez opóźnienia.
+          from.current === null
+            ? 'transition-[scale,opacity,transform]'
+            : 'transition-[scale,opacity]',
+          'duration-200 motion-reduce:transition-none',
           wide
-            ? 'inset-y-0 right-0 border-l border-line'
-            : 'inset-x-0 bottom-0 h-[60dvh] rounded-t-island border-t border-line',
-          !open && (wide ? 'translate-x-full' : 'translate-y-full'),
+            ? 'right-2 max-h-[calc(100dvh-64px-150px)] origin-top-right'
+            : 'inset-x-2 max-h-[min(60dvh,calc(100dvh-72px-140px))] origin-bottom-left',
+          !open && 'pointer-events-none scale-90 opacity-0',
         )}
         style={{
-          ...(wide && { width: PANEL_WIDTH }),
+          ...(wide ? { width: PANEL_WIDTH, top: ISLAND_TOP } : { bottom: controlsBottom(false) }),
           ...(open && dragY > 0 && { transform: `translateY(${dragY}px)` }),
         }}
       >
-        <div {...handle} className={cx('shrink-0', !wide && 'touch-none')}>
-          {!wide && (
-            <div aria-hidden="true" className="flex h-6 items-center justify-center">
-              <span className="h-1 w-10 rounded-full bg-line" />
-            </div>
-          )}
-          <div className={cx('flex items-center gap-1 p-1', !wide && 'pt-0')}>
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-label="zwiń pomysły"
-              className="island flex size-11 items-center justify-center text-muted hover:text-accent"
-            >
-              <Close className="size-5" aria-hidden="true" />
-            </button>
-            <h2 className="flex h-11 items-center gap-2 rounded-island bg-active px-3 text-sm text-accent">
-              <Lightbulb className="size-5" aria-hidden="true" />
-              pomysły
-              <span className="font-bold">{ideas.length}</span>
-            </h2>
-          </div>
+        {/* Na telefonie nagłówek ciągnięty w dół chowa wysepkę. */}
+        <div
+          {...handle}
+          className={cx('flex shrink-0 items-center gap-2 pl-2.5', !wide && 'touch-none')}
+        >
+          <Lightbulb className="size-4 text-accent" aria-hidden="true" />
+          <h2 className="text-sm font-bold">pomysły</h2>
+          <span className="text-xs text-subtle">{ideas.length}</span>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="zwiń pomysły"
+            className="ml-auto flex size-10 items-center justify-center rounded-inner text-muted hover:text-accent"
+          >
+            <Close className="size-4" aria-hidden="true" />
+          </button>
         </div>
         {ideas.length ? (
           <div
             ref={list}
             {...listPull}
-            className={cx(
-              'grid flex-1 content-start gap-1 overflow-y-auto overscroll-y-contain p-1',
-              // Na telefonie dolne menu leży nad drawerem.
-              wide ? 'grid-cols-1' : 'grid-cols-2 pb-[calc(72px+env(safe-area-inset-bottom))]',
-            )}
+            className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto overscroll-y-contain"
           >
             {ideas.map((c) => (
               <IdeaCard
@@ -261,9 +264,14 @@ export function IdeasDrawer({
             ))}
           </div>
         ) : (
-          <p className="px-3 py-4 text-sm text-subtle">
+          <p className="px-2.5 pb-2 text-sm text-subtle">
             karty bez dnia i miejsca udostępnione z Map Google czekają tutaj · przeciągnij je na
             dzień
+          </p>
+        )}
+        {ideas.length > 0 && (
+          <p className="shrink-0 py-1.5 text-center text-2xs text-subtle">
+            {wide ? 'przeciągnij na dzień' : 'przytrzymaj i przeciągnij na dzień'}
           </p>
         )}
       </aside>

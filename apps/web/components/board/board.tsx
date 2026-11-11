@@ -74,8 +74,6 @@ import {
 } from '@xyflow/react'
 import {
   CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
   ClipboardPaste,
   Columns3,
   Plus,
@@ -91,6 +89,7 @@ import { ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
 import { CARD_PANEL_WIDTH, CardSheet } from '@/components/card/card-sheet'
 import { askText, ConfirmDialog, DialogFrame } from '@/components/confirm-dialog'
+import { DaySwitcher, dayLabel } from '@/components/day-switcher'
 import { SearchButton } from '@/components/search/search-button'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { TripMenu, TripTitle } from '@/components/trip-menu'
@@ -126,7 +125,7 @@ import { CardMenu } from './card-menu'
 import { CardNode } from './card-node'
 import { DayNode } from './day-node'
 import { FrameNode } from './frame-node'
-import { controlsBottom, type IdeaDrag, IdeasDrawer, PANEL_WIDTH } from './ideas-drawer'
+import { controlsBottom, type IdeaDrag, IdeasDrawer } from './ideas-drawer'
 import { DropNode, NowNode, SlotNode } from './now-node'
 import { PackingNode } from './packing-node'
 import { RemotePointers } from './remote-pointers'
@@ -162,7 +161,6 @@ const EDGE_STEP = 10
 const PANEL_KEY = 'planer-ideas-panel'
 // Kadr na dzień: miejsce pod nagłówkiem i nad menu, najmniejszy czytelny zoom, wysokość linii „teraz”.
 const FOCUS = { side: 8, top: 64, bottom: 130, readableZoom: 0.6, nowAt: 0.35 }
-
 type Drop = DropTarget | { kind: 'ideas' } | null
 type Placed = { id: string; date: string; time: string; undo: () => void }
 
@@ -1348,20 +1346,71 @@ function BoardCanvas() {
       : []),
   ]
 
-  // Strzałki w rogu: kadr przeskakuje na poprzedni lub następny dzień.
-  const [focused, setFocused] = useState<string | null>(null)
-  const jump = (step: number) => {
-    const today = now?.date ?? todayLocal()
-    const current = focused && days.some((d) => d.date === focused) ? focused : undefined
-    const start = current
-      ? days.findIndex((d) => d.date === current)
-      : days.findIndex((d) => d.date >= today)
-    const index = current ? start + step : start === -1 ? days.length - 1 : start
-    const day = days[Math.min(days.length - 1, Math.max(0, index))]
-    if (!day) return
-    setFocused(day.date)
-    focusDay(day.date, 350)
+  // Przełącznik dni: „bieżący” to dzień w kadrze (najbliżej środka ekranu), liczony też po
+  // przesunięciu palcem — strzałki zawsze idą do dnia obok tego, który widać.
+  const [shown, setShown] = useState<string | null>(null)
+  const dayInView = (): string | null => {
+    const box = canvas.current?.getBoundingClientRect()
+    if (!box) return null
+    const { x, y, zoom } = rf.getViewport()
+    const cx = (box.width / 2 - x) / zoom
+    const cy = (box.height / 2 - y) / zoom
+    let best: string | null = null
+    let bestDist = Number.POSITIVE_INFINITY
+    for (const { date } of days) {
+      const n = rf.getNode(`day:${date}`)
+      if (!n?.width || !n.height) continue
+      const dx = Math.max(n.position.x - cx, 0, cx - n.position.x - n.width)
+      const dy = Math.max(n.position.y - cy, 0, cy - n.position.y - n.height)
+      const dist = Math.hypot(dx, dy)
+      if (dist < bestDist) {
+        bestDist = dist
+        best = date
+      }
+    }
+    return best
   }
+  const dayInViewRef = useRef(dayInView)
+  dayInViewRef.current = dayInView
+  // Po wczytaniu i zmianie dni (węzły mierzą się chwilę po renderze).
+  const dayKey = days.map((d) => d.date).join()
+  useEffect(() => {
+    if (!ready || !dayKey) return
+    const t = setTimeout(() => setShown(dayInViewRef.current()), 300)
+    return () => clearTimeout(t)
+  }, [ready, dayKey])
+
+  const todayDate = now?.date ?? todayLocal()
+  const hasToday = days.some((d) => d.date === todayDate)
+  const shownIndex = days.findIndex((d) => d.date === shown)
+  const goToDay = (date: string) => {
+    setShown(date)
+    focusDay(date, 350)
+  }
+  const jump = (step: number) => {
+    const current = days.findIndex((d) => d.date === (dayInView() ?? shown))
+    // Nic nie zmierzone: start od dziś (albo ostatniego dnia po wyjeździe).
+    const fallback = days.findIndex((d) => d.date >= todayDate)
+    const index = current === -1 ? (fallback === -1 ? days.length - 1 : fallback) : current + step
+    const day = days[index]
+    if (day) goToDay(day.date)
+  }
+  const jumpRef = useRef(jump)
+  jumpRef.current = jump
+  // Desktop: ← i → zmieniają dzień, gdy nie piszesz i nie ma otwartego okna.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (document.querySelector('[role=dialog], [role=menu]')) return
+      e.preventDefault()
+      jumpRef.current(e.key === 'ArrowLeft' ? -1 : 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   /**
    * Kadr na dzień: cały, jeśli mieści się czytelnie; inaczej szerokość dnia, a w pionie okolice
@@ -1407,9 +1456,8 @@ function BoardCanvas() {
         inert={!!sheet.openId && !wide}
         className="fixed inset-0"
         style={
-          wide && (sheet.openId || drawerOpen)
-            ? { right: sheet.openId ? CARD_PANEL_WIDTH : PANEL_WIDTH }
-            : undefined
+          // Pomysły na szerokim ekranie to pływająca wysepka — miejsce zabiera tylko panel karty.
+          wide && sheet.openId ? { right: CARD_PANEL_WIDTH } : undefined
         }
         onPointerDown={(e) => {
           pointers.current++
@@ -1453,6 +1501,7 @@ function BoardCanvas() {
           }}
           onMoveStart={() => setMenu(null)}
           onMoveEnd={(_, viewport) => {
+            setShown(dayInView())
             try {
               localStorage.setItem(`planer-viewport-${trip.id}`, JSON.stringify(viewport))
             } catch {}
@@ -1513,30 +1562,23 @@ function BoardCanvas() {
         </div>
 
         {days.length > 0 && (
-          <div
-            className="island absolute right-1 z-(--z-overlay) flex items-center"
-            style={{ bottom: controlsBottom(wide) }}
-          >
-            <button
-              type="button"
-              onClick={() => jump(-1)}
-              aria-label="poprzedni dzień"
-              className="flex size-11 items-center justify-center text-muted hover:text-accent"
-            >
-              <ChevronLeft className="size-5" aria-hidden="true" />
-            </button>
-            <span className="px-1 text-xs whitespace-nowrap text-subtle">
-              {focused ? formatShortDate(focused) : 'dni'}
-            </span>
-            <button
-              type="button"
-              onClick={() => jump(1)}
-              aria-label="następny dzień"
-              className="flex size-11 items-center justify-center text-muted hover:text-accent"
-            >
-              <ChevronRight className="size-5" aria-hidden="true" />
-            </button>
-          </div>
+          <DaySwitcher
+            className="absolute right-2 z-(--z-overlay)"
+            // Nad menu dolnym także na szerokim ekranie — w jednym rzędzie wyglądało jak jego część.
+            style={{ bottom: controlsBottom(false) }}
+            label={shown ? dayLabel(shown) : 'dni'}
+            sub={shownIndex >= 0 ? `${shownIndex + 1} z ${days.length}` : undefined}
+            isToday={shown === todayDate}
+            onPrev={() => jump(-1)}
+            onNext={() => jump(1)}
+            canPrev={shownIndex !== 0}
+            canNext={shownIndex !== days.length - 1}
+            onLabel={() => {
+              if (hasToday) goToDay(todayDate)
+              else if (shown) goToDay(shown)
+            }}
+            labelAria={hasToday ? 'pokaż dziś' : 'wyśrodkuj dzień'}
+          />
         )}
 
         <IdeasDrawer
@@ -1552,8 +1594,9 @@ function BoardCanvas() {
 
         {placed && (
           <div
-            className="island absolute left-1 z-(--z-overlay) flex items-center gap-1 pl-3 text-sm"
-            style={{ bottom: `calc(${controlsBottom(wide)} + 52px)` }}
+            className="absolute left-2 z-(--z-overlay) flex items-center gap-1 rounded-full border border-sel bg-raised pl-4 text-sm shadow-float"
+            // Nad pigułką pomysłów (telefon) i nad przełącznikiem dni.
+            style={{ bottom: `calc(${controlsBottom(false)} + 58px)` }}
           >
             <span className="text-subtle">{formatShortDate(placed.date)}</span>
             <input

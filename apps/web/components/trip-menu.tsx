@@ -46,7 +46,7 @@ export function TripMenu() {
         aria-haspopup="menu"
         aria-label="menu wyjazdu"
         title="menu wyjazdu"
-        className="flex w-11 items-center justify-center text-muted hover:text-accent aria-expanded:text-accent"
+        className="flex w-12 items-center justify-center pr-1 text-muted hover:text-accent aria-expanded:text-accent"
       >
         <ChevronDown
           className={cx('size-5 transition-transform duration-200', open && 'rotate-180')}
