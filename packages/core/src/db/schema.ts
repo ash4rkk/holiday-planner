@@ -194,11 +194,11 @@ export const aiMessages = pgTable(
   (t) => [index('ai_messages_trip_idx').on(t.tripId, t.archived, t.createdAt)],
 )
 
-/** Koszt każdego wywołania AI (czat, import) — do limitu miesięcznego. */
+/** Koszt każdego wywołania AI (czat, import, nazwa miejsca) — do limitu miesięcznego. */
 export const aiUsage = pgTable('ai_usage', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
-  kind: text('kind').$type<'chat' | 'import'>().notNull(),
+  kind: text('kind').$type<'chat' | 'import' | 'place'>().notNull(),
   model: text('model').notNull(),
   inputTokens: integer('input_tokens').notNull(),
   outputTokens: integer('output_tokens').notNull(),

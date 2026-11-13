@@ -8,6 +8,7 @@ import {
   parseShared,
   unwrapConsentUrl,
 } from '@planer/core'
+import { originalPlaceQuery } from '@/lib/ai/place-name'
 import { redirectTarget } from '@/lib/safe-fetch'
 
 export type ResolvedPlace = {
@@ -70,12 +71,19 @@ export async function geocode(query: string): Promise<LatLng | undefined> {
   return undefined
 }
 
-/** Udostępnienie z Google Maps → nazwa, adres, współrzędne. Błędy sieci nie przerywają — zostaje to, co wiadomo. */
-export async function resolvePlace(input: {
-  title?: string
-  text?: string
-  url?: string
-}): Promise<ResolvedPlace> {
+/**
+ * Udostępnienie z Google Maps → nazwa, adres, współrzędne. Błędy sieci nie przerywają — zostaje to,
+ * co wiadomo. `ai`: gdy link z Map Google nie dał współrzędnych, a geokoder nie zna nazwy (Mapy po
+ * polsku tłumaczą nazwy, OpenStreetMap ich nie zna), AI podaje nazwę oryginalną i szukamy jeszcze raz.
+ */
+export async function resolvePlace(
+  input: {
+    title?: string
+    text?: string
+    url?: string
+  },
+  ai?: { userId: string | null; near?: string },
+): Promise<ResolvedPlace> {
   const shared = parseShared(input)
   let finalUrl = shared.mapsUrl
   if (shared.mapsUrl) {
@@ -94,6 +102,15 @@ export async function resolvePlace(input: {
     } catch (error) {
       console.warn('[maps] geokodowanie nie powiodło się', String(error))
     }
+  }
+  if (!coords && ai && name && shared.mapsUrl) {
+    // Nazwa z adresu linku zwykle zawiera miasto: „Budapest, Baszta Rybacka, 1014 Węgry”.
+    const fromUrl = finalUrl ? nameFromMapsUrl(finalUrl) : undefined
+    const original = await originalPlaceQuery(
+      { name, address: shared.address ?? (fromUrl !== name ? fromUrl : undefined), near: ai.near },
+      ai.userId,
+    )
+    if (original) coords = await geocode(original).catch(() => undefined)
   }
   return {
     name: name || shared.address || 'miejsce',

@@ -38,15 +38,54 @@ export function createPlaceCard(
 /** Rozwija wklejony link Google Maps przez serwer; null, gdy to nie jest link do mapy. */
 export async function resolvePastedPlace(
   text: string,
+  tripId?: string,
 ): Promise<(Place & { otherUrl?: string }) | null> {
   const res = await fetch('/api/maps/resolve', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...(tripId && { tripId }) }),
   })
   if (!res.ok) return null
   const place = (await res.json()) as Place & { otherUrl?: string }
   return place.mapsUrl ? place : null
+}
+
+/**
+ * Współrzędne wpisanego ręcznie adresu (geokoder na serwerze, kilka wariantów zapytania, bez AI).
+ * undefined, gdy adresu nie znaleziono; wyjątek, gdy brak sieci.
+ */
+export async function locateAddress(
+  name: string,
+  address: string,
+): Promise<{ lat: number; lng: number } | undefined> {
+  const res = await fetch('/api/maps/resolve', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text: [name || address, address].join('\n') }),
+  })
+  if (!res.ok) return undefined
+  const place = (await res.json()) as Place
+  return place.lat != null && place.lng != null ? { lat: place.lat, lng: place.lng } : undefined
+}
+
+/**
+ * Współrzędne miejsca z nazwy przez AI (nazwa oryginalna, potem geokoder) — dla nazw przetłumaczonych
+ * przez Mapy Google. undefined, gdy nie znaleziono; wyjątek, gdy brak sieci.
+ */
+export async function locateWithAi(
+  tripId: string,
+  place: { name: string; address?: string },
+): Promise<{ lat: number; lng: number; query: string } | undefined> {
+  const res = await fetch('/api/places/ai', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ tripId, ...place }),
+  })
+  if (!res.ok) return undefined
+  const found = (await res.json()) as { lat?: number; lng?: number; query?: string }
+  return found.lat != null && found.lng != null && found.query
+    ? { lat: found.lat, lng: found.lng, query: found.query }
+    : undefined
 }
 
 /**

@@ -14,8 +14,13 @@ const cache = memoCache<LatLng | undefined>(30 * 24 * 60 * 60_000)
 export async function tripPlace(
   trip: Pick<Trip, 'title' | 'country'>,
 ): Promise<LatLng | undefined> {
-  const name = trip.title.replace(/\(.*?\)/g, '').trim()
-  if (!name) return undefined
-  const query = [name, countryName(trip.country)].filter(Boolean).join(', ')
+  const query = tripArea(trip)
+  if (!query) return undefined
   return cache(query.toLowerCase(), () => geocode(query)).catch(() => undefined)
+}
+
+/** Okolica wyjazdu słowami („Budapeszt, Węgry”) — podpowiedź dla geokodera i AI. */
+export function tripArea(trip: Pick<Trip, 'title' | 'country'>): string {
+  const name = trip.title.replace(/\(.*?\)/g, '').trim()
+  return name ? [name, countryName(trip.country)].filter(Boolean).join(', ') : ''
 }

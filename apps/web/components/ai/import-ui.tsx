@@ -11,13 +11,15 @@ import {
   updateCard,
 } from '@planer/core'
 import { Sparkles, X } from 'lucide-react'
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { Toast } from '@/components/toast-stack'
 import { buttonClass, cx } from '@/components/ui'
 import { importStore, runImports } from '@/lib/ai-import'
 import { withUndo } from '@/lib/undo'
 import { useDismiss } from '@/lib/use-dismiss'
+import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 
 export function useImportState() {
@@ -88,7 +90,11 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
       if (!c || !c.aiDraft || c.deletedAt) importStore.reviewed(id)
     }
   }, [cards, fresh])
-  if (!card) return null
+  // Portal do body: w widoku (fixed wrapper Tablicy, przejścia widoków) z-index okna przegrywał
+  // z dolnym menu, które zasłaniało przyciski. Z ukrytego widoku okno chowa useHideWhenInactive.
+  const ref = useRef<HTMLDivElement>(null)
+  useHideWhenInactive(ref)
+  if (!card || typeof document === 'undefined') return null
   const Icon = TYPE_STYLE[card.type].icon
   const rows = [
     card.date && [
@@ -115,8 +121,9 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
     importStore.reviewed(card.id)
   }
 
-  return (
+  return createPortal(
     <div
+      ref={ref}
       role="dialog"
       aria-modal="true"
       aria-label="szkic karty z AI"
@@ -179,6 +186,7 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
           </button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }

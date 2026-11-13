@@ -67,8 +67,9 @@ export async function budgetLeftPln(): Promise<number> {
 }
 
 export async function recordUsage(entry: {
-  userId: string
-  kind: 'chat' | 'import'
+  /** Brak = wywołanie bez osoby (np. rozwijanie linku w tle). */
+  userId: string | null
+  kind: 'chat' | 'import' | 'place'
   model: string
   usage: UsageLike
 }) {

@@ -2,7 +2,7 @@
 
 import { formatShortDate, type SearchHit, searchCards } from '@planer/core'
 import { Search, X } from 'lucide-react'
-import { useDeferredValue, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { cx } from '@/components/ui'
@@ -82,15 +82,15 @@ function SearchPanel({
   // Zmiana kart (np. od drugiej osoby) odświeża wyniki.
   const cards = useCards()
   const [query, setQuery] = useState(() => lastQuery.get(trip.id) ?? '')
-  const deferred = useDeferredValue(query)
-  const hits = useMemo(() => searchCards(doc, deferred), [doc, deferred, cards])
+  // Bez useDeferredValue: odroczone odświeżenie uruchamia <ViewTransition> layoutu (miganie ekranu).
+  const hits = useMemo(() => searchCards(doc, query), [doc, query, cards])
   useDismiss(true, onClose)
 
   const change = (value: string) => {
     setQuery(value)
     lastQuery.set(trip.id, value)
   }
-  const searching = deferred.trim().length > 0
+  const searching = query.trim().length > 0
 
   return (
     <div
@@ -147,7 +147,7 @@ function SearchPanel({
             </p>
           )}
           {ready && searching && hits.length === 0 && (
-            <p className="px-3 py-4 text-sm text-subtle">● nic nie pasuje do „{deferred}”</p>
+            <p className="px-3 py-4 text-sm text-subtle">● nic nie pasuje do „{query}”</p>
           )}
           {hits.length > 0 && (
             <p className="px-3 pt-2 pb-1 text-2xs text-subtle" aria-live="polite">

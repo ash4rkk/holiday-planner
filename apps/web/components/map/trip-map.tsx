@@ -21,7 +21,7 @@ import {
 } from '@planer/core'
 import { Navigation, SquarePen } from 'lucide-react'
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl'
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChatButton } from '@/components/ai/chat-panel'
 import { fieldsSummary } from '@/components/card/card-fields'
@@ -38,7 +38,7 @@ import { cx } from '@/components/ui'
 import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
 import { useWide } from '@/lib/use-wide'
-import { useCards, useTrip } from '@/lib/yjs/trip-doc'
+import { useSettledCards, useTrip } from '@/lib/yjs/trip-doc'
 import { type CachedMap, keepMap, takeMap } from './map-cache'
 import { cssVar, themeMap, useMapStyle } from './map-style'
 import { loadMapLibre } from './maplibre'
@@ -144,9 +144,9 @@ function groupNearby<T extends { card: MappedCard }>(m: MapLibreMap, pins: T[]):
 
 export function TripMap() {
   const { trip } = useTrip()
-  // Pisanie w otwartej karcie ma pierwszeństwo; widok pod nią nadąża chwilę później.
-  const cards = useDeferredValue(useCards())
   const sheet = useCardSheet()
+  // Pisanie w otwartej karcie ma pierwszeństwo; widok pod nią nadąża chwilę później.
+  const cards = useSettledCards(Boolean(sheet.openId))
   const wide = useWide()
   const style = useMapStyle()
   const today = todayLocal()
@@ -157,6 +157,9 @@ export function TripMap() {
   const [tab, setTab] = useState<Tab>('all')
   const [selected, setSelected] = useState<string | null>(null)
   const [zoom, setZoom] = useState(0)
+  // Ikony typów w pinezkach: pinezki tworzy MapLibre (DOM poza Reactem), ikony lucide wstawia
+  // React przez portale do ich kształtów.
+  const [pinIcons, setPinIcons] = useState<{ el: HTMLElement; type: CardType; id: string }[]>([])
 
   const days = useMemo(() => mapDays(cards, trip), [cards, trip])
   // W trakcie wyjazdu mapa zaczyna od dzisiejszej trasy; przed i po — od wszystkich miejsc.
@@ -242,6 +245,7 @@ export function TripMap() {
       // Pinezki i strzałki rysuje widok — zdejmujemy je, żeby po powrocie się nie dublowały.
       for (const marker of markers.current) marker.remove()
       for (const a of arrows.current) a.remove()
+      setPinIcons([])
       markers.current = []
       arrows.current = []
       if (e) keepMap({ ...e, tab: tabRef.current })
@@ -274,6 +278,7 @@ export function TripMap() {
       for (const marker of markers.current) marker.remove()
       // Widok wszystkich miejsc: pinezki leżące na sobie łączą się w grupę z liczbą.
       const groups = route ? pins.map((p) => [p]) : groupNearby(m, pins)
+      const icons: { el: HTMLElement; type: CardType; id: string }[] = []
       markers.current = groups.map((group) => {
         const { card, label } = group[0] as (typeof pins)[number]
         if (group.length > 1) {
@@ -301,11 +306,12 @@ export function TripMap() {
         el.title = [card.title || card.location.name, card.time].filter(Boolean).join(' · ')
         const shape = document.createElement('div')
         shape.className = 'map-pin__shape'
+        // Trasa dnia: numer kolejności (albo ⌂ noclegu); inaczej ikona typu.
         if (label) {
           const span = document.createElement('span')
           span.textContent = label
           shape.append(span)
-        }
+        } else icons.push({ el: shape, type: card.type, id: card.id })
         el.append(shape)
         el.addEventListener('click', (e) => {
           e.stopPropagation()
@@ -315,6 +321,7 @@ export function TripMap() {
           .setLngLat([card.location.lng, card.location.lat])
           .addTo(m)
       })
+      setPinIcons(icons)
     })
     return () => {
       cancelled = true
@@ -673,6 +680,10 @@ export function TripMap() {
             )}
           </ul>
         )}
+        {pinIcons.map(({ el, type, id }) => {
+          const Icon = TYPE_STYLE[type].icon
+          return createPortal(<Icon aria-hidden="true" />, el, id)
+        })}
         {bubble &&
           selectedCard &&
           hasCoords(selectedCard) &&

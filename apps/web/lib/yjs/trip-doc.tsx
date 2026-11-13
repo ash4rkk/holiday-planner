@@ -22,6 +22,8 @@ import {
   type ReactNode,
   useContext,
   useEffect,
+  useReducer,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react'
@@ -360,6 +362,30 @@ function useDocMap<K extends Key>(key: K): ReturnType<(typeof READERS)[K]> {
 
 export function useCards(): CardSnapshot[] {
   return useDocMap('cards')
+}
+
+const SETTLE_MS = 250
+
+/**
+ * Karty dla widoku pod otwartą kartą (`settle`): pisanie ma pierwszeństwo, a tło dostaje zmiany
+ * dopiero po chwili ciszy. Celowo nie useDeferredValue — odroczone odświeżenie React traktuje jak
+ * przejście, więc <ViewTransition> w layoucie przenikał przy każdym znaku cały ekran razem z
+ * panelem karty (miganie). Bez otwartej karty — od razu.
+ */
+export function useSettledCards(settle: boolean): CardSnapshot[] {
+  const cards = useCards()
+  const shown = useRef(cards)
+  const [, rerender] = useReducer((n: number) => n + 1, 0)
+  if (!settle) shown.current = cards
+  useEffect(() => {
+    if (!settle || shown.current === cards) return
+    const timer = setTimeout(() => {
+      shown.current = cards
+      rerender()
+    }, SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [cards, settle])
+  return shown.current
 }
 
 export function useFrames(): FrameSnapshot[] {

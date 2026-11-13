@@ -89,6 +89,7 @@ pnpm db:sample           # przykład „Lizbona (przykład)” z datami od dziś
 - Push tylko na hosty z `isPushEndpoint`, sync tylko z `Origin` aplikacji (`isAppOrigin`, `APP_ORIGIN`) — to ochrona przed SSRF i obcymi stronami, nie poluzowuj.
 - Zdjęcia profili tylko na serwerze (`UPLOAD_DIR/profiles/<imię>.jpg`, `/api/profile-photo/<imię>`), nigdy w repo — jest publiczne. E-maile profili też tylko w `.env`.
 - Wyniki Google Routes są zapisywane w `route_cache` i pokazywane z liniami i przesiadkami, wbrew warunkom Google (dopuszczają tylko cache współrzędnych). To świadoma decyzja właściciela; ryzyko to blokada klucza. Przy wynikach zostaje tekst `Google Maps` (`text-attrib`).
+- Bez `useDeferredValue` i `startTransition` dla zwykłych odświeżeń danych: React traktuje je jak przejście, a `<ViewTransition>` w layoucie `(app)` przenika wtedy cały ekran (panel karty migał przy każdym znaku). Tło pod otwartą kartą: `useSettledCards`.
 - Nie dawaj `transition`/`transition-duration` na `*`: domyślna właściwość to `all`, więc Tablica spóźniała się o czas przejścia.
 - Style komponentów typu `.island` trzymaj w `@layer components`, inaczej wygrywają z klasami Tailwind.
 - Service worker działa tylko w buildzie produkcyjnym (`next build && next start`); w `next dev` jest wyłączony.

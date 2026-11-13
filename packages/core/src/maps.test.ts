@@ -10,7 +10,6 @@ import {
   navigationUrl,
   offMapReason,
   parseShared,
-  photonPlaces,
   unwrapConsentUrl,
 } from './maps'
 
@@ -274,58 +273,5 @@ describe('offMapReason', () => {
     expect(reason(ids.idea)).toBeUndefined()
     expect(reason(ids.note)).toBeUndefined()
     expect(reason(ids.transport)).toBeUndefined()
-  })
-})
-
-describe('photonPlaces', () => {
-  it('nazwa, adres i współrzędne; bez powtórek i wyników bez punktu', () => {
-    const feature = (properties: Record<string, string>, coordinates?: [number, number]) => ({
-      properties,
-      geometry: coordinates && { coordinates },
-    })
-    const json = {
-      features: [
-        feature(
-          {
-            name: 'Fig Tree Houser Minihotel',
-            street: 'Hungária körút',
-            housenumber: '61',
-            postcode: '1143',
-            city: 'Budapest',
-            country: 'Magyarország',
-          },
-          [19.1058463, 47.5056862],
-        ),
-        feature(
-          {
-            name: 'Fig Tree Houser Minihotel',
-            street: 'Hungária körút',
-            housenumber: '61',
-            postcode: '1143',
-            city: 'Budapest',
-            country: 'Magyarország',
-          },
-          [19.1, 47.5],
-        ),
-        feature(
-          { street: 'Rua Augusta', housenumber: '2', city: 'Lisboa', country: 'Portugal' },
-          [-9.13, 38.71],
-        ),
-        feature({ name: 'Lisboa', country: 'Portugal' }, [-9.14, 38.72]),
-        feature({ name: 'bez punktu' }),
-        feature({}, [1, 1]),
-      ],
-    }
-    expect(photonPlaces(json)).toEqual([
-      {
-        name: 'Fig Tree Houser Minihotel',
-        address: 'Hungária körút 61, 1143 Budapest, Magyarország',
-        lat: 47.5056862,
-        lng: 19.1058463,
-      },
-      { name: 'Rua Augusta 2', address: 'Lisboa, Portugal', lat: 38.71, lng: -9.13 },
-      { name: 'Lisboa', address: 'Portugal', lat: 38.72, lng: -9.14 },
-    ])
-    expect(photonPlaces(null)).toEqual([])
   })
 })

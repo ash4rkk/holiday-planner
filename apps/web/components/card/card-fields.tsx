@@ -12,7 +12,6 @@ import {
   formatShortDate,
   navigationUrl,
   offMapReason,
-  type PlaceHit,
   placeUrl,
 } from '@planer/core'
 import {
@@ -28,14 +27,14 @@ import {
   type LucideIcon,
   MapPin,
   Navigation,
+  Sparkles,
   TimerReset,
   X,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { MiniMap } from '@/components/map/mini-map'
 import { cx, inputClass, SectionLabel } from '@/components/ui'
-import { resolvePastedPlace } from '@/lib/place-card'
-import { usePlaceSearch } from '@/lib/use-place-search'
+import { locateAddress, locateWithAi, resolvePastedPlace } from '@/lib/place-card'
 import { useTrip } from '@/lib/yjs/trip-doc'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
@@ -565,9 +564,9 @@ export function fieldsSummary(card: CardSnapshot): string {
 }
 
 /**
- * Miejsce: nazwa i adres z podpowiedziami (wyszukiwarka miejsc w okolicy wyjazdu) albo wklejony
- * link z Map Google, mapka i nawigacja. Karta bez pinezki zaczyna od podpowiedzi dla swojego adresu
- * (albo nazwy), a „szukaj w Mapach Google” pomaga zdobyć link, gdy podpowiedzi nic nie znajdą.
+ * Miejsce: nazwa i adres ręcznie albo wklejony link z Map Google, mapka i nawigacja. Bez pinezki:
+ * adres szuka geokoder po wyjściu z pola, nazwę przetłumaczoną przez Mapy Google — „znajdź przez
+ * AI”, a „szukaj w Mapach Google” pomaga zdobyć link, gdy oba zawiodą.
  */
 function LocationField({
   field,
@@ -582,32 +581,55 @@ function LocationField({
   const location = card[field]
   const [link, setLink] = useState('')
   const [state, setState] = useState<'idle' | 'resolving' | 'failed' | 'offline'>('idle')
+  const [lookup, setLookup] = useState<'idle' | 'searching' | 'notFound' | 'offline'>('idle')
+  const [aiState, setAiState] = useState<'idle' | 'asking' | 'notFound' | 'offline'>('idle')
+  // Co rozpoznało AI („Halászbástya, Budapest”) — do sprawdzenia na mapce pod spodem.
+  const [aiFound, setAiFound] = useState<string | null>(null)
   const [relink, setRelink] = useState(false)
   const hasCoords = location?.lat !== undefined && location?.lng !== undefined
-  // Tekst do podpowiedzi: ostatnio pisane pole; na start adres albo nazwa karty bez pinezki.
-  const [query, setQuery] = useState<{ text: string; from: 'name' | 'address' }>(() =>
-    location?.address?.trim()
-      ? { text: location.address, from: 'address' }
-      : { text: location?.name ?? '', from: 'name' },
-  )
-  const searching = !hasCoords || relink
-  const search = usePlaceSearch(searching ? query.text : '')
 
   const set = (patch: Partial<CardLocation>) =>
     onChange({ [field]: { name: location?.name ?? '', ...location, ...patch } })
 
-  const pick = (hit: PlaceHit) => {
-    setRelink(false)
-    setQuery({ text: '', from: 'name' })
-    onChange({
-      [field]: {
-        // Szukane po adresie: nazwa karty zostaje; po nazwie — nazwa z podpowiedzi.
-        name: (query.from === 'address' && !relink && location?.name?.trim()) || hit.name,
-        ...(hit.address && { address: hit.address }),
-        lat: hit.lat,
-        lng: hit.lng,
-      },
-    })
+  // Adres bez pinezki: współrzędne z geokodera (bez AI), żeby miejsce było na Mapie.
+  const locate = async () => {
+    const address = location?.address?.trim()
+    if (!address || !location || hasCoords) return
+    setLookup('searching')
+    let at: Awaited<ReturnType<typeof locateAddress>>
+    try {
+      at = await locateAddress(location.name, address)
+    } catch {
+      setLookup('offline')
+      return
+    }
+    setLookup(at ? 'idle' : 'notFound')
+    if (at) onChange({ [field]: { ...location, ...at } })
+  }
+
+  // Nazwa przetłumaczona przez Mapy Google („Baszta Rybacka”): AI podaje oryginalną, geokoder
+  // szuka. Współrzędne dochodzą do miejsca — nazwa, adres i link zostają.
+  const askAi = async () => {
+    const name = location?.name?.trim()
+    if (!name || !location) return
+    setAiState('asking')
+    let found: Awaited<ReturnType<typeof locateWithAi>>
+    try {
+      found = await locateWithAi(trip.id, {
+        name,
+        ...(location.address && { address: location.address }),
+      })
+    } catch {
+      setAiState('offline')
+      return
+    }
+    if (!found) {
+      setAiState('notFound')
+      return
+    }
+    setAiState('idle')
+    setAiFound(found.query)
+    onChange({ [field]: { ...location, lat: found.lat, lng: found.lng } })
   }
 
   const resolve = async (text: string) => {
@@ -615,7 +637,7 @@ function LocationField({
     setState('resolving')
     let place: Awaited<ReturnType<typeof resolvePastedPlace>>
     try {
-      place = await resolvePastedPlace(text)
+      place = await resolvePastedPlace(text, trip.id)
     } catch {
       setState('offline')
       return
@@ -626,6 +648,7 @@ function LocationField({
     }
     setLink('')
     setState('idle')
+    setAiFound(null)
     setRelink(false)
     onChange({
       [field]: {
@@ -650,59 +673,49 @@ function LocationField({
     <div className="flex flex-col gap-1">
       <input
         className={inputClass}
-        placeholder={searching ? 'nazwa miejsca — podpowiem adres' : 'nazwa miejsca'}
+        placeholder="nazwa miejsca"
         value={location?.name ?? ''}
-        onChange={(e) => {
-          set({ name: e.target.value })
-          setQuery({ text: e.target.value, from: 'name' })
-        }}
+        onChange={(e) => set({ name: e.target.value })}
       />
       <input
         className={inputClass}
         placeholder="adres (opcjonalnie)"
         value={location?.address ?? ''}
         onChange={(e) => {
-          // Współrzędne z podpowiedzi należą do starego adresu; z linku zostają.
+          // Współrzędne z geokodera należą do starego adresu; z linku zostają.
           const { lat, lng, ...rest } = location ?? { name: '' }
           const keep = location?.mapsUrl && lat !== undefined ? { lat, lng } : {}
           onChange({ [field]: { ...rest, ...keep, address: e.target.value || undefined } })
-          setQuery({ text: e.target.value, from: 'address' })
+          setLookup('idle')
+          setAiFound(null)
         }}
+        onBlur={() => void locate()}
       />
-      {searching && search.hits.length > 0 && (
-        <ul
-          className="flex flex-col overflow-hidden rounded-small border border-line"
-          aria-label="podpowiedzi miejsc"
-        >
-          {search.hits.map((hit) => (
-            <li key={`${hit.lat},${hit.lng}`} className="border-line not-first:border-t">
-              <button
-                type="button"
-                onClick={() => pick(hit)}
-                className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-active"
-              >
-                <MapPin className="size-4 shrink-0 text-subtle" aria-hidden="true" />
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm">{hit.name}</span>
-                  {hit.address && (
-                    <span className="truncate text-xs text-subtle">{hit.address}</span>
-                  )}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+      {lookup === 'searching' && <span className="text-xs text-subtle">szukam adresu…</span>}
+      {lookup === 'notFound' && (
+        <span className="text-xs text-subtle">nie znaleziono adresu na mapie</span>
       )}
-      {searching && search.state === 'searching' && !search.hits.length && (
-        <span className="text-xs text-subtle">szukam miejsca…</span>
+      {lookup === 'offline' && (
+        <span className="text-xs text-red">● brak zasięgu — adres poszukam później</span>
       )}
-      {searching && search.state === 'done' && !search.hits.length && (
-        <span className="text-xs text-subtle">
-          nic nie znaleziono — wklej link z Map Google poniżej
-        </span>
-      )}
-      {searching && search.state === 'offline' && (
-        <span className="text-xs text-red">● brak zasięgu — podpowiedzi wrócą z siecią</span>
+      {!hasCoords && location?.name?.trim() && (
+        <div className="flex flex-wrap items-center gap-x-2">
+          <button
+            type="button"
+            disabled={aiState === 'asking'}
+            onClick={() => void askAi()}
+            className="flex min-h-11 items-center gap-1 px-1 text-xs text-subtle hover:text-accent disabled:text-subtle"
+          >
+            <Sparkles className="size-3.5" aria-hidden="true" />
+            {aiState === 'asking' ? 'AI szuka miejsca…' : 'znajdź przez AI ›'}
+          </button>
+          {aiState === 'notFound' && (
+            <span className="text-xs text-red">● AI nie rozpoznało miejsca — wklej link</span>
+          )}
+          {aiState === 'offline' && (
+            <span className="text-xs text-red">● brak zasięgu — spróbuj później</span>
+          )}
+        </div>
       )}
       {(!location?.mapsUrl || relink) && (
         <input
@@ -718,7 +731,7 @@ function LocationField({
           onBlur={() => void resolve(link)}
         />
       )}
-      {searching && googleQuery && (
+      {!hasCoords && googleQuery && (
         <a
           href={placeUrl({ name: googleQuery })}
           target="_blank"
@@ -735,6 +748,12 @@ function LocationField({
       )}
       {state === 'offline' && (
         <span className="text-xs text-red">● brak zasięgu — wklej link jeszcze raz później</span>
+      )}
+      {hasCoords && aiFound && (
+        <span className="flex items-center gap-1 text-xs text-subtle">
+          <Sparkles className="size-3.5" aria-hidden="true" />
+          AI: {aiFound} — sprawdź na mapce
+        </span>
       )}
       {hasCoords && (
         <MiniMap lat={location.lat as number} lng={location.lng as number} className="mt-1" />
@@ -761,16 +780,13 @@ function LocationField({
           </a>
         </div>
       )}
-      {hasCoords && !relink && (
+      {(hasCoords || location?.mapsUrl) && !relink && (
         <button
           type="button"
-          onClick={() => {
-            setRelink(true)
-            setQuery({ text: location?.name ?? '', from: 'name' })
-          }}
+          onClick={() => setRelink(true)}
           className="min-h-11 self-start px-1 text-xs text-subtle hover:text-accent"
         >
-          inne miejsce · wyszukaj albo wklej nowy link ›
+          inne miejsce · wklej nowy link ›
         </button>
       )}
     </div>

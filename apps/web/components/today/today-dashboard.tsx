@@ -25,7 +25,7 @@ import {
 } from '@planer/core'
 import { ChevronRight, LocateFixed, Navigation } from 'lucide-react'
 import Link from 'next/link'
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { PlanResponse } from '@/app/api/route/plan/route'
 import type { Route } from '@/app/api/route/route'
 import { ChatButton } from '@/components/ai/chat-panel'
@@ -49,7 +49,7 @@ import { useCardSheet } from '@/lib/use-card-sheet'
 import { useDayPlans } from '@/lib/use-day-plans'
 import { useFetchCached } from '@/lib/use-fetch-cached'
 import { locate, usePosition } from '@/lib/use-position'
-import { useCards, useTrip } from '@/lib/yjs/trip-doc'
+import { useSettledCards, useTrip } from '@/lib/yjs/trip-doc'
 
 const nowHHMM = (d = new Date()) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -64,9 +64,9 @@ function daysLabel(n: number) {
  */
 export function TodayDashboard({ userName }: { userName: string }) {
   const { trip } = useTrip()
-  // Pisanie w otwartej karcie ma pierwszeństwo; widok pod nią nadąża chwilę później.
-  const cards = useDeferredValue(useCards())
   const sheet = useCardSheet()
+  // Pisanie w otwartej karcie ma pierwszeństwo; widok pod nią nadąża chwilę później.
+  const cards = useSettledCards(Boolean(sheet.openId))
   const today = todayLocal()
   const [now, setNow] = useState(nowHHMM())
   useEffect(() => {

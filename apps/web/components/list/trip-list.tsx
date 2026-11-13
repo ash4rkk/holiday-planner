@@ -28,15 +28,7 @@ import {
 } from '@planer/core'
 import { ArrowRightToLine, History, Lightbulb, Luggage, Plus, WandSparkles } from 'lucide-react'
 import Link from 'next/link'
-import {
-  Fragment,
-  type ReactNode,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { AddButton } from '@/components/add-button'
 import { askChat, ChatButton } from '@/components/ai/chat-panel'
 import { DraftReview, ImportRunner, ImportStatus } from '@/components/ai/import-ui'
@@ -65,7 +57,7 @@ import { useDismiss } from '@/lib/use-dismiss'
 import { openPacking } from '@/lib/use-packing-drawer'
 import { useTripNow } from '@/lib/use-trip-now'
 import { useWide } from '@/lib/use-wide'
-import { useAttachments, useCards, useTrip } from '@/lib/yjs/trip-doc'
+import { useAttachments, useCards, useSettledCards, useTrip } from '@/lib/yjs/trip-doc'
 import { VariantCarousel } from './variant-carousel'
 
 const HOLD_HINT_KEY = 'planer-hint-hold'
@@ -80,11 +72,11 @@ export function TripList() {
   const { trip, doc, ready, templates } = useTrip()
   // Waluta główna wyjazdu (pierwsza z listy); bez walut — same złotówki.
   const main = trip.currencies[0] ?? 'PLN'
+  const { openId, isNew, open, close } = useCardSheet()
   // Pisanie w otwartej karcie ma pierwszeństwo; widok pod nią nadąża chwilę później.
-  const cards = useDeferredValue(useCards())
+  const cards = useSettledCards(Boolean(openId))
   const attachments = useAttachments()
   const fileCounts = useMemo(() => countByCard(attachments), [attachments])
-  const { openId, isNew, open, close } = useCardSheet()
   const wide = useWide()
   const [types, setTypes] = useState<Set<CardType>>(new Set())
   const [statuses, setStatuses] = useState<Set<CardStatus>>(new Set())
@@ -100,8 +92,8 @@ export function TripList() {
   // zmianie kart. Z otwartą kartą (`?card=`) nie przewijamy, żeby nie ruszać tła pod arkuszem.
   const listRef = useRef<HTMLElement>(null)
   const scrolledToToday = useRef(false)
-  // Karty idą przez useDeferredValue: tuż po wczytaniu dni są jeszcze puste, a strona za krótka,
-  // żeby przewinąć — czekamy, aż karty się narysują.
+  // Tuż po wczytaniu dni są jeszcze puste, a strona za krótka, żeby przewinąć — czekamy, aż karty
+  // się narysują.
   const drawn = ready && cards.length > 0
   useEffect(() => {
     if (!drawn || scrolledToToday.current) return

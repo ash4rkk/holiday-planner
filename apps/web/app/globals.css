@@ -341,6 +341,13 @@ body {
   align-items: center;
   justify-content: center;
 }
+/* Ikona typu w pinezce (portal z Reacta); w tym samym rozmiarze kształtu co numer trasy. */
+.map-pin__shape > svg {
+  transform: rotate(45deg);
+  width: 15px;
+  height: 15px;
+  color: var(--on-accent);
+}
 .map-pin__shape > span {
   transform: rotate(45deg);
   font-size: 12px;
