@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  arrivalLabel,
   CARD_STATUS_LABELS,
   CARD_TYPE_LABELS,
   formatAmount,
@@ -92,12 +93,19 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
   const rows = [
     card.date && [
       'kiedy',
-      `${formatDayHeader(card.date)}${card.time ? `, ${card.time}` : ''}${card.endDate ? ` → ${formatDayHeader(card.endDate)}` : ''}`,
+      card.type === 'transport' && card.endTime
+        ? `${formatDayHeader(card.date)}, ${card.time ?? '?'} → ${arrivalLabel(card)}`
+        : `${formatDayHeader(card.date)}${card.time ? `, ${card.time}` : ''}${card.endDate ? ` → ${formatDayHeader(card.endDate)}` : ''}`,
     ],
     card.location?.name && [
-      'gdzie',
+      card.type === 'transport' ? 'skąd' : 'gdzie',
       `${card.location.name}${card.location.lat === undefined ? ' (bez pinezki)' : ''}`,
     ],
+    card.type === 'transport' &&
+      card.destination?.name && [
+        'dokąd',
+        `${card.destination.name}${card.destination.lat === undefined ? ' (bez pinezki)' : ''}`,
+      ],
     card.amounts.length > 0 && ['kwota', sumByCurrency(card.amounts).map(formatAmount).join(' + ')],
     card.status && ['status', CARD_STATUS_LABELS[card.status]],
   ].filter(Boolean) as [string, string][]
@@ -140,6 +148,12 @@ export function DraftReview({ onEdit }: { onEdit: (cardId: string) => void }) {
             </div>
           ))}
         </dl>
+        {card.type === 'transport' && (!card.endTime || !card.destination?.name) && (
+          // Bez przyjazdu plan dnia nie wie, kiedy będziecie na miejscu i skąd liczyć dojazd.
+          <p className="mt-2 rounded-small bg-amber/15 px-2 py-1 text-xs text-amber">
+            ● brak {!card.endTime ? 'godziny przyjazdu' : 'celu podróży'} — uzupełnij w „popraw”
+          </p>
+        )}
         {card.preview && <p className="mt-2 line-clamp-4 text-xs text-muted">{card.preview}</p>}
         <div className="mt-4 grid grid-cols-3 gap-1">
           <button

@@ -246,6 +246,59 @@ export function hasCoords(card: CardSnapshot): card is MappedCard {
   return card.location?.lat !== undefined && card.location?.lng !== undefined
 }
 
+/**
+ * Dlaczego karta nie ma pinezki:
+ * - `address` — jest adres, ale bez współrzędnych (geokoder go nie znalazł),
+ * - `link` — link z Map Google bez współrzędnych,
+ * - `name` — tylko nazwa (samej nazwy nie geokodujemy: „Fig Tree House” to też dom w Londynie),
+ * - `none` — zwiedzanie, jedzenie albo nocleg z dniem, ale bez miejsca.
+ */
+export type OffMapReason = 'address' | 'link' | 'name' | 'none'
+
+// Typy, które z natury są miejscem; notatka i transport bez miejsca to nic dziwnego.
+const PLACE_TYPES: ReadonlySet<CardSnapshot['type']> = new Set(['stay', 'sight', 'food'])
+
+/** Powód braku pinezki; undefined, gdy karta jest na mapie albo nie musi na niej być. */
+export function offMapReason(card: CardSnapshot): OffMapReason | undefined {
+  if (hasCoords(card)) return undefined
+  const location = card.location
+  if (location?.address?.trim()) return 'address'
+  if (location?.mapsUrl) return 'link'
+  if (location?.name?.trim()) return 'name'
+  // Pomysł bez miejsca to zwykły pomysł — nie ma czego szukać.
+  return card.date && PLACE_TYPES.has(card.type) ? 'none' : undefined
+}
+
+/** Podpowiedź wyszukiwarki miejsc (Photon). */
+export type PlaceHit = { name: string; address?: string; lat: number; lng: number }
+
+type PhotonFeature = {
+  properties?: Record<string, string | undefined>
+  geometry?: { coordinates?: [number, number] }
+}
+
+/**
+ * Wyniki Photon (GeoJSON) → podpowiedzi: nazwa i adres „ulica numer, kod miasto, kraj”. Bez nazwy
+ * (sam adres) nazwą jest ulica z numerem. Pomija wyniki bez współrzędnych i powtórki.
+ */
+export function photonPlaces(json: unknown): PlaceHit[] {
+  const features = (json as { features?: PhotonFeature[] } | null)?.features ?? []
+  const hits: PlaceHit[] = []
+  for (const f of features) {
+    const p = f.properties ?? {}
+    const [lng, lat] = f.geometry?.coordinates ?? []
+    if (typeof lat !== 'number' || typeof lng !== 'number' || !valid(lat, lng)) continue
+    const street = [p.street, p.housenumber].filter(Boolean).join(' ')
+    const town = [p.postcode, p.city ?? p.town ?? p.village ?? p.county].filter(Boolean).join(' ')
+    const name = p.name ?? (street || town)
+    if (!name) continue
+    const parts = [street, town, p.country].filter((x) => x && x !== name)
+    const hit = { name, ...(parts.length && { address: parts.join(', ') }), lat, lng }
+    if (!hits.some((h) => h.name === hit.name && h.address === hit.address)) hits.push(hit)
+  }
+  return hits
+}
+
 export type DayRoute = {
   /**
    * Nocleg, w którym zaczyna się dzień — ten, w którym spaliście poprzedniej nocy. Pierwszy dzień

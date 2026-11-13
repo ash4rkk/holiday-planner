@@ -1,10 +1,11 @@
-import { CARD_TYPE_LABELS, type CardSnapshot, type Sky } from '@planer/core'
+import { CARD_TYPE_LABELS, type CardSnapshot, placeLine, type Sky } from '@planer/core'
 import { Paperclip } from 'lucide-react'
 import { memo, useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { cx } from '@/components/ui'
 import { SkyLayer } from '@/components/weather'
 import { fieldsSummary } from './card-fields'
+import { OffMapMark } from './off-map-mark'
 import { StatusMark } from './status-mark'
 import { TYPE_STYLE } from './type-style'
 import { VariantBadge } from './variant-badge'
@@ -128,6 +129,7 @@ function CardTileView({
           <span className="ml-auto flex shrink-0 items-center gap-2 self-center">
             <AmountBadge amounts={card.amounts ?? []} plain />
             {card.status && <StatusMark status={card.status} inline />}
+            <OffMapMark card={card} />
           </span>
           {card.pinned && (
             <span className="text-accent" title="przypięta">
@@ -156,7 +158,7 @@ export function CardMetaLine({
   const domain = card.linkPreview?.url && hostOf(card.linkPreview.url)
   const parts = [
     summary,
-    card.location?.name && `⌖ ${card.location.name}`,
+    placeLine(card) && `⌖ ${placeLine(card)}`,
     domain && `↗ ${domain}`,
   ].filter(Boolean)
   if (!parts.length && !files) return null

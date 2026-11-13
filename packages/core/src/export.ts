@@ -1,7 +1,7 @@
 import type * as Y from 'yjs'
 import { type Amount, formatAmount, type RateLookup, sumByCurrency, totals } from './amounts'
 import { readAttachments } from './attachments'
-import { CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot } from './cards'
+import { arrivalLabel, CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot } from './cards'
 import { formatDateSpan, formatDayHeader, formatShortDate } from './dates'
 import {
   type Block,
@@ -62,15 +62,17 @@ export function exportModel(
 /** Pola karty w jednej linii: godzina, czas, do kiedy, status, miejsce, kwota. */
 export function cardMeta(card: CardSnapshot): string[] {
   return [
-    card.time,
-    card.durationMin &&
+    card.time && (arrivalLabel(card) ? `${card.time} → ${arrivalLabel(card)}` : card.time),
+    !arrivalLabel(card) &&
+      card.durationMin &&
       (card.durationMin >= 60
         ? `${Math.floor(card.durationMin / 60)} h${card.durationMin % 60 ? ` ${card.durationMin % 60} min` : ''}`
         : `${card.durationMin} min`),
-    card.endDate && `do ${formatShortDate(card.endDate)}`,
+    !card.endTime && card.endDate && `do ${formatShortDate(card.endDate)}`,
     card.status && CARD_STATUS_LABELS[card.status],
     card.location?.name &&
       `⌖ ${card.location.name}${card.location.address ? `, ${card.location.address}` : ''}`,
+    card.destination?.name && `→ ${card.destination.name}`,
     card.amounts?.length && sumByCurrency(card.amounts).map(formatAmount).join(' + '),
   ].filter((x): x is string => Boolean(x))
 }

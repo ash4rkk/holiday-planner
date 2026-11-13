@@ -8,7 +8,9 @@ import {
   mainCluster,
   nameFromMapsUrl,
   navigationUrl,
+  offMapReason,
   parseShared,
+  photonPlaces,
   unwrapConsentUrl,
 } from './maps'
 
@@ -231,5 +233,99 @@ describe('geocodeQueries', () => {
 
   it('polski kod z myślnikiem', () => {
     expect(geocodeQueries('ul. Długa 1, 80-831 Gdańsk, Polska')[2]).toBe('ul. Długa 1, Gdańsk')
+  })
+})
+
+describe('offMapReason', () => {
+  it('powód braku pinezki', async () => {
+    const Y = await import('yjs')
+    const { createCard, readCards } = await import('./trip-doc')
+    const doc = new Y.Doc()
+    const day = '2027-07-15'
+    const ids = {
+      pinned: createCard(doc, {
+        type: 'sight',
+        date: day,
+        location: { name: 'a', lat: 1, lng: 2 },
+      }),
+      address: createCard(doc, {
+        type: 'stay',
+        date: day,
+        location: { name: 'Fig Tree House', address: 'Hungária körút 61' },
+      }),
+      link: createCard(doc, {
+        type: 'food',
+        date: day,
+        location: { name: 'b', mapsUrl: 'https://maps.app.goo.gl/x' },
+      }),
+      name: createCard(doc, { type: 'sight', location: { name: 'Fig Tree House' } }),
+      none: createCard(doc, { type: 'food', date: day }),
+      idea: createCard(doc, { type: 'sight' }),
+      note: createCard(doc, { type: 'note', date: day }),
+      transport: createCard(doc, { type: 'transport', date: day }),
+    }
+    const cards = readCards(doc)
+    const reason = (id: string) => offMapReason(cards.find((c) => c.id === id) as never)
+    expect(reason(ids.pinned)).toBeUndefined()
+    expect(reason(ids.address)).toBe('address')
+    expect(reason(ids.link)).toBe('link')
+    expect(reason(ids.name)).toBe('name')
+    expect(reason(ids.none)).toBe('none')
+    expect(reason(ids.idea)).toBeUndefined()
+    expect(reason(ids.note)).toBeUndefined()
+    expect(reason(ids.transport)).toBeUndefined()
+  })
+})
+
+describe('photonPlaces', () => {
+  it('nazwa, adres i współrzędne; bez powtórek i wyników bez punktu', () => {
+    const feature = (properties: Record<string, string>, coordinates?: [number, number]) => ({
+      properties,
+      geometry: coordinates && { coordinates },
+    })
+    const json = {
+      features: [
+        feature(
+          {
+            name: 'Fig Tree Houser Minihotel',
+            street: 'Hungária körút',
+            housenumber: '61',
+            postcode: '1143',
+            city: 'Budapest',
+            country: 'Magyarország',
+          },
+          [19.1058463, 47.5056862],
+        ),
+        feature(
+          {
+            name: 'Fig Tree Houser Minihotel',
+            street: 'Hungária körút',
+            housenumber: '61',
+            postcode: '1143',
+            city: 'Budapest',
+            country: 'Magyarország',
+          },
+          [19.1, 47.5],
+        ),
+        feature(
+          { street: 'Rua Augusta', housenumber: '2', city: 'Lisboa', country: 'Portugal' },
+          [-9.13, 38.71],
+        ),
+        feature({ name: 'Lisboa', country: 'Portugal' }, [-9.14, 38.72]),
+        feature({ name: 'bez punktu' }),
+        feature({}, [1, 1]),
+      ],
+    }
+    expect(photonPlaces(json)).toEqual([
+      {
+        name: 'Fig Tree Houser Minihotel',
+        address: 'Hungária körút 61, 1143 Budapest, Magyarország',
+        lat: 47.5056862,
+        lng: 19.1058463,
+      },
+      { name: 'Rua Augusta 2', address: 'Lisboa, Portugal', lat: 38.71, lng: -9.13 },
+      { name: 'Lisboa', address: 'Portugal', lat: 38.72, lng: -9.14 },
+    ])
+    expect(photonPlaces(null)).toEqual([])
   })
 })

@@ -199,3 +199,36 @@ describe('proposalsSummary', () => {
     expect(proposalsSummary([], [])).toBe('')
   })
 })
+
+describe('normalizeProposals: transport', () => {
+  it('przyjazd i cel tylko dla transportu z godziną w wyjeździe', () => {
+    const trip = { startDate: '2026-12-26', endDate: '2027-01-02' }
+    const base = {
+      title: 'Pociąg',
+      date: '2026-12-26',
+      time: '08:54',
+      end_time: '19:49',
+      destination: 'Budapest Nyugati, Budapeszt',
+    }
+    const [train, sight] = normalizeProposals(
+      {
+        cards: [
+          { ...base, type: 'transport' },
+          { ...base, type: 'sight' },
+        ],
+      },
+      trip,
+    )
+    expect(train).toMatchObject({
+      endTime: '19:49',
+      destinationName: 'Budapest Nyugati, Budapeszt',
+    })
+    expect(sight?.endTime).toBeUndefined()
+    expect(sight?.destinationName).toBeUndefined()
+    const [bad] = normalizeProposals(
+      { cards: [{ ...base, type: 'transport', end_time: '7pm' }] },
+      trip,
+    )
+    expect(bad?.endTime).toBeUndefined()
+  })
+})

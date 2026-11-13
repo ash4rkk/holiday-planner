@@ -19,13 +19,14 @@ import {
   moveCardToDay,
   moveToIdeas,
   nextStart,
+  placeLine,
   restoreCard,
   type Sky,
   stayTimes,
   todayLocal,
   variantsByMain,
 } from '@planer/core'
-import { History, Lightbulb, Luggage, Plus, WandSparkles } from 'lucide-react'
+import { ArrowRightToLine, History, Lightbulb, Luggage, Plus, WandSparkles } from 'lucide-react'
 import Link from 'next/link'
 import {
   Fragment,
@@ -403,6 +404,33 @@ export function TripList() {
                   </button>
                 </div>
                 <div className={cx('mx-3 h-0.5 rounded-full', isToday ? 'bg-accent' : 'bg-sel')} />
+                {/* Nocny przejazd z poprzedniego dnia: tu tylko przyjazd, karta stoi w dniu odjazdu. */}
+                {cards
+                  .filter(
+                    (c) =>
+                      c.type === 'transport' &&
+                      c.endTime &&
+                      c.endDate === day.date &&
+                      c.date &&
+                      c.date < day.date &&
+                      !c.deletedAt &&
+                      !c.skipped &&
+                      !c.variantOf,
+                  )
+                  .map((c) => (
+                    <button
+                      key={`arrival-${c.id}`}
+                      type="button"
+                      onClick={() => open(c.id)}
+                      className="mx-3 flex min-h-11 items-center gap-2 text-left text-sm text-muted hover:text-accent"
+                    >
+                      <ArrowRightToLine className="size-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate">
+                        przyjazd <b className="text-text tabular-nums">{c.endTime}</b> ·{' '}
+                        {c.title || placeLine(c) || 'transport'}
+                      </span>
+                    </button>
+                  ))}
                 {day.cards.length > 0 && (
                   <DayCards date={day.date} cards={day.cards} tile={tile} showPast={showingPast} />
                 )}

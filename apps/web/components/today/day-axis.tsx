@@ -1,6 +1,6 @@
 'use client'
 
-import { CARD_STATUS_LABELS, type CardSnapshot, shiftClock } from '@planer/core'
+import { CARD_STATUS_LABELS, type CardSnapshot, shiftClock, spanMin } from '@planer/core'
 import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AmountBadge } from '@/components/amounts'
@@ -52,7 +52,7 @@ export function DayAxis({
   )
   const range = (c: CardSnapshot) => {
     const start = minutesOf(c.time as string)
-    return { start, end: Math.min(24 * 60, start + (c.durationMin ?? DEFAULT_MIN)) }
+    return { start, end: Math.min(24 * 60, start + (spanMin(c) ?? DEFAULT_MIN)) }
   }
 
   return (

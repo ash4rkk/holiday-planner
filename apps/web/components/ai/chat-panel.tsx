@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  addDays,
   addVariant,
   applyCardChange,
   CARD_STATUS_LABELS,
@@ -186,7 +187,7 @@ function Proposals({
   const { doc } = useTrip()
   const existing = useCards()
   const create = (card: CardProposal, target: 'idea' | 'plan') => {
-    const { type, date, time, durationMin, location, address, booking } = card
+    const { type, date, time, endTime, durationMin, location, destination, address, booking } = card
     const planned = target === 'plan'
     // Zamiennik (plan B): wariant istniejącej karty — dzień i godzinę bierze z niej.
     const main =
@@ -197,7 +198,11 @@ function Proposals({
         type,
         ...(planned && date && { date }),
         ...(planned && time && { time }),
-        ...(durationMin && { durationMin }),
+        ...(planned && endTime && { endTime }),
+        // Przyjazd „przed” odjazdem to nocny przejazd: następny dzień.
+        ...(planned && date && time && endTime && endTime < time && { endDate: addDays(date, 1) }),
+        ...(durationMin && !endTime && { durationMin }),
+        ...(destination && { destination }),
         // Starsze propozycje (sprzed pola adresu) mają adres tylko w polu propozycji.
         ...(location && { location: { ...location, ...(address && { address }) } }),
         ...(booking && { status: 'missing' as const }),

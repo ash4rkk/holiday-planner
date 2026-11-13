@@ -50,6 +50,7 @@ import {
   setEdgeLabel,
   shiftClock,
   snapToGrid,
+  spanMin,
   stayTimes,
   TRAVEL_MODE_LABELS,
   todayLocal,
@@ -522,7 +523,7 @@ function BoardCanvas() {
         return [
           {
             time: card.time,
-            durationMin: card.durationMin,
+            durationMin: spanMin(card),
             x: n.position.x,
             top: n.position.y,
             bottom: n.position.y + h,
@@ -582,7 +583,7 @@ function BoardCanvas() {
               bottom: y + (n.measured?.height ?? n.height ?? CARD_SIZE.h),
               // Przypięta na górze kolumny: dla podpowiedzi godziny jest jak karta bez godziny.
               time: card.pinned ? undefined : card.time,
-              durationMin: card.pinned ? undefined : card.durationMin,
+              durationMin: card.pinned ? undefined : spanMin(card),
             },
           ]
         }),
@@ -1766,7 +1767,7 @@ function BoardCanvas() {
           }
           const besideTime =
             target?.time &&
-            roundClock(shiftClock(target.time, (target.durationMin ?? 60) + trip.travelBufferMin))
+            roundClock(shiftClock(target.time, (spanMin(target) ?? 60) + trip.travelBufferMin))
           return (
             <DialogFrame title="zrobić wariant?" onCancel={cancel}>
               <p className="text-sm text-muted">

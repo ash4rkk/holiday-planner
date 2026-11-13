@@ -19,8 +19,13 @@ export type CardProposal = {
   title: string
   date?: string
   time?: string
+  /** Transport: godzina przyjazdu (czas lokalny celu). */
+  endTime?: string
   durationMin?: number
   place?: string
+  /** Transport: stacja lub lotnisko przyjazdu z miastem (do geokodowania). */
+  destinationName?: string
+  destination?: CardLocation
   /** Pełny adres (ulica, miasto) — trafia do pola adresu karty i do geokodowania. */
   address?: string
   location?: CardLocation
@@ -73,6 +78,10 @@ export function normalizeProposals(
     const value = Number(c.amount)
     const currency = typeof c.currency === 'string' ? c.currency.trim().toUpperCase() : 'PLN'
     const place = typeof c.place === 'string' ? c.place.trim().slice(0, 200) : ''
+    const destinationName =
+      type === 'transport' && typeof c.destination === 'string'
+        ? c.destination.trim().slice(0, 200)
+        : ''
     const address = typeof c.address === 'string' ? c.address.trim().slice(0, 300) : ''
     const description = text(c.description, 500)
     const notes = text(c.notes, 1000)
@@ -84,8 +93,13 @@ export function normalizeProposals(
         title,
         ...(dated && { date: c.date as string }),
         ...(dated && isIsoTime(c.time) && { time: c.time }),
+        ...(dated &&
+          type === 'transport' &&
+          isIsoTime(c.time) &&
+          isIsoTime(c.end_time) && { endTime: c.end_time }),
         ...(duration > 0 && duration <= 1440 && { durationMin: Math.round(duration) }),
         ...(place && { place }),
+        ...(destinationName && { destinationName }),
         ...(value > 0 &&
           /^[A-Z]{3}$/.test(currency) && {
             amount: { value: Math.round(value * 100) / 100, currency },

@@ -1,5 +1,5 @@
 import type { AttachmentMeta } from './attachments'
-import { CARD_STATUS_LABELS, type CardSnapshot } from './cards'
+import { CARD_STATUS_LABELS, type CardSnapshot, spanMin } from './cards'
 import { formatDayHeader } from './dates'
 
 // Wieczorne podsumowanie na jutro (push z workera). Składanie treści bez sieci i bazy — testowalne.
@@ -88,7 +88,7 @@ export function cardSkies(cards: CardSnapshot[], date: string, hours: SkyHour[])
   for (const c of cards) {
     if (c.date !== date || !c.time || c.deletedAt || c.variantOf || c.skipped) continue
     const start = minutesOf(c.time)
-    const end = start + (c.durationMin ?? 60)
+    const end = start + (spanMin(c) ?? 60)
     let sky: Sky | undefined
     for (let h = Math.floor(start / 60); h * 60 < end; h++) {
       const at = byHour.get(h)
@@ -114,7 +114,7 @@ export function cardsInRain(
   return cards.filter((c) => {
     if (c.date !== date || !c.time || c.deletedAt || c.variantOf || c.skipped) return false
     const start = minutesOf(c.time)
-    const end = start + (c.durationMin ?? 60)
+    const end = start + (spanMin(c) ?? 60)
     for (let h = Math.floor(start / 60); h * 60 < end; h++) if (wet.has(h)) return true
     return false
   })

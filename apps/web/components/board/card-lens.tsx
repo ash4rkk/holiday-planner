@@ -1,6 +1,6 @@
 'use client'
 
-import { type CardSnapshot, formatAmount, sumByCurrency } from '@planer/core'
+import { arrivalLabel, type CardSnapshot, formatAmount, sumByCurrency } from '@planer/core'
 import { useStore } from '@xyflow/react'
 import { type RefObject, useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -51,8 +51,8 @@ export function CardLens({
   const Icon = style.icon
   const amounts = sumByCurrency(card.amounts ?? [])
   const when = [
-    card.time,
-    card.durationMin !== undefined && formatDuration(card.durationMin),
+    card.time && (arrivalLabel(card) ? `${card.time} → ${arrivalLabel(card)}` : card.time),
+    !card.endTime && card.durationMin !== undefined && formatDuration(card.durationMin),
     amounts.length > 0 && amounts.map(formatAmount).join(' + '),
   ]
     .filter(Boolean)

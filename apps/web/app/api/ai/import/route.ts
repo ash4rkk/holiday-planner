@@ -1,6 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
-import { CARD_TYPES, formatDateSpan, isIsoDate, isIsoTime, withoutAmounts } from '@planer/core'
+import {
+  addDays,
+  arrivalFromText,
+  CARD_TYPES,
+  formatDateSpan,
+  isIsoDate,
+  isIsoTime,
+  withoutAmounts,
+} from '@planer/core'
 import { z } from 'zod'
 import { budgetLeftPln, MONTHLY_BUDGET_PLN, recordUsage } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured, anthropic, fallback } from '@/lib/ai/client'
@@ -16,10 +24,24 @@ const Extracted = z.object({
   type: z.enum(CARD_TYPES),
   title: z.string().describe('krótki tytuł karty, np. „Lot WAW → FCO” albo nazwa hotelu'),
   date: z.string().nullable().describe('YYYY-MM-DD'),
-  time: z.string().nullable().describe('HH:MM'),
-  end_date: z.string().nullable().describe('YYYY-MM-DD, dla noclegów dzień wyjazdu'),
-  location_name: z.string().nullable(),
+  time: z.string().nullable().describe('HH:MM; transport — godzina odjazdu'),
+  end_time: z
+    .string()
+    .nullable()
+    .describe('HH:MM; transport — godzina przyjazdu (lokalna, jak na bilecie), inne typy — null'),
+  end_date: z
+    .string()
+    .nullable()
+    .describe(
+      'YYYY-MM-DD; nocleg — dzień wyjazdu, transport — dzień przyjazdu tylko gdy inny niż odjazdu',
+    ),
+  location_name: z.string().nullable().describe('transport — stacja lub lotnisko odjazdu'),
   location_address: z.string().nullable(),
+  destination_name: z
+    .string()
+    .nullable()
+    .describe('transport — stacja lub lotnisko przyjazdu z miastem, inne typy — null'),
+  destination_address: z.string().nullable(),
   amount: z.object({ value: z.number(), currency: z.string() }).nullable(),
   details: z.array(z.object({ label: z.string(), value: z.string() })),
   notes: z.string().nullable(),
@@ -30,8 +52,10 @@ export type ImportDraft = {
   title: string
   date?: string
   time?: string
+  endTime?: string
   endDate?: string
   location?: { name: string; address?: string; lat?: number; lng?: number }
+  destination?: { name: string; address?: string; lat?: number; lng?: number }
   amount?: { value: number; currency: string }
   details: { label: string; value: string }[]
   notes?: string
@@ -132,18 +156,40 @@ export async function POST(request: Request) {
       .slice(0, 12),
     ...(notes && { notes }),
   }
-  if (out.location_name?.trim()) {
-    const name = out.location_name.trim()
-    const address = out.location_address?.trim() || undefined
-    // Współrzędne z geokodera, żeby karta od razu miała pinezkę na Mapie.
-    const place = await resolvePlace({ text: [name, address].filter(Boolean).join('\n') }).catch(
-      () => null,
-    )
-    draft.location = {
-      name,
-      ...(address && { address }),
-      ...(place?.lat !== undefined && { lat: place.lat, lng: place.lng }),
-    }
+  if (out.type === 'transport') {
+    // Przyjazd z pola, a gdy model zostawił go tylko w opisie — z tekstu („08:54 → 19:49”).
+    const endTime = isIsoTime(out.end_time)
+      ? out.end_time
+      : arrivalFromText([...draft.details.map((d) => `${d.label}: ${d.value}`), notes].join('\n'))
+    if (endTime) draft.endTime = endTime
+    // Przyjazd „przed” odjazdem bez daty przyjazdu to nocny przejazd: następny dzień.
+    if (endTime && draft.date && draft.time && endTime < draft.time && !draft.endDate)
+      draft.endDate = addDays(draft.date, 1)
+    if (draft.endDate && draft.date && draft.endDate <= draft.date) delete draft.endDate
   }
+  const [location, destination] = await Promise.all([
+    place(out.location_name, out.location_address),
+    out.type === 'transport' ? place(out.destination_name, out.destination_address) : undefined,
+  ])
+  if (location) draft.location = location
+  if (destination) draft.destination = destination
   return Response.json({ draft })
+}
+
+/** Miejsce ze współrzędnymi z geokodera, żeby karta od razu miała pinezkę na Mapie. */
+async function place(
+  rawName: string | null,
+  rawAddress: string | null,
+): Promise<ImportDraft['location']> {
+  const name = rawName?.trim()
+  if (!name) return undefined
+  const address = rawAddress?.trim() || undefined
+  const found = await resolvePlace({ text: [name, address].filter(Boolean).join('\n') }).catch(
+    () => null,
+  )
+  return {
+    name,
+    ...(address && { address }),
+    ...(found?.lat !== undefined && { lat: found.lat, lng: found.lng }),
+  }
 }

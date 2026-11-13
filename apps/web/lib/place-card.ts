@@ -50,24 +50,6 @@ export async function resolvePastedPlace(
 }
 
 /**
- * Współrzędne wpisanego ręcznie adresu (geokoder na serwerze, kilka wariantów zapytania).
- * undefined, gdy adresu nie znaleziono; wyjątek, gdy brak sieci.
- */
-export async function locateAddress(
-  name: string,
-  address: string,
-): Promise<{ lat: number; lng: number } | undefined> {
-  const res = await fetch('/api/maps/resolve', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: [name || address, address].join('\n') }),
-  })
-  if (!res.ok) return undefined
-  const place = (await res.json()) as Place
-  return place.lat != null && place.lng != null ? { lat: place.lat, lng: place.lng } : undefined
-}
-
-/**
  * Karta ze schowka: link Google Maps → karta z miejscem (współrzędne z serwera), inny tekst → notatka.
  * Zwraca id karty albo null, gdy schowek pusty lub niedostępny.
  */

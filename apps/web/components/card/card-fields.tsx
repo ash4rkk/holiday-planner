@@ -1,6 +1,8 @@
 'use client'
 
 import {
+  addDays,
+  arrivalLabel,
   arriveEarlyMin,
   CARD_STATUS_LABELS,
   type CardLocation,
@@ -9,9 +11,12 @@ import {
   type EditableCardFields,
   formatShortDate,
   navigationUrl,
+  offMapReason,
+  type PlaceHit,
   placeUrl,
 } from '@planer/core'
 import {
+  ArrowRightToLine,
   Bell,
   CalendarCheck,
   CalendarDays,
@@ -29,7 +34,8 @@ import {
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { MiniMap } from '@/components/map/mini-map'
 import { cx, inputClass, SectionLabel } from '@/components/ui'
-import { locateAddress, resolvePastedPlace } from '@/lib/place-card'
+import { resolvePastedPlace } from '@/lib/place-card'
+import { usePlaceSearch } from '@/lib/use-place-search'
 import { useTrip } from '@/lib/yjs/trip-doc'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
@@ -37,6 +43,7 @@ type Key =
   | 'date'
   | 'endDate'
   | 'time'
+  | 'endTime'
   | 'durationMin'
   | 'location'
   | 'destination'
@@ -52,6 +59,7 @@ const WHEN: { key: TimeKey; label: string; value: (card: CardSnapshot) => string
     value: (c) => `do ${formatShortDate(c.endDate as string)}`,
   },
   { key: 'time', label: 'godzina', value: (c) => c.time as string },
+  { key: 'endTime', label: 'przyjazd', value: (c) => `przyjazd ${arrivalLabel(c)}` },
   {
     key: 'durationMin',
     label: 'czas trwania',
@@ -73,6 +81,9 @@ const whenFields = (card: CardSnapshot) =>
   WHEN.filter(
     (f) =>
       (f.key !== 'arriveEarlyMin' || card.type === 'transport') &&
+      // Transport: przyjazd zamiast czasu trwania (czas zostaje, gdy już był ustawiony).
+      (f.key !== 'endTime' || card.type === 'transport') &&
+      (f.key !== 'durationMin' || card.type !== 'transport' || card.durationMin !== undefined) &&
       // Kilka dni trwa nocleg albo wynajem auta; przy innych kartach tylko, gdy już ustawiona.
       (f.key !== 'endDate' ||
         card.type === 'stay' ||
@@ -113,6 +124,7 @@ const WHEN_ICON: Record<TimeKey, LucideIcon> = {
   date: CalendarDays,
   endDate: CalendarRange,
   time: Clock,
+  endTime: ArrowRightToLine,
   durationMin: Hourglass,
   remindMin: Bell,
   arriveEarlyMin: TimerReset,
@@ -138,7 +150,9 @@ export function CardSections({
   const [editing, setEditing] = useState<TimeKey | null>(null)
   const [opened, setOpened] = useState<Set<Key>>(new Set())
   const open = (key: Key) => setOpened((s) => new Set(s).add(key))
-  const shown = (key: Key) => card[key] !== undefined || opened.has(key)
+  // Karta, która powinna mieć pinezkę, a jej nie ma, od razu pokazuje pole miejsca.
+  const shown = (key: Key) =>
+    card[key] !== undefined || opened.has(key) || (key === 'location' && !!offMapReason(card))
   const clear = (key: Key) => {
     setEditing(null)
     setOpened((s) => {
@@ -445,6 +459,39 @@ function FieldInput({
           onChange={(e) => onChange({ time: e.target.value || undefined })}
         />
       )
+    case 'endTime':
+      return (
+        <div className="flex flex-col gap-1">
+          <input
+            type="time"
+            className={inputClass}
+            value={card.endTime ?? ''}
+            onChange={(e) => onChange({ endTime: e.target.value || undefined })}
+          />
+          {card.date && (
+            <button
+              type="button"
+              aria-pressed={card.endDate === addDays(card.date, 1)}
+              onClick={() =>
+                onChange({
+                  endDate:
+                    card.endDate === addDays(card.date as string, 1)
+                      ? undefined
+                      : addDays(card.date as string, 1),
+                })
+              }
+              className={cx(
+                'min-h-11 self-start rounded-full border px-3 text-sm',
+                card.endDate === addDays(card.date, 1)
+                  ? 'border-accent bg-active text-accent'
+                  : 'border-line text-muted',
+              )}
+            >
+              następnego dnia
+            </button>
+          )}
+        </div>
+      )
     case 'durationMin':
       return (
         <select
@@ -506,16 +553,22 @@ function FieldInput({
 
 /** Krótki opis pól do kafelka na Liście: '14:30 · 2 h · do 16 lip'. */
 export function fieldsSummary(card: CardSnapshot): string {
+  // Transport z przyjazdem: '08:54 → 19:49'; na osi dnia godziny stoją w kolumnie obok.
+  const arrival = arrivalLabel(card)
   return [
-    card.time,
-    card.durationMin && formatDuration(card.durationMin),
-    card.endDate && `do ${formatShortDate(card.endDate)}`,
+    card.time && (arrival ? `${card.time} → ${arrival}` : card.time),
+    !arrival && card.durationMin && formatDuration(card.durationMin),
+    !card.endTime && card.endDate && `do ${formatShortDate(card.endDate)}`,
   ]
     .filter(Boolean)
     .join(' · ')
 }
 
-/** Miejsce: nazwa i adres ręcznie albo wklejony link Google Maps (współrzędne), mapka i nawigacja. */
+/**
+ * Miejsce: nazwa i adres z podpowiedziami (wyszukiwarka miejsc w okolicy wyjazdu) albo wklejony
+ * link z Map Google, mapka i nawigacja. Karta bez pinezki zaczyna od podpowiedzi dla swojego adresu
+ * (albo nazwy), a „szukaj w Mapach Google” pomaga zdobyć link, gdy podpowiedzi nic nie znajdą.
+ */
 function LocationField({
   field,
   card,
@@ -525,16 +578,37 @@ function LocationField({
   card: CardSnapshot
   onChange: (patch: Partial<EditableCardFields>) => void
 }) {
+  const { trip } = useTrip()
   const location = card[field]
   const [link, setLink] = useState('')
-  const [state, setState] = useState<'idle' | 'resolving' | 'failed' | 'offline' | 'notFound'>(
-    'idle',
-  )
+  const [state, setState] = useState<'idle' | 'resolving' | 'failed' | 'offline'>('idle')
   const [relink, setRelink] = useState(false)
   const hasCoords = location?.lat !== undefined && location?.lng !== undefined
+  // Tekst do podpowiedzi: ostatnio pisane pole; na start adres albo nazwa karty bez pinezki.
+  const [query, setQuery] = useState<{ text: string; from: 'name' | 'address' }>(() =>
+    location?.address?.trim()
+      ? { text: location.address, from: 'address' }
+      : { text: location?.name ?? '', from: 'name' },
+  )
+  const searching = !hasCoords || relink
+  const search = usePlaceSearch(searching ? query.text : '')
 
   const set = (patch: Partial<CardLocation>) =>
     onChange({ [field]: { name: location?.name ?? '', ...location, ...patch } })
+
+  const pick = (hit: PlaceHit) => {
+    setRelink(false)
+    setQuery({ text: '', from: 'name' })
+    onChange({
+      [field]: {
+        // Szukane po adresie: nazwa karty zostaje; po nazwie — nazwa z podpowiedzi.
+        name: (query.from === 'address' && !relink && location?.name?.trim()) || hit.name,
+        ...(hit.address && { address: hit.address }),
+        lat: hit.lat,
+        lng: hit.lng,
+      },
+    })
+  }
 
   const resolve = async (text: string) => {
     if (!text.trim()) return
@@ -564,56 +638,71 @@ function LocationField({
     })
   }
 
-  // Adres bez linku z Map Google: współrzędne z geokodera, żeby miejsce było na Mapie.
-  const canLocate = !!location?.address?.trim() && !location.mapsUrl && !hasCoords
-  const locate = async () => {
-    if (!canLocate || !location?.address) return
-    setState('resolving')
-    let at: Awaited<ReturnType<typeof locateAddress>>
-    try {
-      at = await locateAddress(location.name, location.address)
-    } catch {
-      setState('offline')
-      return
-    }
-    setState(at ? 'idle' : 'notFound')
-    if (at) onChange({ [field]: { ...location, ...at } })
-  }
+  // Mapy Google: nazwa z adresem, a bez adresu z nazwą wyjazdu (zwykle miasto).
+  const googleQuery = [
+    location?.name?.trim(),
+    location?.address?.trim() || trip.title.replace(/\(.*?\)/g, '').trim(),
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <div className="flex flex-col gap-1">
       <input
         className={inputClass}
-        placeholder="nazwa miejsca"
+        placeholder={searching ? 'nazwa miejsca — podpowiem adres' : 'nazwa miejsca'}
         value={location?.name ?? ''}
-        onChange={(e) => set({ name: e.target.value })}
+        onChange={(e) => {
+          set({ name: e.target.value })
+          setQuery({ text: e.target.value, from: 'name' })
+        }}
       />
       <input
         className={inputClass}
         placeholder="adres (opcjonalnie)"
         value={location?.address ?? ''}
         onChange={(e) => {
-          // Współrzędne z geokodera należą do starego adresu; z linku zostają.
+          // Współrzędne z podpowiedzi należą do starego adresu; z linku zostają.
           const { lat, lng, ...rest } = location ?? { name: '' }
           const keep = location?.mapsUrl && lat !== undefined ? { lat, lng } : {}
           onChange({ [field]: { ...rest, ...keep, address: e.target.value || undefined } })
-          setState('idle')
+          setQuery({ text: e.target.value, from: 'address' })
         }}
-        onBlur={() => void locate()}
       />
-      {canLocate && state === 'idle' && (
-        <button
-          type="button"
-          onClick={() => void locate()}
-          className="min-h-11 self-start px-1 text-xs text-subtle hover:text-accent"
+      {searching && search.hits.length > 0 && (
+        <ul
+          className="flex flex-col overflow-hidden rounded-small border border-line"
+          aria-label="podpowiedzi miejsc"
         >
-          znajdź adres na mapie ›
-        </button>
+          {search.hits.map((hit) => (
+            <li key={`${hit.lat},${hit.lng}`} className="border-line not-first:border-t">
+              <button
+                type="button"
+                onClick={() => pick(hit)}
+                className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-active"
+              >
+                <MapPin className="size-4 shrink-0 text-subtle" aria-hidden="true" />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm">{hit.name}</span>
+                  {hit.address && (
+                    <span className="truncate text-xs text-subtle">{hit.address}</span>
+                  )}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-      {state === 'notFound' && (
-        <span className="text-xs text-red">
-          ● nie znaleziono adresu — popraw go albo wklej link z Map Google
+      {searching && search.state === 'searching' && !search.hits.length && (
+        <span className="text-xs text-subtle">szukam miejsca…</span>
+      )}
+      {searching && search.state === 'done' && !search.hits.length && (
+        <span className="text-xs text-subtle">
+          nic nie znaleziono — wklej link z Map Google poniżej
         </span>
+      )}
+      {searching && search.state === 'offline' && (
+        <span className="text-xs text-red">● brak zasięgu — podpowiedzi wrócą z siecią</span>
       )}
       {(!location?.mapsUrl || relink) && (
         <input
@@ -628,6 +717,17 @@ function LocationField({
           onPaste={(e) => void resolve(e.clipboardData.getData('text'))}
           onBlur={() => void resolve(link)}
         />
+      )}
+      {searching && googleQuery && (
+        <a
+          href={placeUrl({ name: googleQuery })}
+          target="_blank"
+          rel="noreferrer"
+          className="flex min-h-11 flex-col justify-center self-start px-1 text-xs text-subtle hover:text-accent"
+        >
+          <span>szukaj w Mapach Google ›</span>
+          <span className="text-2xs">skopiuj tam link miejsca i wklej go wyżej</span>
+        </a>
       )}
       {state === 'resolving' && <span className="text-xs text-subtle">szukam miejsca…</span>}
       {state === 'failed' && (
@@ -661,13 +761,16 @@ function LocationField({
           </a>
         </div>
       )}
-      {location?.mapsUrl && !relink && (
+      {hasCoords && !relink && (
         <button
           type="button"
-          onClick={() => setRelink(true)}
+          onClick={() => {
+            setRelink(true)
+            setQuery({ text: location?.name ?? '', from: 'name' })
+          }}
           className="min-h-11 self-start px-1 text-xs text-subtle hover:text-accent"
         >
-          inne miejsce · wklej nowy link ›
+          inne miejsce · wyszukaj albo wklej nowy link ›
         </button>
       )}
     </div>

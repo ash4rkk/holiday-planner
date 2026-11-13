@@ -64,8 +64,19 @@ const PROPOSE_CARDS: Anthropic.Beta.BetaTool = {
             title: { type: 'string', description: 'krótki tytuł karty' },
             date: nullable('string', 'YYYY-MM-DD'),
             time: nullable('string', 'HH:MM, czas lokalny miejsca'),
+            end_time: nullable(
+              'string',
+              'transport: HH:MM przyjazdu, czas lokalny celu; inne typy — null',
+            ),
             duration_min: nullable('number', 'czas trwania w minutach'),
-            place: nullable('string', 'nazwa miejsca z miastem'),
+            place: nullable(
+              'string',
+              'nazwa miejsca z miastem; transport — stacja lub lotnisko odjazdu',
+            ),
+            destination: nullable(
+              'string',
+              'transport: stacja lub lotnisko przyjazdu z miastem; inne typy — null',
+            ),
             address: nullable('string', 'pełny adres: ulica i numer, kod, miasto'),
             amount: nullable('number', 'koszt'),
             currency: nullable('string', 'kod ISO, np. EUR'),
@@ -89,8 +100,10 @@ const PROPOSE_CARDS: Anthropic.Beta.BetaTool = {
             'title',
             'date',
             'time',
+            'end_time',
             'duration_min',
             'place',
+            'destination',
             'address',
             'amount',
             'currency',
@@ -156,7 +169,7 @@ const PROPOSE_CHANGES: Anthropic.Beta.BetaTool = {
     additionalProperties: false,
   },
   // Bez strict: API dopuszcza najwyżej 16 pól z unią typów (nullable/anyOf) we wszystkich narzędziach
-  // strict razem — propose_cards ma ich 12, z tymi 7 było 19 i każde pytanie kończyło się 400.
+  // strict razem — propose_cards ma ich 14 (zapas: 2), z tymi 7 byłoby 21 i każde pytanie kończyłoby się 400.
   // normalizeChanges i tak sprawdza każde pole.
 }
 
@@ -455,6 +468,8 @@ export async function POST(request: Request) {
             for (const card of cards) {
               const location = await locate(card.place, card.address)
               if (location) card.location = location
+              const destination = card.destinationName && (await locate(card.destinationName))
+              if (destination) card.destination = destination
             }
             proposed.push(...cards)
             send('proposal', { cards })

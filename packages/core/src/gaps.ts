@@ -1,4 +1,4 @@
-import type { CardLocation, CardSnapshot } from './cards'
+import { type CardLocation, type CardSnapshot, spanMin } from './cards'
 import { addDays } from './dates'
 import { distanceKm, hasCoords, type LatLng } from './maps'
 import type { TravelMode } from './route-plan'
@@ -90,7 +90,7 @@ const timedCards = (cards: CardSnapshot[]) =>
     .filter((c) => c.time && c.type !== 'stay' && !c.deletedAt)
     .sort((a, b) => (a.time as string).localeCompare(b.time as string))
 
-const endOf = (c: CardSnapshot) => minutes(c.time as string) + (c.durationMin ?? 0)
+const endOf = (c: CardSnapshot) => minutes(c.time as string) + (spanMin(c) ?? 0)
 
 /**
  * Pary kolejnych kart dnia z godziną. Noclegi pomijamy (trwają kilka dni). Lot czy pociąg bez pola
@@ -177,16 +177,21 @@ export function nextStart(
  * trwania jest otwarta: trwa do startu następnej (`next`), a bez następnej do końca dnia.
  */
 export function cardIsPast(
-  card: Pick<CardSnapshot, 'date' | 'endDate' | 'time' | 'durationMin'>,
+  card: Pick<CardSnapshot, 'date' | 'endDate' | 'time' | 'durationMin'> &
+    Partial<Pick<CardSnapshot, 'type' | 'endTime'>>,
   now: { date: string; time: string },
   next?: string,
 ): boolean {
   const last = card.endDate ?? card.date
   if (!last) return false
   if (last !== now.date) return last < now.date
+  // Nocny przejazd: dziś liczy się już tylko przyjazd.
+  if (card.endDate && card.endDate !== card.date && card.type === 'transport' && card.endTime)
+    return card.endTime <= now.time
   if (card.endDate || !card.time) return false
-  if (card.durationMin === undefined) return next !== undefined && next <= now.time
-  return minutes(card.time) + card.durationMin <= minutes(now.time)
+  const span = spanMin(card)
+  if (span === undefined) return next !== undefined && next <= now.time
+  return minutes(card.time) + span <= minutes(now.time)
 }
 
 /** Typowy postój na karcie, gdy nie wiadomo, ile potrwa. */
@@ -207,7 +212,7 @@ export function legIsPast(
   if (date !== now.date) return date < now.date
   const to = cards.find((c) => c.id === leg.to)
   if (!to?.time) return false
-  const end = minutes(to.time) + (to.durationMin ?? TYPICAL_STAY_MIN)
+  const end = minutes(to.time) + (spanMin(to) ?? TYPICAL_STAY_MIN)
   return minutes(now.time) >= end + LEG_GRACE_MIN
 }
 
@@ -264,7 +269,7 @@ export function stayTimes(
   const times = new Map<string, string>()
   for (const leg of legs) {
     const card = cards.find((c) => c.id === leg.from)
-    if (!card?.time || card.durationMin !== undefined || !leg.arriveBy) continue
+    if (!card?.time || spanMin(card) !== undefined || !leg.arriveBy) continue
     const latest = latestLeave(leg.arriveBy, plans[leg.id], bufferMin)
     if (latest <= minutes(card.time)) continue
     // Bez znanego dojazdu to tylko górna granica: sam zapas przed następną kartą.

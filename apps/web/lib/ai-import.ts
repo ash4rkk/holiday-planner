@@ -93,8 +93,10 @@ async function processJob(doc: Y.Doc, job: ImportJob): Promise<string> {
       type: d.type as CardType,
       ...(d.date && { date: d.date }),
       ...(d.time && { time: d.time }),
+      ...(d.endTime && { endTime: d.endTime }),
       ...(d.endDate && { endDate: d.endDate }),
       ...(d.location && { location: d.location }),
+      ...(d.destination && { destination: d.destination }),
       // Bilet, rezerwacja i paragon to rzeczy już załatwione.
       ...(d.type !== 'note' && { status: 'booked' as const }),
       aiDraft: true,

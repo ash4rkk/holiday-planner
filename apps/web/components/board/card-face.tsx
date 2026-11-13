@@ -5,10 +5,12 @@ import {
   type CardSnapshot,
   formatAmount,
   formatShortDate,
+  placeLine,
   sumByCurrency,
 } from '@planer/core'
 import { Paperclip } from 'lucide-react'
 import { fieldsSummary } from '@/components/card/card-fields'
+import { OffMapMark } from '@/components/card/off-map-mark'
 import { StatusMark } from '@/components/card/status-mark'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { cx } from '@/components/ui'
@@ -51,10 +53,9 @@ export function CardFace({
   const amounts = sumByCurrency(card.amounts ?? [])
   const domain = card.linkPreview?.url ? hostOf(card.linkPreview.url) : undefined
   // Miejsce o tej samej nazwie co karta nic nie dodaje (np. „Mosteiro dos Jerónimos” dwa razy).
+  const placeName = placeLine(card)
   const place =
-    card.location?.name && norm(card.location.name) !== norm(card.title)
-      ? `⌖ ${card.location.name}`
-      : domain && `↗ ${domain}`
+    placeName && norm(placeName) !== norm(card.title) ? `⌖ ${placeName}` : domain && `↗ ${domain}`
   const footer = amounts.length > 0 || card.status || when || files > 0 || place
 
   return (
@@ -71,6 +72,7 @@ export function CardFace({
           {card.title || 'bez tytułu'}
         </span>
         {card.pinned && <span className="text-accent">⌖</span>}
+        <OffMapMark card={card} />
         <span className="pt-0.5" title={CARD_TYPE_LABELS[card.type]}>
           <Icon className={cx('size-4', style.text)} aria-hidden="true" />
           <span className="sr-only">{CARD_TYPE_LABELS[card.type]}</span>

@@ -1,7 +1,13 @@
 import type * as Y from 'yjs'
 import { formatAmount, sumByCurrency } from './amounts'
 import { readAttachments } from './attachments'
-import { CARD_STATUS_LABELS, CARD_TYPE_LABELS, type CardSnapshot, variantsByMain } from './cards'
+import {
+  arrivalLabel,
+  CARD_STATUS_LABELS,
+  CARD_TYPE_LABELS,
+  type CardSnapshot,
+  variantsByMain,
+} from './cards'
 import { formatDateSpan, formatDayHeader } from './dates'
 import {
   cardsOf,
@@ -34,8 +40,9 @@ function cardBlock(
 ): string {
   const meta = [
     card.time && `godz. ${card.time}`,
+    arrivalLabel(card) && `przyjazd ${card.endTime}${card.endDate ? ` (${card.endDate})` : ''}`,
     card.durationMin && `${card.durationMin} min`,
-    card.endDate && `do ${card.endDate}`,
+    card.endDate && !card.endTime && `do ${card.endDate}`,
     card.status && CARD_STATUS_LABELS[card.status],
     card.location?.name &&
       `miejsce: ${card.location.name}${card.location.address ? ` (${card.location.address})` : ''}${
@@ -43,6 +50,7 @@ function cardBlock(
           ? ` [${card.location.lat.toFixed(5)},${card.location.lng?.toFixed(5)}]`
           : ''
       }`,
+    card.destination?.name && `dokąd: ${card.destination.name}`,
     card.amounts?.length && `kwoty: ${sumByCurrency(card.amounts).map(formatAmount).join(' + ')}`,
     card.linkPreview?.url && `link: ${card.linkPreview.url}`,
     card.pinned && 'przypięta',
