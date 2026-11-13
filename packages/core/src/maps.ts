@@ -96,6 +96,30 @@ export function parseShared(input: { title?: string; text?: string; url?: string
   return { name, address, mapsUrl, otherUrl }
 }
 
+/**
+ * Warianty zapytania do geokodera (Nominatim), od najdokładniejszego. Adres przepisany po polsku
+ * („1143 Budapeszt, 61 Hungária körút, Węgry”) Nominatim odrzuca przez kraj na końcu, więc kolejne
+ * próby go pomijają, a ostatnia także kody pocztowe. Najwyżej trzy zapytania.
+ */
+export function geocodeQueries(query: string): string[] {
+  const parts = query
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  const out = [parts.join(', ')]
+  if (parts.length > 1) {
+    const head = parts.slice(0, -1)
+    out.push(head.join(', '))
+    out.push(
+      head
+        .map((p) => p.replace(/\b\d{2}-?\d{3}\b|\b\d{4,5}\b/g, '').trim())
+        .filter(Boolean)
+        .join(', '),
+    )
+  }
+  return [...new Set(out.filter(Boolean))]
+}
+
 function valid(lat: number, lng: number): LatLng | undefined {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined
   if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) return undefined

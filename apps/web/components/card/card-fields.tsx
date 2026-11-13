@@ -29,7 +29,7 @@ import {
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { MiniMap } from '@/components/map/mini-map'
 import { cx, inputClass, SectionLabel } from '@/components/ui'
-import { resolvePastedPlace } from '@/lib/place-card'
+import { locateAddress, resolvePastedPlace } from '@/lib/place-card'
 import { useTrip } from '@/lib/yjs/trip-doc'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
@@ -527,7 +527,9 @@ function LocationField({
 }) {
   const location = card[field]
   const [link, setLink] = useState('')
-  const [state, setState] = useState<'idle' | 'resolving' | 'failed' | 'offline'>('idle')
+  const [state, setState] = useState<'idle' | 'resolving' | 'failed' | 'offline' | 'notFound'>(
+    'idle',
+  )
   const [relink, setRelink] = useState(false)
   const hasCoords = location?.lat !== undefined && location?.lng !== undefined
 
@@ -562,6 +564,22 @@ function LocationField({
     })
   }
 
+  // Adres bez linku z Map Google: współrzędne z geokodera, żeby miejsce było na Mapie.
+  const canLocate = !!location?.address?.trim() && !location.mapsUrl && !hasCoords
+  const locate = async () => {
+    if (!canLocate || !location?.address) return
+    setState('resolving')
+    let at: Awaited<ReturnType<typeof locateAddress>>
+    try {
+      at = await locateAddress(location.name, location.address)
+    } catch {
+      setState('offline')
+      return
+    }
+    setState(at ? 'idle' : 'notFound')
+    if (at) onChange({ [field]: { ...location, ...at } })
+  }
+
   return (
     <div className="flex flex-col gap-1">
       <input
@@ -574,8 +592,29 @@ function LocationField({
         className={inputClass}
         placeholder="adres (opcjonalnie)"
         value={location?.address ?? ''}
-        onChange={(e) => set({ address: e.target.value || undefined })}
+        onChange={(e) => {
+          // Współrzędne z geokodera należą do starego adresu; z linku zostają.
+          const { lat, lng, ...rest } = location ?? { name: '' }
+          const keep = location?.mapsUrl && lat !== undefined ? { lat, lng } : {}
+          onChange({ [field]: { ...rest, ...keep, address: e.target.value || undefined } })
+          setState('idle')
+        }}
+        onBlur={() => void locate()}
       />
+      {canLocate && state === 'idle' && (
+        <button
+          type="button"
+          onClick={() => void locate()}
+          className="min-h-11 self-start px-1 text-xs text-subtle hover:text-accent"
+        >
+          znajdź adres na mapie ›
+        </button>
+      )}
+      {state === 'notFound' && (
+        <span className="text-xs text-red">
+          ● nie znaleziono adresu — popraw go albo wklej link z Map Google
+        </span>
+      )}
       {(!location?.mapsUrl || relink) && (
         <input
           className={inputClass}

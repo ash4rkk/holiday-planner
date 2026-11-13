@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   coordsFromMapsUrl,
   decodePolyline,
+  geocodeQueries,
   isAllowedMapsHost,
   isGoogleMapsUrl,
   mainCluster,
@@ -208,5 +209,27 @@ describe('mainCluster', () => {
     const chain = [0, 0.3, 0.6, 0.9].map((d) => ({ lat: 50, lng: 20 + d }))
     expect(mainCluster(chain)).toHaveLength(4)
     expect(mainCluster([])).toEqual([])
+  })
+})
+
+describe('geocodeQueries', () => {
+  it('pomija kraj, potem kody pocztowe', () => {
+    expect(geocodeQueries('1143 Budapeszt, 61 Hungária körút, Węgry')).toEqual([
+      '1143 Budapeszt, 61 Hungária körút, Węgry',
+      '1143 Budapeszt, 61 Hungária körút',
+      'Budapeszt, 61 Hungária körút',
+    ])
+  })
+
+  it('jeden człon to jedno zapytanie', () => {
+    expect(geocodeQueries(' Lizbona ')).toEqual(['Lizbona'])
+  })
+
+  it('bez powtórzeń', () => {
+    expect(geocodeQueries('Budapeszt, Węgry')).toEqual(['Budapeszt, Węgry', 'Budapeszt'])
+  })
+
+  it('polski kod z myślnikiem', () => {
+    expect(geocodeQueries('ul. Długa 1, 80-831 Gdańsk, Polska')[2]).toBe('ul. Długa 1, Gdańsk')
   })
 })

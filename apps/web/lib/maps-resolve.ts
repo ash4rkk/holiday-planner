@@ -1,6 +1,7 @@
 import 'server-only'
 import {
   coordsFromMapsUrl,
+  geocodeQueries,
   isAllowedMapsHost,
   type LatLng,
   nameFromMapsUrl,
@@ -37,8 +38,8 @@ async function followRedirects(start: string): Promise<string> {
   return url
 }
 
-/** Geokodowanie zapasowe (Nominatim, OSM). */
-export async function geocode(query: string): Promise<LatLng | undefined> {
+/** Jedno zapytanie do Nominatim (OSM). */
+async function nominatim(query: string): Promise<LatLng | undefined> {
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.search = new URLSearchParams({
     q: query,
@@ -53,6 +54,20 @@ export async function geocode(query: string): Promise<LatLng | undefined> {
   if (!res.ok) return undefined
   const [hit] = (await res.json()) as { lat: string; lon: string }[]
   return hit ? { lat: Number(hit.lat), lng: Number(hit.lon) } : undefined
+}
+
+// Zasady Nominatim: najwyżej jedno zapytanie na sekundę.
+const NOMINATIM_GAP_MS = 1100
+
+/** Geokodowanie zapasowe: kolejne warianty adresu (`geocodeQueries`), aż któryś trafi. */
+export async function geocode(query: string): Promise<LatLng | undefined> {
+  const queries = geocodeQueries(query)
+  for (const [i, q] of queries.entries()) {
+    if (i > 0) await new Promise((r) => setTimeout(r, NOMINATIM_GAP_MS))
+    const hit = await nominatim(q)
+    if (hit) return hit
+  }
+  return undefined
 }
 
 /** Udostępnienie z Google Maps → nazwa, adres, współrzędne. Błędy sieci nie przerywają — zostaje to, co wiadomo. */
