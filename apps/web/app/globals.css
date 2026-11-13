@@ -365,6 +365,27 @@ body {
   font-weight: 700;
   cursor: pointer;
 }
+/* Wachlarz pinezek z jednego punktu: kropka w punkcie i cienkie linie do pinezek. */
+.map-spread {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--panel);
+  pointer-events: none;
+}
+.map-spread svg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+}
+.map-spread line {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
 .map-pin.is-active .map-pin__shape {
   border-color: var(--text);
 }

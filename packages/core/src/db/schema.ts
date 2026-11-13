@@ -215,6 +215,15 @@ export const routesUsage = pgTable('routes_usage', {
   requests: integer('requests').notNull().default(0),
 })
 
+/**
+ * Zapytania o szczegóły miejsca w Google Places (współrzędne) w miesiącu (YYYY-MM) — twardy limit,
+ * żeby zostać w darmowej puli. Wyszukiwanie samego ID miejsca jest darmowe i go nie liczymy.
+ */
+export const placesUsage = pgTable('places_usage', {
+  month: text('month').primaryKey(),
+  requests: integer('requests').notNull().default(0),
+})
+
 /** Dzienny bezpiecznik zapytań do Google (wspólny dla web i workera; dzień w Europe/Warsaw). */
 export const routesDaily = pgTable('routes_daily', {
   day: text('day').primaryKey(),

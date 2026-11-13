@@ -326,3 +326,46 @@ export function mapDays(
     hasPlaces: live.some((c) => c.date === date && hasCoords(c)),
   }))
 }
+
+/** Najmniejszy odstęp środków sąsiednich pinezek w wachlarzu (px) — pinezka ma ok. 30 px. */
+const FAN_GAP_PX = 38
+
+/**
+ * Przesunięcia (px względem punktu) pinezek rozsuniętych z jednego miejsca: do 6 — łuk nad punktem,
+ * więcej — pełny okrąg. Promień rośnie tak, żeby sąsiednie pinezki na siebie nie wchodziły.
+ */
+export function fanOffsets(n: number): [number, number][] {
+  if (n < 1) return []
+  const arc = n <= 6
+  const step = arc ? (n === 1 ? 0 : Math.min(50, 160 / (n - 1))) : 360 / n
+  const rad = (deg: number) => (deg * Math.PI) / 180
+  const r = step ? Math.max(44, FAN_GAP_PX / (2 * Math.sin(rad(step) / 2))) : 44
+  const start = arc ? -90 - (step * (n - 1)) / 2 : -90
+  return Array.from({ length: n }, (_, i) => {
+    const a = rad(start + step * i)
+    return [Math.round(r * Math.cos(a)), Math.round(r * Math.sin(a))]
+  })
+}
+
+/** Miejsce z Google Places: współrzędne i adres (Place Details Essentials). */
+export type GooglePlace = { id: string; lat: number; lng: number; address?: string }
+
+/** Pierwsze ID miejsca z odpowiedzi Text Search (pole `places.id`). */
+export function googlePlaceId(json: unknown): string | undefined {
+  const id = (json as { places?: { id?: unknown }[] } | null)?.places?.[0]?.id
+  return typeof id === 'string' && /^[\w-]{10,300}$/.test(id) ? id : undefined
+}
+
+/** Odpowiedź Place Details (`id,location,formattedAddress`) → miejsce; bez współrzędnych undefined. */
+export function googlePlaceDetails(json: unknown): GooglePlace | undefined {
+  const p = (json ?? {}) as {
+    id?: unknown
+    formattedAddress?: unknown
+    location?: { latitude?: unknown; longitude?: unknown }
+  }
+  const lat = Number(p.location?.latitude)
+  const lng = Number(p.location?.longitude)
+  if (typeof p.id !== 'string' || !valid(lat, lng)) return undefined
+  const address = typeof p.formattedAddress === 'string' ? p.formattedAddress.trim() : ''
+  return { id: p.id, lat, lng, ...(address && { address }) }
+}

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { getCurrentUser } from '@/lib/auth/user'
 import { resolvePlace } from '@/lib/maps-resolve'
-import { tripArea } from '@/lib/trip-place'
+import { tripArea, tripPlace } from '@/lib/trip-place'
 import { getTrip } from '@/lib/trips'
 
 const body = z.object({
@@ -19,6 +19,9 @@ export async function POST(request: Request) {
   const { tripId, ...shared } = parsed.data
   const trip = tripId ? await getTrip(tripId) : undefined
   return Response.json(
-    await resolvePlace(shared, { userId: user.id, ...(trip && { near: tripArea(trip) }) }),
+    await resolvePlace(shared, {
+      userId: user.id,
+      ...(trip && { near: tripArea(trip), nearAt: await tripPlace(trip) }),
+    }),
   )
 }

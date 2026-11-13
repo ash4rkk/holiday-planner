@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   coordsFromMapsUrl,
   decodePolyline,
+  fanOffsets,
   geocodeQueries,
+  googlePlaceDetails,
+  googlePlaceId,
   isAllowedMapsHost,
   isGoogleMapsUrl,
   mainCluster,
@@ -273,5 +276,46 @@ describe('offMapReason', () => {
     expect(reason(ids.idea)).toBeUndefined()
     expect(reason(ids.note)).toBeUndefined()
     expect(reason(ids.transport)).toBeUndefined()
+  })
+})
+
+describe('fanOffsets', () => {
+  it.each([1, 2, 3, 5, 6, 7, 12])('%i pinezek bez nakładania, nad punktem przy łuku', (n) => {
+    const out = fanOffsets(n)
+    expect(out).toHaveLength(n)
+    for (let i = 0; i < n; i++)
+      for (let k = i + 1; k < n; k++) {
+        const [a, b] = [out[i] as [number, number], out[k] as [number, number]]
+        expect(Math.hypot(a[0] - b[0], a[1] - b[1])).toBeGreaterThanOrEqual(36)
+      }
+    if (n <= 6) for (const [, y] of out) expect(y).toBeLessThan(0)
+  })
+})
+
+describe('Google Places', () => {
+  it('ID z Text Search', () => {
+    expect(googlePlaceId({ places: [{ id: 'ChIJnZm0fyLcQUcRRl4jRKg8Ji8' }] })).toBe(
+      'ChIJnZm0fyLcQUcRRl4jRKg8Ji8',
+    )
+    expect(googlePlaceId({ places: [] })).toBeUndefined()
+    expect(googlePlaceId({ places: [{ id: '../../x' }] })).toBeUndefined()
+    expect(googlePlaceId(null)).toBeUndefined()
+  })
+
+  it('szczegóły miejsca', () => {
+    expect(
+      googlePlaceDetails({
+        id: 'ChIJnZm0fyLcQUcRRl4jRKg8Ji8',
+        formattedAddress: 'Budapeszt, Szentháromság tér, 1014 Węgry',
+        location: { latitude: 47.5021, longitude: 19.0348 },
+      }),
+    ).toEqual({
+      id: 'ChIJnZm0fyLcQUcRRl4jRKg8Ji8',
+      lat: 47.5021,
+      lng: 19.0348,
+      address: 'Budapeszt, Szentháromság tér, 1014 Węgry',
+    })
+    expect(googlePlaceDetails({ id: 'x', location: { latitude: 0, longitude: 0 } })).toBeUndefined()
+    expect(googlePlaceDetails({ location: { latitude: 47, longitude: 19 } })).toBeUndefined()
   })
 })

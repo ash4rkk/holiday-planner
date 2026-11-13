@@ -15,6 +15,7 @@
     "./settings": "./src/settings.ts",
     "./push": "./src/push.ts",
     "./routes": "./src/routes.ts",
+    "./places": "./src/places.ts",
     "./forecast": "./src/forecast.ts"
   },
   "scripts": {

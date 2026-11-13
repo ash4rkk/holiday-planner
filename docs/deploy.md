@@ -58,13 +58,19 @@ licznik jest w ustawieniach aplikacji.
 ### 2c. Dojazdy komunikacją [L] (opcjonalnie)
 
 Klucz Google Routes API → `/srv/planer/.env`: `GOOGLE_ROUTES_API_KEY`. Rachunek rozliczeniowy z adresem w
-EOG, bo tylko warunki EOG dopuszczają użycie obok mapy innej niż Google. Klucz ogranicz do Routes API i
-do adresu serwera. Bez klucza czasy liczy OSRM (pieszo) i zostaje link „dojazd ›” do Map Google.
+EOG, bo tylko warunki EOG dopuszczają użycie obok mapy innej niż Google. Klucz ogranicz do Routes API
+i Places API (New) oraz do adresu serwera. Bez klucza czasy liczy OSRM (pieszo) i zostaje link „dojazd ›” do Map Google.
 Zapis wyników w `route_cache` jest niezgodny z warunkami Google; to świadoma decyzja, ryzykiem jest blokada klucza.
 
 `GOOGLE_ROUTES_MONTHLY_BUDGET_PLN` (domyślnie 0) to twardy limit kwoty: aplikacja liczy zapytania w tabeli
 `routes_usage` i po wyczerpaniu przestaje pytać Google do końca miesiąca. Budżet w Google Cloud tylko
 ostrzega. Licznik jest w ustawieniach aplikacji. Zakłada, że ten rachunek nie używa Routes nigdzie indziej.
+
+Ten sam klucz z włączonym **Places API (New)** szuka miejsc, których link z Map Google nie dał współrzędnych
+(Mapy po polsku tłumaczą nazwy). Wyszukiwanie samego ID jest darmowe, a szczegóły miejsca liczy tabela
+`places_usage` z twardym limitem 9000 w miesiącu (darmowa pula Google to 10 000). Bez Places API na kluczu
+albo po limicie miejsca szuka geokoder i AI. Współrzędne z Places zostają w kartach na stałe, a warunki
+Google pozwalają na 30 dni: to ta sama świadoma decyzja co przy `route_cache`.
 
 ### 3. Caddy [S]
 

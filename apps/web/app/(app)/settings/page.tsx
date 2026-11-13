@@ -118,7 +118,7 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
         {routes && (
           <SettingsRow
             href="/settings/routes"
-            label="trasy Google"
+            label="trasy i miejsca Google"
             icon={Route}
             value={`${checks} / ${routesLimit()}`}
           />

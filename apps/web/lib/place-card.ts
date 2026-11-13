@@ -1,5 +1,6 @@
 import { type CardType, createCard, findUrls, type LinkPreview } from '@planer/core'
 import type * as Y from 'yjs'
+import type { FoundPlace } from '@/app/api/places/find/route'
 
 export type Place = {
   name: string
@@ -69,22 +70,22 @@ export async function locateAddress(
 }
 
 /**
- * Współrzędne miejsca z nazwy przez AI (nazwa oryginalna, potem geokoder) — dla nazw przetłumaczonych
- * przez Mapy Google. undefined, gdy nie znaleziono; wyjątek, gdy brak sieci.
+ * Współrzędne miejsca bez pinezki: Google Places, a bez wyniku AI (nazwa oryginalna) i geokoder.
+ * undefined, gdy nie znaleziono; wyjątek, gdy brak sieci.
  */
-export async function locateWithAi(
+export async function findPlace(
   tripId: string,
   place: { name: string; address?: string },
-): Promise<{ lat: number; lng: number; query: string } | undefined> {
-  const res = await fetch('/api/places/ai', {
+): Promise<FoundPlace | undefined> {
+  const res = await fetch('/api/places/find', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ tripId, ...place }),
   })
   if (!res.ok) return undefined
-  const found = (await res.json()) as { lat?: number; lng?: number; query?: string }
-  return found.lat != null && found.lng != null && found.query
-    ? { lat: found.lat, lng: found.lng, query: found.query }
+  const found = (await res.json()) as Partial<FoundPlace>
+  return found.lat != null && found.lng != null && found.label && found.source
+    ? (found as FoundPlace)
     : undefined
 }
 

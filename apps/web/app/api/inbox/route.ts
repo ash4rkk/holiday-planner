@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { getCurrentUser } from '@/lib/auth/user'
 import { addToInbox } from '@/lib/inbox'
 import { resolvePlace } from '@/lib/maps-resolve'
-import { tripArea } from '@/lib/trip-place'
+import { tripArea, tripPlace } from '@/lib/trip-place'
 import { getTrip } from '@/lib/trips'
 
 const body = z.object({
@@ -23,7 +23,11 @@ export async function POST(request: Request) {
   const { tripId, note, clientKey, ...shared } = parsed.data
   const trip = await getTrip(tripId)
   if (!trip) return Response.json({ error: 'nie ma takiego wyjazdu' }, { status: 404 })
-  const place = await resolvePlace(shared, { userId: user.id, near: tripArea(trip) })
+  const place = await resolvePlace(shared, {
+    userId: user.id,
+    near: tripArea(trip),
+    nearAt: await tripPlace(trip),
+  })
   const item = await addToInbox({ tripId, place, note, createdBy: user.id, clientKey })
   revalidatePath(`/trips/${tripId}`, 'layout')
   return Response.json(item)

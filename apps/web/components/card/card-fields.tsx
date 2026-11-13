@@ -27,6 +27,7 @@ import {
   type LucideIcon,
   MapPin,
   Navigation,
+  Search,
   Sparkles,
   TimerReset,
   X,
@@ -34,7 +35,7 @@ import {
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { MiniMap } from '@/components/map/mini-map'
 import { cx, inputClass, SectionLabel } from '@/components/ui'
-import { locateAddress, locateWithAi, resolvePastedPlace } from '@/lib/place-card'
+import { findPlace, locateAddress, resolvePastedPlace } from '@/lib/place-card'
 import { useTrip } from '@/lib/yjs/trip-doc'
 import { formatDuration, formatRemind, REMIND_OPTIONS } from './type-style'
 
@@ -582,9 +583,9 @@ function LocationField({
   const [link, setLink] = useState('')
   const [state, setState] = useState<'idle' | 'resolving' | 'failed' | 'offline'>('idle')
   const [lookup, setLookup] = useState<'idle' | 'searching' | 'notFound' | 'offline'>('idle')
-  const [aiState, setAiState] = useState<'idle' | 'asking' | 'notFound' | 'offline'>('idle')
-  // Co rozpoznało AI („Halászbástya, Budapest”) — do sprawdzenia na mapce pod spodem.
-  const [aiFound, setAiFound] = useState<string | null>(null)
+  const [finding, setFinding] = useState<'idle' | 'asking' | 'notFound' | 'offline'>('idle')
+  // Co znalazło Google albo AI — do sprawdzenia na mapce pod spodem.
+  const [found, setFound] = useState<{ label: string; source: 'google' | 'ai' } | null>(null)
   const [relink, setRelink] = useState(false)
   const hasCoords = location?.lat !== undefined && location?.lng !== undefined
 
@@ -607,29 +608,36 @@ function LocationField({
     if (at) onChange({ [field]: { ...location, ...at } })
   }
 
-  // Nazwa przetłumaczona przez Mapy Google („Baszta Rybacka”): AI podaje oryginalną, geokoder
-  // szuka. Współrzędne dochodzą do miejsca — nazwa, adres i link zostają.
-  const askAi = async () => {
+  // Miejsce bez pinezki (np. nazwa przetłumaczona przez Mapy Google): Google Places, potem AI.
+  // Współrzędne dochodzą do miejsca — nazwa i link zostają, adres z Google tylko gdy go nie było.
+  const find = async () => {
     const name = location?.name?.trim()
     if (!name || !location) return
-    setAiState('asking')
-    let found: Awaited<ReturnType<typeof locateWithAi>>
+    setFinding('asking')
+    let place: Awaited<ReturnType<typeof findPlace>>
     try {
-      found = await locateWithAi(trip.id, {
+      place = await findPlace(trip.id, {
         name,
         ...(location.address && { address: location.address }),
       })
     } catch {
-      setAiState('offline')
+      setFinding('offline')
       return
     }
-    if (!found) {
-      setAiState('notFound')
+    if (!place) {
+      setFinding('notFound')
       return
     }
-    setAiState('idle')
-    setAiFound(found.query)
-    onChange({ [field]: { ...location, lat: found.lat, lng: found.lng } })
+    setFinding('idle')
+    setFound({ label: place.label, source: place.source })
+    onChange({
+      [field]: {
+        ...location,
+        lat: place.lat,
+        lng: place.lng,
+        ...(!location.address && place.address && { address: place.address }),
+      },
+    })
   }
 
   const resolve = async (text: string) => {
@@ -648,7 +656,7 @@ function LocationField({
     }
     setLink('')
     setState('idle')
-    setAiFound(null)
+    setFound(null)
     setRelink(false)
     onChange({
       [field]: {
@@ -687,7 +695,7 @@ function LocationField({
           const keep = location?.mapsUrl && lat !== undefined ? { lat, lng } : {}
           onChange({ [field]: { ...rest, ...keep, address: e.target.value || undefined } })
           setLookup('idle')
-          setAiFound(null)
+          setFound(null)
         }}
         onBlur={() => void locate()}
       />
@@ -702,17 +710,17 @@ function LocationField({
         <div className="flex flex-wrap items-center gap-x-2">
           <button
             type="button"
-            disabled={aiState === 'asking'}
-            onClick={() => void askAi()}
+            disabled={finding === 'asking'}
+            onClick={() => void find()}
             className="flex min-h-11 items-center gap-1 px-1 text-xs text-subtle hover:text-accent disabled:text-subtle"
           >
-            <Sparkles className="size-3.5" aria-hidden="true" />
-            {aiState === 'asking' ? 'AI szuka miejsca…' : 'znajdź przez AI ›'}
+            <Search className="size-3.5" aria-hidden="true" />
+            {finding === 'asking' ? 'szukam miejsca…' : 'znajdź na mapie ›'}
           </button>
-          {aiState === 'notFound' && (
-            <span className="text-xs text-red">● AI nie rozpoznało miejsca — wklej link</span>
+          {finding === 'notFound' && (
+            <span className="text-xs text-red">● nie znaleziono miejsca — wklej link</span>
           )}
-          {aiState === 'offline' && (
+          {finding === 'offline' && (
             <span className="text-xs text-red">● brak zasięgu — spróbuj później</span>
           )}
         </div>
@@ -749,10 +757,19 @@ function LocationField({
       {state === 'offline' && (
         <span className="text-xs text-red">● brak zasięgu — wklej link jeszcze raz później</span>
       )}
-      {hasCoords && aiFound && (
-        <span className="flex items-center gap-1 text-xs text-subtle">
-          <Sparkles className="size-3.5" aria-hidden="true" />
-          AI: {aiFound} — sprawdź na mapce
+      {hasCoords && found && (
+        <span className="flex min-w-0 items-center gap-1 text-xs text-subtle">
+          {found.source === 'ai' ? (
+            <>
+              <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+              AI:
+            </>
+          ) : (
+            // Atrybucja wyników Google, jak przy trasach.
+            <span className="font-sans text-attrib not-italic">Google Maps</span>
+          )}
+          <span className="truncate">{found.label}</span>
+          <span className="shrink-0">· sprawdź na mapce</span>
         </span>
       )}
       {hasCoords && (

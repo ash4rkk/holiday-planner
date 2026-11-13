@@ -5,6 +5,7 @@ import { ChevronDown, Lightbulb, Minus } from 'lucide-react'
 import { type PointerEvent, type TouchEvent, useEffect, useRef, useState } from 'react'
 import { AmountBadge } from '@/components/amounts'
 import { fieldsSummary } from '@/components/card/card-fields'
+import { OffMapMark } from '@/components/card/off-map-mark'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { VariantBadge } from '@/components/card/variant-badge'
 import { cx } from '@/components/ui'
@@ -88,6 +89,7 @@ function IdeaCard({
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-1.5">
+        <OffMapMark card={card} />
         <AmountBadge amounts={card.amounts ?? []} />
         {variants > 0 && <VariantBadge card={card} count={variants} />}
       </span>

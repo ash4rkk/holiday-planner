@@ -8,6 +8,7 @@ import {
   type DayGap,
   dayRoute,
   decodePolyline,
+  fanOffsets,
   formatDayHeader,
   hasCoords,
   type LegPlan,
@@ -126,9 +127,18 @@ function routeFeatures(legs: DayGap[], plans: Record<string, LegPlan | null>, st
 type Tab = 'all' | string
 
 const CLUSTER_PX = 34
+// Dotknięcie grupy przybliża najwyżej do tego poziomu; bliżej leżące miejsca idą w wachlarz.
+const SPLIT_MAX_ZOOM = 19
 // Dymek nad pinezką i jego margines od nagłówka z dniami i dolnego menu.
 const BUBBLE_OFFSET = 42
 const BUBBLE_MARGIN = { top: 116, bottom: 130, side: 8 }
+
+/** Stały klucz grupy (te same karty = ta sama grupa po ponownym narysowaniu). */
+const groupKey = (group: { card: { id: string } }[]) =>
+  group
+    .map((p) => p.card.id)
+    .sort()
+    .join(',')
 
 /** Łączy pinezki bliższe niż CLUSTER_PX na ekranie przy obecnym przybliżeniu. */
 function groupNearby<T extends { card: MappedCard }>(m: MapLibreMap, pins: T[]): T[][] {
@@ -157,6 +167,8 @@ export function TripMap() {
   const [tab, setTab] = useState<Tab>('all')
   const [selected, setSelected] = useState<string | null>(null)
   const [zoom, setZoom] = useState(0)
+  // Grupa rozsunięta wachlarzem (pinezki w jednym punkcie); `ids` w kolejności wachlarza.
+  const [spread, setSpread] = useState<{ key: string; ids: string[] } | null>(null)
   // Ikony typów w pinezkach: pinezki tworzy MapLibre (DOM poza Reactem), ikony lucide wstawia
   // React przez portale do ich kształtów.
   const [pinIcons, setPinIcons] = useState<{ el: HTMLElement; type: CardType; id: string }[]>([])
@@ -194,8 +206,17 @@ export function TripMap() {
     let cancelled = false
     // Nasłuch per wejście na widok: stan tego komponentu, nie poprzedniego.
     const onLoad = () => setLoaded(true)
-    const onZoom = () => map.current && setZoom(map.current.getZoom())
-    const onClick = () => setSelected(null)
+    const onZoom = () => {
+      if (!map.current) return
+      setZoom(map.current.getZoom())
+      setSpread(null)
+    }
+    const onClick = () => {
+      setSelected(null)
+      setSpread(null)
+    }
+    // Przesunięcie mapy składa wachlarz (pinezki wracają do grupy).
+    const onDrag = () => setSpread(null)
     const attach = (e: CachedMap) => {
       container.current?.append(e.element)
       entry.current = e
@@ -203,6 +224,7 @@ export function TripMap() {
       e.map.on('load', onLoad)
       e.map.on('zoomend', onZoom)
       e.map.on('click', onClick)
+      e.map.on('dragstart', onDrag)
       e.map.resize()
       setZoom(e.map.getZoom())
       if (e.map.isStyleLoaded()) setLoaded(true)
@@ -241,6 +263,7 @@ export function TripMap() {
         m.off('load', onLoad)
         m.off('zoomend', onZoom)
         m.off('click', onClick)
+        m.off('dragstart', onDrag)
       }
       // Pinezki i strzałki rysuje widok — zdejmujemy je, żeby po powrocie się nie dublowały.
       for (const marker of markers.current) marker.remove()
@@ -279,24 +302,10 @@ export function TripMap() {
       // Widok wszystkich miejsc: pinezki leżące na sobie łączą się w grupę z liczbą.
       const groups = route ? pins.map((p) => [p]) : groupNearby(m, pins)
       const icons: { el: HTMLElement; type: CardType; id: string }[] = []
-      markers.current = groups.map((group) => {
-        const { card, label } = group[0] as (typeof pins)[number]
-        if (group.length > 1) {
-          const el = document.createElement('button')
-          el.type = 'button'
-          el.className = 'map-cluster'
-          el.textContent = String(group.length)
-          el.setAttribute('aria-label', `${group.length} miejsc, przybliż`)
-          el.addEventListener('click', (e) => {
-            e.stopPropagation()
-            const bounds = new LngLatBounds()
-            for (const p of group) bounds.extend([p.card.location.lng, p.card.location.lat])
-            m.fitBounds(bounds, { padding: 90, maxZoom: 17, duration: 350 })
-          })
-          return new Marker({ element: el })
-            .setLngLat([card.location.lng, card.location.lat])
-            .addTo(m)
-        }
+      const pin = (
+        { card, label }: (typeof pins)[number],
+        offset: [number, number] = [0, 0],
+      ): Marker => {
         const el = document.createElement('button')
         el.type = 'button'
         el.className = cx('map-pin', selected === card.id && 'is-active')
@@ -317,16 +326,71 @@ export function TripMap() {
           e.stopPropagation()
           setSelected(card.id)
         })
-        return new Marker({ element: el, anchor: 'bottom' })
+        return new Marker({ element: el, anchor: 'bottom', offset })
           .setLngLat([card.location.lng, card.location.lat])
           .addTo(m)
+      }
+      markers.current = groups.flatMap((group): Marker[] => {
+        const first = group[0] as (typeof pins)[number]
+        const at: [number, number] = [first.card.location.lng, first.card.location.lat]
+        if (group.length === 1) return [pin(first)]
+        const key = groupKey(group)
+        // Rozsunięta grupa: pinezki wachlarzem nad punktem, cienkie linie do niego.
+        if (spread?.key === key) {
+          const ordered = spread.ids.flatMap((id) => group.filter((p) => p.card.id === id))
+          const offsets = fanOffsets(ordered.length)
+          const hub = document.createElement('div')
+          hub.className = 'map-spread'
+          hub.innerHTML = `<svg aria-hidden="true">${offsets
+            .map(([x, y]) => `<line x1="0" y1="0" x2="${x}" y2="${y}" />`)
+            .join('')}</svg>`
+          return [
+            new Marker({ element: hub }).setLngLat(at).addTo(m),
+            ...ordered.map((p, i) => pin(p, offsets[i])),
+          ]
+        }
+        const el = document.createElement('button')
+        el.type = 'button'
+        el.className = 'map-cluster'
+        el.textContent = String(group.length)
+        el.setAttribute('aria-label', `${group.length} miejsc, pokaż osobno`)
+        el.addEventListener('click', (e) => {
+          e.stopPropagation()
+          // Odległości par na ekranie; para, której nie rozdzieli nawet SPLIT_MAX_ZOOM, się nie liczy.
+          const points = group.map((p) => m.project([p.card.location.lng, p.card.location.lat]))
+          const gain = 2 ** (SPLIT_MAX_ZOOM - m.getZoom())
+          let nearest = Number.POSITIVE_INFINITY
+          for (const [i, a] of points.entries())
+            for (const b of points.slice(i + 1)) {
+              const d = a.dist(b)
+              if (d * gain >= CLUSTER_PX + 6) nearest = Math.min(nearest, d)
+            }
+          if (!Number.isFinite(nearest)) {
+            // Wszystko w jednym punkcie (albo kilka metrów obok): przybliżanie nie pomoże — wachlarz.
+            setSpread({ key, ids: group.map((p) => p.card.id) })
+            return
+          }
+          // Przybliżenie, przy którym rozdzieli się najbliższa para, ale nie dalej, niż mieści się
+          // cała grupa — reszta rozpadnie się przy kolejnym dotknięciu.
+          const bounds = new LngLatBounds()
+          for (const p of group) bounds.extend([p.card.location.lng, p.card.location.lat])
+          const fit = m.cameraForBounds(bounds, { padding: 90, maxZoom: SPLIT_MAX_ZOOM })?.zoom
+          const needed = m.getZoom() + Math.log2((CLUSTER_PX + 6) / nearest)
+          const zoom = Math.min(needed, fit ?? needed, SPLIT_MAX_ZOOM)
+          m.easeTo({
+            center: bounds.getCenter(),
+            zoom: Math.max(zoom, m.getZoom() + 1),
+            duration: 350,
+          })
+        })
+        return [new Marker({ element: el }).setLngLat(at).addTo(m)]
       })
       setPinIcons(icons)
     })
     return () => {
       cancelled = true
     }
-  }, [pins, route, loaded, selected, zoom])
+  }, [pins, route, loaded, selected, zoom, spread])
 
   // ---------- trasa dnia: przerywana linia w akcencie + strzałki kierunku ----------
   const arrows = useRef<Marker[]>([])
@@ -534,6 +598,10 @@ export function TripMap() {
   const bubblePlace = selectedCard && hasCoords(selectedCard) ? selectedCard.location : undefined
   const bubbleLng = bubblePlace?.lng
   const bubbleLat = bubblePlace?.lat
+  // Pinezka w wachlarzu stoi obok swojego punktu — dymek idzie nad nią, nie nad punkt.
+  const fanIndex = selected && spread ? spread.ids.indexOf(selected) : -1
+  const [shiftX, shiftY] =
+    fanIndex >= 0 ? (fanOffsets(spread?.ids.length ?? 0)[fanIndex] ?? [0, 0]) : [0, 0]
   useEffect(() => {
     const m = map.current
     if (!m || bubbleLng === undefined || bubbleLat === undefined) return
@@ -549,7 +617,7 @@ export function TripMap() {
         closeOnClick: false,
         focusAfterOpen: false,
         maxWidth: '300px',
-        offset: BUBBLE_OFFSET,
+        offset: [shiftX, shiftY - BUBBLE_OFFSET],
       })
         .setLngLat([bubbleLng, bubbleLat])
         .setDOMContent(body)
@@ -561,7 +629,7 @@ export function TripMap() {
       popup?.remove()
       setBubble(null)
     }
-  }, [bubbleLng, bubbleLat])
+  }, [bubbleLng, bubbleLat, shiftX, shiftY])
   // Pomiar dopiero z treścią dymka: wcześniej jest pusty i wąski.
   useEffect(() => {
     const m = map.current
