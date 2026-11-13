@@ -6,7 +6,9 @@ import { dayLegs, shiftClock } from './gaps'
 import type { LatLng } from './maps'
 import {
   choosePlan,
+  EARLY_EMPTY_DAYS,
   isFarWalk,
+  isStaleSchedule,
   type LegDraft,
   type LegPlan,
   type LegStep,
@@ -14,6 +16,8 @@ import {
   needsTransit,
   type PlanInput,
   planMaxAgeMs,
+  SUSPECT_GAP_MIN,
+  scheduleGap,
   type TransitOutcome,
   type TravelMode,
 } from './route-plan'
@@ -288,8 +292,11 @@ function fromRoute(route: Route, mode: TravelMode, arriveBy?: string): LegDraft 
 
 export type PlanResult = { plan: LegPlan | null; limited?: boolean; early?: boolean }
 
-/** Znacznik w cache: „rozkładu na ten dzień jeszcze nie ma”, żeby nie pytać przy każdym otwarciu. */
-type EarlyMark = { early: true; checkedAt: string }
+/**
+ * Znacznik w cache: „rozkładu na ten dzień jeszcze nie ma”, żeby nie pytać przy każdym otwarciu.
+ * `estimate`: trasa orientacyjna, gdy Google podał kursy z innej pory (`isStaleSchedule`).
+ */
+type EarlyMark = { early: true; checkedAt: string; estimate?: LegPlan }
 const isEarlyMark = (plan: unknown): plan is EarlyMark =>
   typeof plan === 'object' && plan !== null && 'early' in plan
 
@@ -324,7 +331,7 @@ export async function planLeg(
     : await db.select().from(routeCache).where(eq(routeCache.key, key))
   const age = row ? Date.now() - row.checkedAt.getTime() : Number.POSITIVE_INFINITY
   if (row && isEarlyMark(row.plan) && !options.refresh && age < EARLY_RECHECK_MS)
-    return { plan: null, early: true }
+    return { plan: row.plan.estimate ?? null, early: true }
   const miss = row && isMissMark(row.plan) ? row.plan : null
   const stored = miss ? miss.plan : row && !isEarlyMark(row.plan) ? (row.plan as LegPlan) : null
   // Stare wpisy mogą mieć awaryjną trasę pieszą przez pół kraju; takiej nie pokazujemy.
@@ -346,34 +353,58 @@ export async function planLeg(
     ride: options.ride,
     daysAhead: today().until(Temporal.PlainDate.from(leg.date)).days,
   }
+  const when = (date: string) =>
+    leg.arriveBy
+      ? { arrivalTime: instant(date, leg.arriveBy, trip.timezone) }
+      : { departureTime: instant(date, time, trip.timezone) }
   let outcome: TransitOutcome | undefined
   if (needsTransit(input)) {
     const apiKey = process.env.GOOGLE_ROUTES_API_KEY
     if (!apiKey) outcome = { kind: 'no-key' }
     else if (!(await takeRouteRequest())) outcome = { kind: 'limited' }
-    else
-      outcome = await transit(
-        apiKey,
-        leg.from,
-        leg.to,
-        leg.arriveBy
-          ? { arrivalTime: instant(leg.date, leg.arriveBy, trip.timezone) }
-          : { departureTime: instant(leg.date, time, trip.timezone) },
+    else outcome = await transit(apiKey, leg.from, leg.to, when(leg.date))
+    // Kursy kilka godzin obok potrzebnej pory przy dalekiej dacie: porównanie z tym samym dniem
+    // tydzień wcześniej (tam rozkład już jest) odróżnia brak rozkładu od rzadkiego kursu.
+    if (
+      outcome?.kind === 'ok' &&
+      !options.ride &&
+      !options.live &&
+      input.daysAhead > EARLY_EMPTY_DAYS &&
+      scheduleGap(outcome.plan, leg) > SUSPECT_GAP_MIN &&
+      (await takeRouteRequest())
+    ) {
+      const before = await transit(apiKey as string, leg.from, leg.to, when(addDays(leg.date, -7)))
+      if (
+        isStaleSchedule(
+          outcome.plan,
+          before.kind === 'ok' ? before.plan : null,
+          leg,
+          input.daysAhead,
+        )
       )
+        outcome = { kind: 'stale', plan: outcome.plan }
+    }
   }
   const choice = choosePlan(input, outcome)
   const checkedAt = new Date()
 
   if (choice.early) {
-    // Znacznik tylko po pustej odpowiedzi Google; poza horyzontem i tak nie pytamy.
-    if (outcome?.kind === 'empty' && !options.live) {
-      const mark: EarlyMark = { early: true, checkedAt: checkedAt.toISOString() }
+    const estimate = choice.plan
+      ? { ...choice.plan, checkedAt: checkedAt.toISOString() }
+      : undefined
+    // Znacznik po pustej albo podejrzanej odpowiedzi Google; poza horyzontem i tak nie pytamy.
+    if ((outcome?.kind === 'empty' || outcome?.kind === 'stale') && !options.live) {
+      const mark: EarlyMark = {
+        early: true,
+        checkedAt: checkedAt.toISOString(),
+        ...(estimate && { estimate }),
+      }
       await db
         .insert(routeCache)
         .values({ key, plan: mark, checkedAt })
         .onConflictDoUpdate({ target: routeCache.key, set: { plan: mark, checkedAt } })
     }
-    return { plan: null, early: true }
+    return { plan: estimate ?? null, early: true }
   }
   const save = (plan: LegPlan | MissMark) =>
     db

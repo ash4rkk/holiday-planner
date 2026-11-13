@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  asEstimate,
   choosePlan,
   isFarWalk,
+  isStaleSchedule,
   type LegDraft,
   type LegPlan,
   mergeWalks,
@@ -9,6 +11,7 @@ import {
   type PlanInput,
   planMaxAgeMs,
   routeMarks,
+  scheduleGap,
   vehicleKind,
   waitMinutes,
   withoutFarWalks,
@@ -196,5 +199,56 @@ describe('choosePlan', () => {
     const car: LegDraft = { minutes: 12, mode: 'drive', steps: [] }
     expect(needsTransit({ ...base, mode: 'drive', osrm: car })).toBe(false)
     expect(choosePlan({ ...base, mode: 'drive', osrm: car })).toEqual({ plan: car, keep: true })
+  })
+})
+
+describe('rozkład, którego Google jeszcze nie ma', () => {
+  // Fig Tree House → Nyugati na 2.01 rano: Google podał nocne metro (rozkład kończy się 1.01).
+  const night: LegDraft = {
+    minutes: 38,
+    mode: 'transit',
+    departAt: '00:31',
+    steps: [
+      { kind: 'walk', minutes: 11 },
+      { kind: 'transit', minutes: 8, line: 'M2', departs: '00:42' },
+      { kind: 'transit', minutes: 3, line: 'M3', departs: '01:03' },
+    ],
+  }
+  const morning: LegDraft = {
+    ...night,
+    departAt: '07:16',
+    steps: [
+      { kind: 'walk', minutes: 6 },
+      { kind: 'transit', minutes: 11, line: '1', departs: '07:27' },
+      { kind: 'transit', minutes: 5, line: 'M3', departs: '07:46' },
+    ],
+  }
+  const when = { arriveBy: '07:57' }
+
+  it('scheduleGap: przyjazd za wcześnie, spóźnienie to 0', () => {
+    expect(scheduleGap(night, when)).toBe(408)
+    expect(scheduleGap(morning, when)).toBe(3)
+    expect(scheduleGap({ ...morning, departAt: '07:30' }, when)).toBe(0)
+    expect(scheduleGap(night, { leaveAt: '22:00' })).toBe(162)
+  })
+
+  it('brak rozkładu tylko daleko naprzód i gdy tydzień wcześniej jest normalnie', () => {
+    expect(isStaleSchedule(night, morning, when, 50)).toBe(true)
+    // Rzadki kurs: tydzień wcześniej też trzeba wyjść w nocy.
+    expect(isStaleSchedule(night, night, when, 50)).toBe(false)
+    // Bliska data: Google ma rozkład, wynik jest prawdziwy.
+    expect(isStaleSchedule(night, morning, when, 5)).toBe(false)
+    expect(isStaleSchedule(night, null, when, 50)).toBe(false)
+  })
+
+  it('choosePlan: orientacyjna trasa przesunięta do potrzebnej pory', () => {
+    const choice = choosePlan(
+      { mode: 'transit', osrm: null, arriveBy: '07:57', daysAhead: 50 },
+      { kind: 'stale', plan: night },
+    )
+    expect(choice).toMatchObject({ keep: false, early: true })
+    expect(choice.plan).toMatchObject({ estimate: true, departAt: '07:19' })
+    expect(choice.plan?.steps.map((s) => s.departs)).toEqual([undefined, '07:30', '07:51'])
+    expect(asEstimate(night, { leaveAt: '22:00' }).steps[1]?.departs).toBe('22:00')
   })
 })

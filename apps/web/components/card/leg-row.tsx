@@ -241,17 +241,26 @@ export function LegRow({
             disabled={!details}
             className={cx(
               'hit flex min-h-7 items-center gap-1 text-left',
-              late || plan.noService ? 'text-red' : 'text-green',
+              plan.estimate ? 'text-subtle' : late || plan.noService ? 'text-red' : 'text-green',
             )}
           >
-            <span>
-              {(late || plan.noService) && '● '}
-              {label && `${label}: `}
-              {plan.noService && 'już nic nie jedzie, '}
-              {plan.minutes} min {TRAVEL_MODE_LABELS[plan.mode]}
-              {leaveBy && !overlap && ` · wyjdź do ${leaveBy}`}
-              {late && ` · brakuje ${short} min`}
-            </span>
+            {plan.estimate ? (
+              // Google nie ma jeszcze rozkładu na ten dzień: trasa prawdziwa, godziny przybliżone.
+              <span>
+                {label && `${label}: `}ok. {plan.minutes} min {TRAVEL_MODE_LABELS[plan.mode]}
+                {leaveBy && !overlap && ` · wyjście ok. ${leaveBy}`} · rozkład na ten dzień jeszcze
+                niepełny
+              </span>
+            ) : (
+              <span>
+                {(late || plan.noService) && '● '}
+                {label && `${label}: `}
+                {plan.noService && 'już nic nie jedzie, '}
+                {plan.minutes} min {TRAVEL_MODE_LABELS[plan.mode]}
+                {leaveBy && !overlap && ` · wyjdź do ${leaveBy}`}
+                {late && ` · brakuje ${short} min`}
+              </span>
+            )}
             {details && (
               <ChevronDown
                 className={cx('size-3 shrink-0 transition-transform', open && 'rotate-180')}
@@ -331,7 +340,13 @@ export function LegRow({
           {plan.steps.length > 0 && (
             <StepTimeline rows={timeline(plan.steps, leaveBy ?? plan.departAt)} />
           )}
-          {plan.mode === 'transit' && (
+          {plan.estimate && (
+            <span>
+              godziny orientacyjne: Google nie ma jeszcze rozkładu na ten dzień, sprawdzimy bliżej
+              wyjazdu
+            </span>
+          )}
+          {plan.mode === 'transit' && !plan.estimate && (
             <span className="flex flex-wrap items-center gap-1.5">
               <span className="text-subtle">odjazd</span>
               <button

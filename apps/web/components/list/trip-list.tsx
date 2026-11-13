@@ -176,8 +176,19 @@ export function TripList() {
       <main
         ref={listRef}
         inert={!!openId && !wide}
-        className="mx-auto flex max-w-xl flex-col gap-1"
-        style={wide && openId ? { marginRight: CARD_PANEL_WIDTH } : undefined}
+        className={cx(
+          'mx-auto flex max-w-xl flex-col gap-1',
+          wide && 'transition-[margin] duration-200 motion-reduce:transition-none',
+        )}
+        // Na szerokim ekranie lista stoi na środku; panel karty przesuwa ją tylko o tyle, ile ją
+        // zasłania. Prawy margines zawsze wprost (nie auto), żeby przesunięcie było płynne.
+        style={
+          wide
+            ? {
+                marginRight: `max(${openId ? CARD_PANEL_WIDTH : 0}px, calc((100% - 36rem) / 2))`,
+              }
+            : undefined
+        }
       >
         <TopBar
           title={<TripTitle />}

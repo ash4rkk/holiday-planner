@@ -39,6 +39,11 @@ export type LegPlan = {
   noService?: boolean
   /** Cena biletu na osobę z Google (komunikacja), gdy przewoźnik ją podaje. */
   fare?: { amount: number; currency: string }
+  /**
+   * Orientacyjnie: Google nie ma jeszcze rozkładu na ten dzień (podał kursy z innej pory), więc
+   * trasa jest prawdziwa, a godziny przesunięte do potrzebnej pory. Bez „czasu wyjść”.
+   */
+  estimate?: boolean
   checkedAt: string
 }
 
@@ -98,6 +103,8 @@ export const EARLY_EMPTY_DAYS = 7
 /** Wynik zapytania o komunikację; błąd i brak połączeń to co innego. */
 export type TransitOutcome =
   | { kind: 'ok'; plan: LegDraft }
+  /** Google dał kursy z innej pory, bo rozkładu na ten dzień jeszcze nie ma (`isStaleSchedule`). */
+  | { kind: 'stale'; plan: LegDraft }
   | { kind: 'empty' }
   | { kind: 'error' }
   | { kind: 'limited' }
@@ -159,6 +166,8 @@ export function choosePlan(input: PlanInput, transit?: TransitOutcome): PlanChoi
         return { plan: noService(walking), keep: true }
       return { plan: walking && walking.minutes <= ride_.minutes ? walking : ride_, keep: true }
     }
+    case 'stale':
+      return { plan: asEstimate(transit.plan, { leaveAt, arriveBy }), keep: false, early: true }
     case 'empty':
       if (daysAhead > EARLY_EMPTY_DAYS) return { plan: null, keep: false, early: true }
       if (ride) return { plan: null, keep: false }
@@ -258,4 +267,63 @@ export function routeMarks(plan: Pick<LegPlan, 'steps'>): RouteMark[] {
         : []),
     ]
   })
+}
+
+// ---------- rozkład, którego Google jeszcze nie ma ----------
+
+/** Wynik mijający się z potrzebną porą o więcej niż tyle minut jest podejrzany (dalekie daty). */
+export const SUSPECT_GAP_MIN = 120
+
+const addClock = (time: string, delta: number) => {
+  const total = (((clockMinutes(time) + delta) % 1440) + 1440) % 1440
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
+/**
+ * O ile minut wynik Google mija się z potrzebną porą: przyjazd przed `arriveBy` albo pierwszy kurs
+ * po `leaveAt`. Spóźnienie (przyjazd po `arriveBy`) to nie to samo — wtedy 0.
+ */
+export function scheduleGap(plan: LegDraft, when: { arriveBy?: string; leaveAt?: string }): number {
+  if (when.arriveBy && plan.departAt) {
+    const gap = waitMinutes(addClock(plan.departAt, plan.minutes), when.arriveBy)
+    return gap > 12 * 60 ? 0 : gap
+  }
+  const first = plan.steps.find((s) => s.kind === 'transit')?.departs
+  if (when.leaveAt && first) {
+    const gap = waitMinutes(when.leaveAt, first)
+    return gap > 12 * 60 ? 0 : gap
+  }
+  return 0
+}
+
+/**
+ * Google nie mówi, że rozkład się skończył — podaje wtedy kursy z innej pory (np. nocne metro
+ * zamiast porannego). Rozróżniamy to od rzadkiego kursu porównaniem z tym samym dniem tydzień
+ * wcześniej, na który rozkład już jest: tam normalnie, tu kilka godzin obok = rozkładu brak.
+ */
+export function isStaleSchedule(
+  target: LegDraft,
+  weekBefore: LegDraft | null,
+  when: { arriveBy?: string; leaveAt?: string },
+  daysAhead: number,
+): boolean {
+  if (daysAhead <= EARLY_EMPTY_DAYS || !weekBefore) return false
+  return (
+    scheduleGap(target, when) > SUSPECT_GAP_MIN && scheduleGap(weekBefore, when) <= SUSPECT_GAP_MIN
+  )
+}
+
+/** Trasa z podejrzanego wyniku z godzinami przesuniętymi do potrzebnej pory — orientacyjnie. */
+export function asEstimate(
+  plan: LegDraft,
+  when: { arriveBy?: string; leaveAt?: string },
+): LegDraft {
+  const gap = scheduleGap(plan, when)
+  const delta = when.arriveBy ? gap : -gap
+  return {
+    ...plan,
+    estimate: true,
+    ...(plan.departAt && { departAt: addClock(plan.departAt, delta) }),
+    steps: plan.steps.map((s) => (s.departs ? { ...s, departs: addClock(s.departs, delta) } : s)),
+  }
 }

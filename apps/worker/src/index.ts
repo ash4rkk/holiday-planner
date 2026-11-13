@@ -72,7 +72,8 @@ async function leaveReminders() {
         mode: leg.mode,
       }
       const { plan } = await planLeg(request, trip)
-      if (!plan) continue
+      // Trasa orientacyjna (rozkładu jeszcze nie ma) nie wyznacza godziny wyjścia.
+      if (!plan || plan.estimate) continue
       const leaveBy = shiftClock(
         plan.departAt ?? shiftClock(leg.arriveBy, -plan.minutes),
         -trip.travelBufferMin,
@@ -131,7 +132,7 @@ async function eveningBriefing() {
         },
         trip,
       ).catch(() => ({ plan: null }))
-      if (plan)
+      if (plan && !plan.estimate)
         leaveBy = shiftClock(
           plan.departAt ?? shiftClock(start.arriveBy, -plan.minutes),
           -trip.travelBufferMin,
