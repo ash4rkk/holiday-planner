@@ -701,7 +701,7 @@ function LayersMenu({
         <LayersIcon className="size-5" aria-hidden="true" />
       </button>
       {open && (
-        <div className="island shadow-float pop-in absolute right-0 top-12 z-(--z-popover) flex w-72 flex-col p-1">
+        <div className="island shadow-float pop-in absolute right-0 top-12 z-(--z-popover) flex w-72 flex-col p-1 max-md:fixed max-md:inset-x-2 max-md:top-auto max-md:mt-1 max-md:w-auto">
           {row('święta w Polsce', layers.pl, () => setLayers({ pl: !layers.pl }), '●')}
           {row('święta w Brandenburgii', layers.bb, () => setLayers({ bb: !layers.bb }), '○')}
           {row('wyjazdy', layers.trips, () => setLayers({ trips: !layers.trips }))}

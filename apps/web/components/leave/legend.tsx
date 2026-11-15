@@ -108,7 +108,7 @@ export function Legend({
         <Info className="size-5" aria-hidden="true" />
       </button>
       {open && (
-        <div className="island shadow-float pop-in absolute top-full right-0 z-(--z-popover) mt-1 flex w-72 flex-col gap-2 p-3 text-xs text-muted">
+        <div className="island shadow-float pop-in absolute top-full right-0 z-(--z-popover) mt-1 flex w-72 flex-col gap-2 p-3 text-xs text-muted max-md:fixed max-md:inset-x-2 max-md:top-auto max-md:w-auto">
           <ul aria-label="legenda" className="flex flex-col gap-2">
             {items.map(row)}
           </ul>
