@@ -14,7 +14,13 @@ const MAX_PAGES = 200
 export interface TimeTreeCalendar {
   id: string
   name: string
+  /** kolory etykiet: label_id → '#rrggbb' */
+  labels: Record<string, string>
 }
+
+/** Kolor TimeTree to liczba RGB (np. 3067015) → '#2ecc87'. */
+export const labelColor = (n: unknown): string | null =>
+  typeof n === 'number' && n >= 0 && n <= 0xffffff ? `#${n.toString(16).padStart(6, '0')}` : null
 
 /** Wydarzenie tak, jak zwraca je API TimeTree (tylko pola, których używamy). */
 export interface TimeTreeEvent {
@@ -32,6 +38,7 @@ export interface TimeTreeEvent {
   deactivated_at?: number | null
   /** 2 = wspomnienie/notatka bez daty w kalendarzu */
   category?: number | null
+  label_id?: number | string | null
 }
 
 export class TimeTreeError extends Error {}
@@ -84,11 +91,25 @@ export class TimeTreeClient {
 
   async calendars(): Promise<TimeTreeCalendar[]> {
     const json = (await this.get('/calendars?since=0')) as {
-      calendars?: { id: string | number; name?: string; deactivated_at?: number | null }[]
+      calendars?: {
+        id: string | number
+        name?: string
+        deactivated_at?: number | null
+        calendar_labels?: { id: number | string; color?: unknown }[]
+      }[]
     }
     return (json.calendars ?? [])
       .filter((c) => !c.deactivated_at)
-      .map((c) => ({ id: String(c.id), name: c.name?.trim() || 'kalendarz' }))
+      .map((c) => ({
+        id: String(c.id),
+        name: c.name?.trim() || 'kalendarz',
+        labels: Object.fromEntries(
+          (c.calendar_labels ?? []).flatMap((l) => {
+            const color = labelColor(l.color)
+            return color ? [[String(l.id), color]] : []
+          }),
+        ),
+      }))
   }
 
   /** Wszystkie wydarzenia kalendarza (API oddaje je partiami, `chunk` = jest dalej). */
@@ -147,7 +168,11 @@ function recurrenceLine(line: string, tz: string, allDay: boolean): string | nul
 }
 
 /** Wydarzenia TimeTree jako plik iCalendar (do wspólnego rozwijania powtórzeń w `parseIcs`). */
-export function timetreeToIcs(events: TimeTreeEvent[], timeZone = 'Europe/Warsaw'): string {
+export function timetreeToIcs(
+  events: TimeTreeEvent[],
+  timeZone = 'Europe/Warsaw',
+  labels: Record<string, string> = {},
+): string {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//planer//timetree//PL']
   for (const ev of events) {
     if (ev.deactivated_at || ev.category === 2) continue
@@ -158,6 +183,8 @@ export function timetreeToIcs(events: TimeTreeEvent[], timeZone = 'Europe/Warsaw
     const allDay = Boolean(ev.all_day)
     const end = typeof ev.end_at === 'number' && ev.end_at >= ev.start_at ? ev.end_at : ev.start_at
     lines.push('BEGIN:VEVENT', `UID:${uid}`, `SUMMARY:${escapeText(ev.title ?? '')}`)
+    const color = ev.label_id != null ? labels[String(ev.label_id)] : undefined
+    if (color) lines.push(`X-PLANER-COLOR:${color}`)
     if (allDay) {
       // Całodniowe: północ UTC, koniec to ostatni dzień włącznie.
       const s = utcDate(ev.start_at)
@@ -188,7 +215,12 @@ export function timetreeOccurrences(
   events: TimeTreeEvent[],
   window: IcsWindow,
   timeZone = 'Europe/Warsaw',
+  labels: Record<string, string> = {},
 ): { events: EventOccurrence[]; truncated: boolean } {
-  const { events: list, truncated } = parseIcs(timetreeToIcs(events, timeZone), window, timeZone)
+  const { events: list, truncated } = parseIcs(
+    timetreeToIcs(events, timeZone, labels),
+    window,
+    timeZone,
+  )
   return { events: list, truncated }
 }

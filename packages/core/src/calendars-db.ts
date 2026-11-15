@@ -37,8 +37,15 @@ export async function syncTimetreeCalendar(calendar: {
 }): Promise<number> {
   try {
     if (!calendar.externalId) throw new Error('brak id kalendarza TimeTree')
-    const raw = await timetreeClient().events(calendar.externalId)
-    const { events, truncated } = timetreeOccurrences(raw, importWindow(todayLocal()))
+    const client = timetreeClient()
+    const [raw, list] = await Promise.all([client.events(calendar.externalId), client.calendars()])
+    const labels = list.find((c) => c.id === calendar.externalId)?.labels ?? {}
+    const { events, truncated } = timetreeOccurrences(
+      raw,
+      importWindow(todayLocal()),
+      'Europe/Warsaw',
+      labels,
+    )
     await replaceCalendarEvents(calendar.id, events)
     if (truncated)
       await logEvent('warn', 'timetree', `${calendar.name}: za dużo wydarzeń, część pominięta`)

@@ -54,12 +54,24 @@ function toLocal(t: ICAL.Time, timeZone: string): { date: string; time: string |
   return localDateTime(t.toUnixTime() * 1000, timeZone)
 }
 
+const HEX = /^#[0-9a-f]{6}$/i
+
+/** Kolor wydarzenia: nasz `X-PLANER-COLOR` (TimeTree) albo `COLOR` z RFC 7986, tylko '#rrggbb'. */
+function colorOf(ev: ICAL.Event): string | null {
+  for (const name of ['x-planer-color', 'color']) {
+    const v = ev.component.getFirstPropertyValue(name)
+    if (typeof v === 'string' && HEX.test(v.trim())) return v.trim().toLowerCase()
+  }
+  return null
+}
+
 function occurrence(
   uid: string,
   title: string,
   start: ICAL.Time,
   end: ICAL.Time | null,
   timeZone: string,
+  color: string | null = null,
 ): EventOccurrence {
   const s = toLocal(start, timeZone)
   const allDay = start.isDate
@@ -86,6 +98,7 @@ function occurrence(
     startTime: s.time,
     endTime,
     allDay,
+    color,
   }
 }
 
@@ -138,7 +151,9 @@ export function parseIcs(text: string, window: IcsWindow, timeZone = 'Europe/War
   for (const [uid, ev] of masters) {
     if (!ev.startDate || cancelled(ev)) continue
     if (!ev.isRecurring()) {
-      push(occurrence(uid, ev.summary ?? '', ev.startDate, ev.endDate ?? null, timeZone))
+      push(
+        occurrence(uid, ev.summary ?? '', ev.startDate, ev.endDate ?? null, timeZone, colorOf(ev)),
+      )
       continue
     }
     const it = ev.iterator()
@@ -148,7 +163,7 @@ export function parseIcs(text: string, window: IcsWindow, timeZone = 'Europe/War
       const d = ev.getOccurrenceDetails(next)
       if (d.endDate.compare(from) < 0) continue
       if (cancelled(d.item)) continue
-      push(occurrence(uid, d.item.summary ?? '', d.startDate, d.endDate, timeZone))
+      push(occurrence(uid, d.item.summary ?? '', d.startDate, d.endDate, timeZone, colorOf(d.item)))
     }
   }
   events.sort((a, b) => a.startDate.localeCompare(b.startDate))

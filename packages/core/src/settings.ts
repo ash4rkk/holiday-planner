@@ -2,6 +2,7 @@ import { type BriefingSettings, DEFAULT_BRIEFING } from './briefing'
 import type { CardType } from './cards'
 import { appSettings, eq, getDb } from './db'
 import { HOLIDAY_REGIONS, type HolidayRegion } from './holidays'
+import type { LeaveRegions } from './leave-paint'
 import { DEFAULT_PACKING_DAYS, MAX_PACKING_DAYS } from './packing'
 import { DEFAULT_REMIND_MIN, type ReminderDefaults } from './reminders'
 
@@ -101,18 +102,27 @@ export async function markBriefingSent(tripId: string, date: string): Promise<vo
 
 const LEAVE_KEY = 'leave'
 
-/** Według świąt którego regionu planer liczy dni urlopu (wspólne dla obu osób). */
-export async function getLeaveRegion(): Promise<HolidayRegion> {
+/** Region świąt każdej osoby — według niego liczą się jej dni urlopu. Wspólne dla obu osób. */
+export async function getLeaveRegions(): Promise<LeaveRegions> {
   const [row] = await getDb()
     .select({ value: appSettings.value })
     .from(appSettings)
     .where(eq(appSettings.key, LEAVE_KEY))
-  const region = (row?.value as { region?: unknown } | undefined)?.region
-  return HOLIDAY_REGIONS.includes(region as HolidayRegion) ? (region as HolidayRegion) : 'PL'
+  const v = (row?.value ?? {}) as { region?: unknown; regions?: unknown }
+  const ok = (r: unknown): r is HolidayRegion => HOLIDAY_REGIONS.includes(r as HolidayRegion)
+  const byPerson: Record<string, HolidayRegion> = {}
+  if (v.regions && typeof v.regions === 'object') {
+    for (const [name, r] of Object.entries(v.regions)) if (ok(r)) byPerson[name] = r
+  }
+  return { fallback: ok(v.region) ? v.region : 'PL', byPerson }
 }
 
-export async function setLeaveRegion(region: HolidayRegion): Promise<void> {
-  const clean = { region: HOLIDAY_REGIONS.includes(region) ? region : 'PL' }
+export async function setLeaveRegions(byPerson: Record<string, HolidayRegion>): Promise<void> {
+  const current = await getLeaveRegions()
+  const regions = Object.fromEntries(
+    Object.entries(byPerson).filter(([, r]) => HOLIDAY_REGIONS.includes(r)),
+  )
+  const clean = { region: current.fallback, regions }
   await getDb()
     .insert(appSettings)
     .values({ key: LEAVE_KEY, value: clean })

@@ -2,8 +2,17 @@
 
 import { useRef } from 'react'
 import { cx } from '@/components/ui'
-import { HolidayMarks } from './day-cell'
-import { type DayIndex, MONTH_NAMES, monthWeeks, WEEKDAYS } from './model'
+import { HolidayMarks, Mark, PendingMark } from './day-cell'
+import {
+  type DayIndex,
+  ERASE_CELL,
+  eventColor,
+  type LeaveAt,
+  MONTH_NAMES,
+  monthWeeks,
+  type PaintAt,
+  WEEKDAYS,
+} from './model'
 
 const SWIPE_PX = 50
 
@@ -16,6 +25,8 @@ export function MonthView({
   picking,
   onPick,
   onMonth,
+  paintAt,
+  leaveAt,
 }: {
   year: number
   month: number
@@ -24,6 +35,8 @@ export function MonthView({
   picking: string | null
   onPick: (date: string) => void
   onMonth: (month: number) => void
+  paintAt?: PaintAt
+  leaveAt: LeaveAt
 }) {
   const start = useRef<{ x: number; y: number } | null>(null)
   const swiped = useRef(false)
@@ -33,6 +46,7 @@ export function MonthView({
       className="island flex touch-pan-y flex-col gap-1 p-1.5"
       aria-label={MONTH_NAMES[month]}
       onPointerDown={(e) => {
+        if (paintAt) return
         start.current = { x: e.clientX, y: e.clientY }
         swiped.current = false
       }}
@@ -89,7 +103,9 @@ export function MonthView({
             if (!date) {
               return <span key={`e${i}`} />
             }
-            const period = index.period(date)
+            const paint = paintAt?.(date) ?? null
+            const leave = leaveAt(date)
+            const period = Boolean(leave)
             const holidays = index.holidays(date)
             const events = index.events(date)
             const trips = index.trips(date)
@@ -97,10 +113,18 @@ export function MonthView({
               <button
                 key={date}
                 type="button"
+                data-date={date}
                 onClick={() => onPick(date)}
                 className={cx(
                   'flex min-h-20 min-w-0 flex-col items-stretch gap-0.5 overflow-hidden rounded-small border border-line p-1 text-left',
-                  period && 'bg-active',
+                  // na urlopie cały tekst w kolorze urlopu (nazwy świąt i wydarzeń też czytelne)
+                  leave &&
+                    cx(
+                      leave.cls,
+                      'border-transparent',
+                      leave.approved && '[&_span]:text-on-accent',
+                    ),
+                  paint === 'erase' && ERASE_CELL,
                   picking === date && 'border-accent',
                   date === today && 'border-sel',
                   'hover:border-accent',
@@ -108,30 +132,44 @@ export function MonthView({
               >
                 <span
                   className={cx(
-                    'flex items-center gap-1 text-xs tabular-nums',
-                    period ? 'font-bold' : index.off(date) ? 'text-subtle' : 'text-text',
+                    'flex w-full items-center gap-1 text-xs tabular-nums',
+                    period ? '' : index.off(date) ? 'text-subtle' : 'text-text',
                   )}
                 >
                   {Number(date.slice(8))}
-                  <HolidayMarks marks={holidays} />
+                  <HolidayMarks marks={holidays} onLeave={!!period} />
+                  {leave && !leave.approved && (
+                    <span className="ml-auto flex">
+                      <PendingMark />
+                    </span>
+                  )}
                 </span>
                 {holidays.map((h) => (
-                  <span key={h.region} className="truncate text-2xs text-muted">
+                  <span
+                    key={h.region}
+                    className={cx(
+                      'truncate text-2xs',
+                      h.region === 'PL' ? 'text-hol-pl' : 'text-hol-bb',
+                    )}
+                  >
                     {h.region === 'PL' ? h.name : h.localName}
                   </span>
                 ))}
                 {trips.map((t) => (
-                  <span key={t.id} className="truncate border-t border-muted text-2xs text-muted">
+                  <span key={t.id} className="truncate border-t-2 border-trip text-2xs text-muted">
                     {t.title}
                   </span>
                 ))}
                 {events.slice(0, 3).map((e) => (
                   <span
                     key={`${e.calendarId}${e.uid}`}
-                    className="truncate text-2xs text-muted opacity-60"
+                    className="flex min-w-0 items-center gap-1 text-2xs text-muted opacity-75"
                   >
-                    {e.startTime ? `${e.startTime} ` : ''}
-                    {e.title}
+                    <Mark kind="event" color={eventColor(e)} />
+                    <span className="truncate">
+                      {e.startTime ? `${e.startTime} ` : ''}
+                      {e.title}
+                    </span>
                   </span>
                 ))}
                 {events.length > 3 && (

@@ -1,16 +1,38 @@
 'use client'
 
 import {
+  applyLeaveChange,
   type DayEvent,
-  type HolidayRegion,
-  leaveInYear,
+  diffLeave,
+  type LeaveRegions,
+  leaveDayCounts,
+  leaveInRange,
+  mergeSharedLeave,
+  type PaintMode,
+  paintLeave,
+  personLeaveDays,
   REGION_LABEL,
+  regionOf,
   todayLocal,
 } from '@planer/core'
-import { CalendarCog, Layers as LayersIcon, Plus } from 'lucide-react'
+import {
+  CalendarCog,
+  CalendarDays,
+  Columns3,
+  Layers as LayersIcon,
+  LayoutGrid,
+  type LucideIcon,
+  Plus,
+} from 'lucide-react'
 import Link from 'next/link'
-import { useRef, useState } from 'react'
-import { createLeave, deleteLeave, restoreLeave, updateLeave } from '@/app/(app)/leave/actions'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createLeave,
+  deleteLeave,
+  restoreLeave,
+  swapLeavePeriods,
+  updateLeave,
+} from '@/app/(app)/leave/actions'
 import { Toast } from '@/components/toast-stack'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { cx } from '@/components/ui'
@@ -18,46 +40,85 @@ import { UndoToast } from '@/components/undo-toast'
 import { offerUndo } from '@/lib/undo'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useLeaveLayers } from '@/lib/use-leave-layers'
-import { GanttView } from './gantt-view'
+import { ColumnsView } from './columns-view'
+import { DayTooltip, useDayTooltip } from './day-tooltip'
 import { LeaveSheet, type SheetValue } from './leave-sheet'
+import { Legend } from './legend'
 import { ListView } from './list-view'
 import {
+  type LeaveAt,
   type LeaveView,
+  leaveBg,
+  leaveCellClass,
   type PlannerCalendar,
   type PlannerPeriod,
   type PlannerTrip,
   useDayIndex,
   VIEW_LABELS,
+  type Who,
+  whoOf,
 } from './model'
 import { MonthView } from './month-view'
 import { MonthsView } from './months-view'
+import { PaintNavButton } from './paint-nav-button'
+import { PersonPicker } from './person-picker'
+import { usePaint } from './use-paint'
 
 const VIEWS = Object.keys(VIEW_LABELS) as LeaveView[]
+const VIEW_ICONS: Record<LeaveView, LucideIcon> = {
+  columns: Columns3,
+  months: LayoutGrid,
+  month: CalendarDays,
+}
+/** Widoki, w których da się malować urlop. */
+const PAINT_VIEWS: LeaveView[] = ['columns', 'months', 'month']
 const daysWord = (n: number) => (n === 1 ? 'dzień' : 'dni')
 
 type Sheet = { kind: 'new'; value: SheetValue } | { kind: 'edit'; period: PlannerPeriod }
+
+const BRUSH_KEY = 'planer:leave-brush-person'
+
+/** Czyj urlop maluje pędzel — pamiętane na urządzeniu (`null` = oboje). */
+function useBrushPerson(persons: string[]): [Who, (w: Who) => void] {
+  const [who, setWho] = useState<Who>(null)
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(BRUSH_KEY) ?? 'null') as unknown
+      if (typeof v === 'string' && persons.includes(v)) setWho(v)
+    } catch {}
+  }, [persons])
+  const set = (w: Who) => {
+    setWho(w)
+    try {
+      localStorage.setItem(BRUSH_KEY, JSON.stringify(w))
+    } catch {}
+  }
+  return [who, set]
+}
 
 const byStart = (a: PlannerPeriod, b: PlannerPeriod) => a.startDate.localeCompare(b.startDate)
 
 /** Planer urlopów: wspólny plan dni wolnych, liczony wg świąt wybranego regionu. */
 export function LeavePlanner({
   year,
-  region,
+  regions,
   initialView,
   initialMonth,
   periods: initialPeriods,
   trips,
   events,
   calendars,
+  persons,
 }: {
   year: number
-  region: HolidayRegion
+  regions: LeaveRegions
   initialView: LeaveView
   initialMonth: number
   periods: PlannerPeriod[]
   trips: PlannerTrip[]
   events: DayEvent[]
   calendars: PlannerCalendar[]
+  persons: string[]
 }) {
   const today = todayLocal()
   const [periods, setPeriods] = useState(initialPeriods)
@@ -68,11 +129,30 @@ export function LeavePlanner({
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [layers, setLayers] = useLeaveLayers()
-  const index = useDayIndex(year, region, periods, trips, events, layers)
-  const total = leaveInYear(periods, year, region)
-  const count = periods.filter(
-    (p) => p.endDate >= `${year}-01-01` && p.startDate <= `${year}-12-31`,
-  ).length
+  const [brush, setBrush] = useState(false)
+  const painting = brush && PAINT_VIEWS.includes(view)
+  // Regiony, w których pracujecie: dzień jest szary, gdy wolny dla wszystkich.
+  const workRegions = useMemo(
+    () => [
+      ...new Set(persons.length ? persons.map((p) => regionOf(regions, p)) : [regions.fallback]),
+    ],
+    [persons, regions],
+  )
+  const index = useDayIndex(year, workRegions, periods, trips, events, layers)
+  const [brushPerson, setBrushPerson] = useBrushPerson(persons)
+  const approvedOnly = periods.filter((p) => p.approved)
+  const yearDays = (list: PlannerPeriod[], name: string) =>
+    personLeaveDays(list, name, `${year}-01-01`, `${year}-12-31`, regionOf(regions, name))
+  const totals = persons.map((name) => {
+    const days = yearDays(periods, name)
+    // dni, których nie pokrywa żaden zatwierdzony okres
+    return { name, days, pending: days - yearDays(approvedOnly, name) }
+  })
+  const total = leaveInRange(periods, `${year}-01-01`, `${year}-12-31`, regions.fallback)
+  const totalPending =
+    total - leaveInRange(approvedOnly, `${year}-01-01`, `${year}-12-31`, regions.fallback)
+  // Skala pasków: najdłuższy urlop w roku, nie mniej niż typowa roczna pula.
+  const barScale = Math.max(26, ...totals.map((t) => t.days))
 
   const go = (next: { view?: LeaveView; month?: number }) => {
     const v = next.view ?? view
@@ -92,10 +172,103 @@ export function LeavePlanner({
   const openNew = (startDate = today, endDate = startDate) => {
     setError(undefined)
     setPicking(null)
-    setSheet({ kind: 'new', value: { startDate, endDate, note: '' } })
+    setSheet({
+      kind: 'new',
+      value: { startDate, endDate, note: '', person: null, approved: false },
+    })
+  }
+
+  /** Zamalowany zakres: od razu na ekranie i w bazie, „cofnij” przywraca poprzednie okresy. */
+  const paintCommit = async (from: string, to: string, mode: PaintMode) => {
+    const painted = paintLeave(periods, from, to, mode, () => crypto.randomUUID(), brushPerson)
+    if (!painted.remove.length && !painted.insert.length) return
+    // Ten sam okres u obu osób zapisujemy jako jeden urlop wspólny.
+    const change = diffLeave(periods, mergeSharedLeave(applyLeaveChange(periods, painted), persons))
+    if (!change.remove.length && !change.insert.length) return
+    const before = periods
+    const gone = new Set(change.remove.map((p) => p.id))
+    const added = new Set(change.insert.map((p) => p.id))
+    const local = change.insert.map((p) => ({
+      ...p,
+      approved: Boolean(p.approved),
+      createdBy: null,
+      createdAt: new Date(),
+    }))
+    const swap = (removeIds: Set<string>, insert: PlannerPeriod[]) =>
+      setPeriods((list) => [...list.filter((p) => !removeIds.has(p.id)), ...insert].sort(byStart))
+    swap(gone, local)
+    const saved = await swapLeavePeriods({ remove: [...gone], insert: change.insert })
+    if (!saved) {
+      setPeriods(before)
+      return
+    }
+    swap(added, saved)
+    // Zmiana dni urlopu w roku dla każdej osoby (każda wg swoich świąt).
+    const after = [...before.filter((p) => !gone.has(p.id)), ...local]
+    const y0 = `${year}-01-01`
+    const y1 = `${year}-12-31`
+    const deltas = (persons.length ? persons : [null]).map((n) => {
+      const count = (list: PlannerPeriod[]) =>
+        n === null
+          ? leaveInRange(list, y0, y1, regions.fallback)
+          : personLeaveDays(list, n, y0, y1, regionOf(regions, n))
+      return { n, d: count(after) - count(before) }
+    })
+    const signed = (d: number) => (d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '0')
+    const changed = deltas.filter((x) => x.d !== 0)
+    const label = !changed.length
+      ? 'urlop zmieniony'
+      : deltas.every((x) => x.d === deltas[0]?.d)
+        ? `${signed(deltas[0]?.d ?? 0)} ${daysWord(Math.abs(deltas[0]?.d ?? 0))} urlopu`
+        : `${changed.map((x) => `${x.n} ${signed(x.d)}`).join(' · ')} dni urlopu`
+    const old = change.remove.map(({ id, startDate, endDate, note, person, approved }) => ({
+      id,
+      startDate,
+      endDate,
+      note,
+      person,
+      approved,
+    }))
+    offerUndo(label, async () => {
+      const back = await swapLeavePeriods({ remove: [...added], insert: old })
+      if (back) swap(added, back)
+    })
+  }
+  const tooltip = useDayTooltip(!painting)
+  const paint = usePaint({
+    enabled: painting,
+    isLeave: (date) =>
+      index.periods(date).some((p) => brushPerson === null || p.person === brushPerson),
+    onCommit: paintCommit,
+  })
+
+  /** Urlop w dniu tak, jak go widać: z podglądem malowania pędzlem osoby `brushPerson`. */
+  const leaveAt: LeaveAt = (date) => {
+    let list = index.periods(date)
+    const mode = painting ? paint.paintAt(date) : null
+    if (mode === 'erase') {
+      list = list.filter((p) => brushPerson !== null && p.person !== brushPerson)
+    }
+    let who = whoOf(list)
+    if (mode === 'add') {
+      who = who === undefined || who === brushPerson ? brushPerson : null
+      list = [...list, { person: brushPerson, approved: false } as PlannerPeriod]
+    }
+    if (who === undefined) return undefined
+    // Weekend albo święto w urlopie (nikomu nie zużywa dnia): paski na kolorze urlopu.
+    const counts = leaveDayCounts(date, list, persons, regions)
+    const approved = list.every((p) => p.approved)
+    return {
+      who,
+      cls: cx(leaveCellClass(who, persons, approved), !counts && 'leave-free'),
+      counts,
+      approved,
+    }
   }
 
   const pick = (date: string) => {
+    // W trybie malowania dotknięcie obsługuje malowanie (jeden dzień).
+    if (painting) return
     if (!picking) {
       const period = index.period(date)
       if (period) {
@@ -110,10 +283,35 @@ export function LeavePlanner({
     openNew(a, b)
   }
 
+  /**
+   * Ten sam okres u obu osób → jeden urlop wspólny: zapis w bazie i w stanie. Po zapisie z arkusza
+   * i raz przy wejściu (porządkuje okresy dodane wcześniej osobno).
+   */
+  const mergeShared = async (list: PlannerPeriod[]) => {
+    const change = diffLeave(list, mergeSharedLeave(list, persons))
+    if (!change.remove.length && !change.insert.length) return
+    const saved = await swapLeavePeriods({
+      remove: change.remove.map((p) => p.id),
+      insert: change.insert,
+    })
+    if (!saved) return
+    const gone = new Set(change.remove.map((p) => p.id))
+    setPeriods((cur) => [...cur.filter((p) => !gone.has(p.id)), ...saved].sort(byStart))
+  }
+  useEffect(() => {
+    void mergeShared(initialPeriods)
+  }, [])
+
   const save = async (v: SheetValue) => {
     if (!sheet) return
     setBusy(true)
-    const input = { startDate: v.startDate, endDate: v.endDate, note: v.note }
+    const input = {
+      startDate: v.startDate,
+      endDate: v.endDate,
+      note: v.note,
+      person: v.person,
+      approved: v.approved,
+    }
     const res =
       sheet.kind === 'edit' ? await updateLeave(sheet.period.id, input) : await createLeave(input)
     setBusy(false)
@@ -121,8 +319,26 @@ export function LeavePlanner({
       setError(res.error)
       return
     }
-    setPeriods((list) => [...list.filter((p) => p.id !== res.period.id), res.period].sort(byStart))
+    const next = [...periods.filter((p) => p.id !== res.period.id), res.period].sort(byStart)
+    setPeriods(next)
     setSheet(null)
+    await mergeShared(next)
+  }
+
+  /** Status z listy: od razu na ekranie, w bazie w tle (przy błędzie wraca). */
+  const toggleApproved = async (period: PlannerPeriod) => {
+    const approved = !period.approved
+    const flip = (value: boolean) =>
+      setPeriods((list) => list.map((p) => (p.id === period.id ? { ...p, approved: value } : p)))
+    flip(approved)
+    const res = await updateLeave(period.id, {
+      startDate: period.startDate,
+      endDate: period.endDate,
+      note: period.note ?? '',
+      person: period.person,
+      approved,
+    })
+    if (!res.ok) flip(period.approved)
   }
 
   const remove = async (period: PlannerPeriod) => {
@@ -163,11 +379,9 @@ export function LeavePlanner({
         }
       />
 
-      <section
-        className="island flex flex-wrap items-center gap-x-3 gap-y-1 p-1 pl-1"
-        aria-label="podsumowanie"
-      >
-        <div className="flex items-center">
+      {/* Jeden wiersz: rok, sumy jako paski, widoki, warstwy i legenda (na telefonie dwa). */}
+      <div className="flex flex-wrap items-stretch gap-1">
+        <div className="island flex items-center">
           <Link
             href={yearHref(year - 1)}
             aria-label={`rok ${year - 1}`}
@@ -184,90 +398,158 @@ export function LeavePlanner({
             ›
           </Link>
         </div>
-        <p className="min-w-0 flex-1 text-sm">
-          <span className="font-bold tabular-nums">
-            {total} {daysWord(total)} urlopu
-          </span>
-          <span className="text-muted">
-            {count > 0 && ` · ${count} ${count === 1 ? 'okres' : count < 5 ? 'okresy' : 'okresów'}`}
-          </span>
-          <span className="block text-xs text-subtle">wg świąt: {REGION_LABEL[region]}</span>
-        </p>
-      </section>
-
-      <div className="flex items-center gap-1">
-        <div className="island flex min-w-0 flex-1 gap-0.5 overflow-x-auto p-1" role="tablist">
-          {VIEWS.map((v) => (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={view === v}
-              onClick={() => go({ view: v })}
-              className={cx(
-                'min-h-9 shrink-0 rounded-inner px-3 text-sm',
-                view === v ? 'bg-active font-bold text-text' : 'text-muted hover:text-accent',
-              )}
-            >
-              {VIEW_LABELS[v]}
-            </button>
+        <section
+          aria-label="dni urlopu w roku"
+          className="island flex min-w-60 flex-1 flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1.5 text-sm"
+        >
+          {totals.map((t) => (
+            <LeaveBar
+              key={t.name}
+              name={t.name}
+              days={t.days}
+              pending={t.pending}
+              scale={barScale}
+              persons={persons}
+            />
           ))}
+          {persons.length > 0 ? (
+            <span className="flex items-center gap-1 text-xs text-muted">
+              <span aria-hidden="true" className="inline-block size-2.5 rounded-[3px] bg-accent" />
+              oboje
+            </span>
+          ) : (
+            <span className="font-bold tabular-nums">
+              {total} {daysWord(total)}
+              {totalPending > 0 && (
+                <span className="font-normal text-muted"> · {totalPending} do zatwierdzenia</span>
+              )}
+            </span>
+          )}
+        </section>
+        <div className="island flex shrink-0 gap-0.5 p-1" role="tablist" aria-label="widok">
+          {VIEWS.map((v) => {
+            const Icon = VIEW_ICONS[v]
+            return (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={view === v}
+                aria-label={VIEW_LABELS[v]}
+                title={VIEW_LABELS[v]}
+                onClick={() => go({ view: v })}
+                className={cx(
+                  'flex size-10 items-center justify-center rounded-inner',
+                  view === v ? 'bg-active text-text' : 'text-muted hover:text-accent',
+                )}
+              >
+                <Icon className="size-5" aria-hidden="true" />
+              </button>
+            )
+          })}
         </div>
-        <LayersMenu layers={layers} setLayers={setLayers} calendars={calendars} />
+        <div className="island flex shrink-0 items-center gap-0.5 p-1">
+          <LayersMenu layers={layers} setLayers={setLayers} calendars={calendars} />
+          <Legend
+            layers={layers}
+            calendars={calendars.length}
+            persons={persons}
+            regionsText={`święta: ${
+              persons.length
+                ? persons.map((p) => `${p} ${REGION_LABEL[regionOf(regions, p)]}`).join(' · ')
+                : REGION_LABEL[regions.fallback]
+            }`}
+          />
+        </div>
       </div>
 
-      {view === 'months' && (
-        <MonthsView
-          year={year}
-          region={region}
-          periods={periods}
-          index={index}
-          today={today}
-          picking={picking}
-          onPick={pick}
-          onOpenMonth={(m) => go({ view: 'month', month: m })}
-        />
-      )}
-      {view === 'month' && (
-        <MonthView
-          year={year}
-          month={month}
-          index={index}
-          today={today}
-          picking={picking}
-          onPick={pick}
-          onMonth={(m) => go({ month: m })}
-        />
-      )}
-      {view === 'list' && (
+      {/* Przy malowaniu dni nie przewijają strony (touch-action na samych komórkach, bo widok
+          kolumn ma własne przewijanie w bok). */}
+      <div
+        {...tooltip.bind}
+        onPointerDown={(e) => {
+          paint.onPointerDown(e)
+          tooltip.bind.onPointerDown(e)
+        }}
+        className={cx(
+          painting && 'select-none [&_[data-date]]:touch-none [&_[data-date]]:cursor-crosshair',
+        )}
+      >
+        {view === 'months' && (
+          <MonthsView
+            year={year}
+            regions={regions}
+            periods={periods}
+            index={index}
+            today={today}
+            picking={picking}
+            onPick={pick}
+            onOpenMonth={(m) => go({ view: 'month', month: m })}
+            paintAt={painting ? paint.paintAt : undefined}
+            leaveAt={leaveAt}
+            persons={persons}
+          />
+        )}
+        {view === 'columns' && (
+          <ColumnsView
+            year={year}
+            regions={regions}
+            periods={periods}
+            index={index}
+            today={today}
+            picking={picking}
+            onPick={pick}
+            paintAt={painting ? paint.paintAt : undefined}
+            leaveAt={leaveAt}
+            persons={persons}
+          />
+        )}
+        {view === 'month' && (
+          <MonthView
+            year={year}
+            month={month}
+            index={index}
+            today={today}
+            picking={picking}
+            onPick={pick}
+            onMonth={(m) => go({ month: m })}
+            paintAt={painting ? paint.paintAt : undefined}
+            leaveAt={leaveAt}
+          />
+        )}
+      </div>
+      {/* Okresy urlopu w roku zawsze pod kalendarzem. */}
+      <section aria-label="urlopy w roku" className="flex flex-col gap-1 pt-2">
+        <h2 className="px-1 text-xs text-subtle italic">urlopy w {year}</h2>
         <ListView
           year={year}
-          region={region}
+          regions={regions}
           periods={periods}
           index={index}
           layers={layers}
+          persons={persons}
           onEdit={(p) => {
             setError(undefined)
             setSheet({ kind: 'edit', period: p })
           }}
           onAdd={() => openNew()}
+          onToggleApproved={toggleApproved}
         />
-      )}
-      {view === 'gantt' && (
-        <GanttView
-          year={year}
-          periods={periods}
-          index={index}
-          layers={layers}
-          calendars={calendars}
-          today={today}
-          onEdit={(p) => {
-            setError(undefined)
-            setSheet({ kind: 'edit', period: p })
-          }}
-        />
-      )}
+      </section>
 
+      {painting && !paint.active && (
+        <Toast>
+          <div role="status" className="island pop-in flex flex-col gap-2 p-2 text-sm">
+            <span className="px-2">● maluj po dniach · na urlopie gumka · ✓ kończy</span>
+            <PersonPicker
+              persons={persons}
+              value={brushPerson}
+              onChange={setBrushPerson}
+              label="czyj urlop maluje pędzel"
+            />
+          </div>
+        </Toast>
+      )}
       {picking && (
         <Toast>
           <div
@@ -307,15 +589,36 @@ export function LeavePlanner({
                   startDate: sheet.period.startDate,
                   endDate: sheet.period.endDate,
                   note: sheet.period.note ?? '',
+                  person: sheet.period.person,
+                  approved: sheet.period.approved,
                 }
               : sheet.value
           }
-          region={region}
+          regions={regions}
+          persons={persons}
           error={error}
           busy={busy}
           onSave={save}
           onDelete={sheet.kind === 'edit' ? () => remove(sheet.period) : undefined}
           onClose={() => setSheet(null)}
+        />
+      )}
+      {PAINT_VIEWS.includes(view) && (
+        <PaintNavButton
+          on={brush}
+          onToggle={() => {
+            setPicking(null)
+            setBrush((b) => !b)
+          }}
+        />
+      )}
+      {tooltip.tip && (
+        <DayTooltip
+          tip={tooltip.tip}
+          index={index}
+          regions={regions}
+          calendars={calendars}
+          persons={persons}
         />
       )}
       <UndoToast />
@@ -362,13 +665,14 @@ function LayersMenu({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
+        aria-label="warstwy"
+        title="warstwy"
         className={cx(
-          'island flex min-h-11 items-center gap-2 px-3 text-sm',
-          open ? 'text-accent' : 'text-muted hover:text-accent',
+          'flex size-10 items-center justify-center rounded-inner',
+          open ? 'bg-active text-text' : 'text-muted hover:text-accent',
         )}
       >
-        <LayersIcon className="size-4" aria-hidden="true" />
-        warstwy
+        <LayersIcon className="size-5" aria-hidden="true" />
       </button>
       {open && (
         <div className="island shadow-float pop-in absolute right-0 top-12 z-(--z-popover) flex w-72 flex-col p-1">
@@ -392,5 +696,35 @@ function LayersMenu({
         </div>
       )}
     </div>
+  )
+}
+
+/** Suma osoby w roku: imię, liczba dni i pasek (pełny = zatwierdzone, jasny = do zatwierdzenia). */
+function LeaveBar({
+  name,
+  days,
+  pending,
+  scale,
+  persons,
+}: {
+  name: string
+  days: number
+  pending: number
+  scale: number
+  persons: string[]
+}) {
+  const pct = (n: number) => `${Math.min(100, (n / scale) * 100)}%`
+  return (
+    <span
+      className="flex items-center gap-1.5 tabular-nums"
+      title={`${name}: ${days} ${daysWord(days)} urlopu${pending ? `, w tym ${pending} do zatwierdzenia` : ''}`}
+    >
+      {name} <span className="font-bold">{days}</span>
+      <span aria-hidden="true" className="flex h-1.5 w-16 overflow-hidden rounded-full bg-line">
+        <span className={leaveBg(name, persons)} style={{ width: pct(days - pending) }} />
+        <span className={leaveCellClass(name, persons, false)} style={{ width: pct(pending) }} />
+      </span>
+      {pending > 0 && <span className="sr-only">, w tym {pending} do zatwierdzenia</span>}
+    </span>
   )
 }

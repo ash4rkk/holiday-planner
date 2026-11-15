@@ -33,6 +33,7 @@ describe('parseIcs', () => {
         startTime: null,
         endTime: null,
         allDay: true,
+        color: null,
       },
     ])
   })
@@ -128,17 +129,22 @@ describe('timetree', () => {
           end_at: Date.UTC(2027, 0, 5, 18),
           start_timezone: 'Europe/Warsaw',
           recurrences: ['RRULE:FREQ=MONTHLY;COUNT=7', 'EXDATE:20270205T170000Z'],
+          label_id: 2,
         },
         { uuid: 'z', title: 'notatka', category: 2, start_at: Date.UTC(2027, 0, 1) },
       ],
       WINDOW,
+      'Europe/Warsaw',
+      { '2': '#2ecc87' },
     )
     const trip = events.find((e) => e.title === 'Wyjazd służbowy')
+    expect(trip?.color).toBeNull()
     expect(trip).toMatchObject({ startDate: '2027-05-10', endDate: '2027-05-12', allDay: true })
     const yoga = events.filter((e) => e.title === 'Joga')
     // 7 miesięcy bez lutego; w lipcu nadal 18:00 mimo czasu letniego
     expect(yoga).toHaveLength(6)
     expect(yoga.map((e) => e.startTime)).toEqual(Array(6).fill('18:00'))
+    expect(yoga.every((e) => e.color === '#2ecc87')).toBe(true)
     expect(events.some((e) => e.title === 'notatka')).toBe(false)
   })
 
@@ -153,6 +159,7 @@ describe('timetree', () => {
           startTime: null,
           endTime: null,
           allDay: true,
+          color: null,
         },
       ],
       '2027-02-01',

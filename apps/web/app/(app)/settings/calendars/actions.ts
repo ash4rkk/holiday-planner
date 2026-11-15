@@ -3,10 +3,11 @@
 import { HOLIDAY_REGIONS, type HolidayRegion } from '@planer/core'
 import { syncTimetreeCalendar } from '@planer/core/calendars-db'
 import { calendars, eq, getDb } from '@planer/core/db'
-import { setLeaveRegion } from '@planer/core/settings'
+import { setLeaveRegions } from '@planer/core/settings'
 import { revalidatePath } from 'next/cache'
 import { getCurrentUser } from '@/lib/auth/user'
 import { isUuid } from '@/lib/leave'
+import { listProfiles } from '@/lib/profiles'
 
 const refresh = () => {
   revalidatePath('/leave')
@@ -14,11 +15,15 @@ const refresh = () => {
   revalidatePath('/settings', 'layout')
 }
 
+/** Region świąt każdej osoby (pola `region:<imię>`). */
 export async function saveLeaveRegion(form: FormData) {
-  await getCurrentUser()
-  const region = String(form.get('region'))
-  if (HOLIDAY_REGIONS.includes(region as HolidayRegion))
-    await setLeaveRegion(region as HolidayRegion)
+  const user = await getCurrentUser()
+  const byPerson: Record<string, HolidayRegion> = {}
+  for (const { name } of listProfiles(user.name)) {
+    const region = String(form.get(`region:${name}`))
+    if (HOLIDAY_REGIONS.includes(region as HolidayRegion)) byPerson[name] = region as HolidayRegion
+  }
+  await setLeaveRegions(byPerson)
   refresh()
 }
 

@@ -1,35 +1,37 @@
 'use client'
 
+import { formatDateSpan, formatShortDate, holidaysBetween, type LeaveRegions } from '@planer/core'
+import { buttonClass, cx } from '@/components/ui'
 import {
-  formatDateSpan,
-  formatShortDate,
-  freeSpan,
-  type HolidayRegion,
-  holidaysBetween,
-  leaveDays,
-} from '@planer/core'
-import { buttonClass } from '@/components/ui'
-import type { DayIndex, Layers, PlannerPeriod } from './model'
-
-const daysWord = (n: number) => (n === 1 ? 'dzień' : 'dni')
+  type DayIndex,
+  type Layers,
+  leaveBg,
+  leaveCellClass,
+  type PlannerPeriod,
+  periodDaysText,
+} from './model'
 
 /** Lista okresów urlopu w roku z liczbą dni i tym, co dzieje się w tym czasie. */
 export function ListView({
   year,
-  region,
+  regions,
   periods,
   index,
   layers,
+  persons,
   onEdit,
   onAdd,
+  onToggleApproved,
 }: {
   year: number
-  region: HolidayRegion
+  regions: LeaveRegions
   periods: PlannerPeriod[]
   index: DayIndex
   layers: Layers
+  persons: string[]
   onEdit: (p: PlannerPeriod) => void
   onAdd: () => void
+  onToggleApproved: (p: PlannerPeriod) => void
 }) {
   const from = `${year}-01-01`
   const to = `${year}-12-31`
@@ -47,8 +49,6 @@ export function ListView({
   return (
     <ul className="flex flex-col gap-1">
       {list.map((p) => {
-        const days = leaveDays(p.startDate, p.endDate, region)
-        const free = freeSpan(p.startDate, p.endDate, region)
         const trips = index.visibleTrips.filter(
           (t) => t.startDate <= p.endDate && t.endDate >= p.startDate,
         )
@@ -62,17 +62,58 @@ export function ListView({
         const more = trips.length + events.length + holidays.length
         return (
           <li key={p.id} className="island flex flex-col">
-            <button
-              type="button"
-              onClick={() => onEdit(p)}
-              className="flex min-h-12 flex-col items-start gap-0.5 px-4 py-2 text-left hover:text-accent"
-            >
-              <span className="font-bold">{formatDateSpan(p.startDate, p.endDate)}</span>
-              <span className="text-sm text-muted tabular-nums">
-                {days} {daysWord(days)} urlopu · {free} {daysWord(free)} wolnego
-                {p.note ? ` · ${p.note}` : ''}
-              </span>
-            </button>
+            <div className="flex items-start">
+              <button
+                type="button"
+                onClick={() => onEdit(p)}
+                className="flex min-h-12 min-w-0 flex-1 flex-col items-start gap-0.5 py-2 pl-4 text-left hover:text-accent"
+              >
+                <span className="flex items-center gap-2 font-bold">
+                  {/* Kto ma urlop: pierwsze, w kolorze urlopu (jasne, gdy do zatwierdzenia). */}
+                  {persons.length > 0 ? (
+                    <span
+                      className={cx(
+                        'shrink-0 rounded-[6px] px-2 py-0.5 text-xs',
+                        p.approved
+                          ? cx(leaveBg(p.person, persons), 'text-on-accent')
+                          : leaveCellClass(p.person, persons, false),
+                      )}
+                    >
+                      {p.person ?? 'oboje'}
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={cx(
+                        'size-3 shrink-0 rounded-[3px]',
+                        p.approved
+                          ? leaveBg(p.person, persons)
+                          : leaveCellClass(p.person, persons, false),
+                      )}
+                    />
+                  )}
+                  {formatDateSpan(p.startDate, p.endDate)}
+                </span>
+                <span className="text-sm text-muted tabular-nums">
+                  {periodDaysText(p, persons, regions)}
+                  {p.note ? ` · ${p.note}` : ''}
+                </span>
+              </button>
+              {/* Status jednym dotknięciem (zatwierdzenie w pracy przychodzi zwykle później). */}
+              <button
+                type="button"
+                aria-pressed={p.approved}
+                onClick={() => onToggleApproved(p)}
+                className={cx(
+                  'm-1 flex min-h-11 shrink-0 items-center rounded-inner px-3 text-xs',
+                  p.approved
+                    ? 'text-muted hover:text-accent'
+                    : 'bg-active text-text hover:text-accent',
+                )}
+              >
+                {p.approved ? '✓ zatwierdzony' : 'do zatwierdzenia'}
+              </button>
+            </div>
             {more > 0 && (
               <details className="group border-t border-line">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 text-xs text-subtle hover:text-accent [&::-webkit-details-marker]:hidden">

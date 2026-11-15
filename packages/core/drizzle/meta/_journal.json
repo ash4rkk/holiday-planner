@@ -127,6 +127,27 @@
       "when": 1794752590655,
       "tag": "0017_mushy_susan_delgado",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794754373692,
+      "tag": "0018_freezing_gwen_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794756084194,
+      "tag": "0019_smiling_payback",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794768869178,
+      "tag": "0020_shiny_marvel_boy",
+      "breakpoints": true
     }
   ]
 }

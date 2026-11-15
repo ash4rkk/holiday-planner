@@ -1,10 +1,12 @@
 import { todayLocal } from '@planer/core'
-import { getLeaveRegion } from '@planer/core/settings'
+import { getLeaveRegions } from '@planer/core/settings'
 import { connection } from 'next/server'
 import { LeavePlanner } from '@/components/leave/leave-planner'
 import { isLeaveView } from '@/components/leave/model'
+import { Flag } from '@/components/trips/flag'
 import { getCurrentUser } from '@/lib/auth/user'
 import { listCalendarEvents, listCalendars, listLeave } from '@/lib/leave'
+import { listProfiles } from '@/lib/profiles'
 import { listTrips } from '@/lib/trips'
 
 // Planer czyta bazę przy każdym wejściu — wejście może chwilę poczekać.
@@ -17,7 +19,7 @@ export default async function LeavePage({ searchParams }: PageProps<'/leave'>) {
   const thisYear = Number(today.slice(0, 4))
   const y = Number(params.year)
   const year = Number.isInteger(y) && y >= 2000 && y <= 2100 ? y : thisYear
-  const view = isLeaveView(params.view) ? params.view : 'months'
+  const view = isLeaveView(params.view) ? params.view : 'columns'
   const m = Number(params.m)
   const month =
     Number.isInteger(m) && m >= 1 && m <= 12
@@ -28,9 +30,9 @@ export default async function LeavePage({ searchParams }: PageProps<'/leave'>) {
   const from = `${year}-01-01`
   const to = `${year}-12-31`
 
-  const [, region, periods, lists, calendars, events] = await Promise.all([
+  const [user, region, periods, lists, calendars, events] = await Promise.all([
     getCurrentUser(),
-    getLeaveRegion(),
+    getLeaveRegions(),
     listLeave(from, to),
     listTrips(),
     listCalendars(),
@@ -43,6 +45,7 @@ export default async function LeavePage({ searchParams }: PageProps<'/leave'>) {
       title: t.title,
       startDate: t.startDate as string,
       endDate: t.endDate ?? (t.startDate as string),
+      flag: t.country ? <Flag country={t.country} className="h-full w-full" /> : undefined,
     }))
     .filter((t) => t.endDate >= from && t.startDate <= to)
 
@@ -50,13 +53,14 @@ export default async function LeavePage({ searchParams }: PageProps<'/leave'>) {
     <LeavePlanner
       key={year}
       year={year}
-      region={region}
+      regions={region}
       initialView={view}
       initialMonth={month}
       periods={periods}
       trips={trips}
       events={events}
       calendars={calendars.map((c) => ({ id: c.id, name: c.name }))}
+      persons={listProfiles(user.name).map((p) => p.name)}
     />
   )
 }

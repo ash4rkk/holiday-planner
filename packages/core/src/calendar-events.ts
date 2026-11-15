@@ -12,6 +12,8 @@ export interface EventOccurrence {
   startTime: string | null
   endTime: string | null
   allDay: boolean
+  /** kolor wydarzenia '#rrggbb' (etykieta TimeTree); `null` = domyślny */
+  color: string | null
 }
 
 export interface DayEvent extends EventOccurrence {

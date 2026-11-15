@@ -1,0 +1,1 @@
+ALTER TABLE "leave_periods" ADD COLUMN "person" text;

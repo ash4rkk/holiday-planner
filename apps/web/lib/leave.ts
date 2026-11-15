@@ -9,6 +9,7 @@ import {
   eq,
   getDb,
   gte,
+  inArray,
   type LeavePeriod,
   leavePeriods,
   lte,
@@ -65,8 +66,20 @@ export async function listCalendarEvents(from: string, to: string): Promise<DayE
       startTime: calendarEvents.startTime,
       endTime: calendarEvents.endTime,
       allDay: calendarEvents.allDay,
+      color: calendarEvents.color,
     })
     .from(calendarEvents)
     .where(and(lte(calendarEvents.startDate, to), gte(calendarEvents.endDate, from)))
     .orderBy(asc(calendarEvents.startDate))
+}
+
+/** Malowanie i jego „cofnij”: usuwa okresy i zapisuje nowe w jednej transakcji. */
+export async function swapLeave(
+  removeIds: string[],
+  insert: (typeof leavePeriods.$inferInsert)[],
+): Promise<LeavePeriod[]> {
+  return getDb().transaction(async (tx) => {
+    if (removeIds.length) await tx.delete(leavePeriods).where(inArray(leavePeriods.id, removeIds))
+    return insert.length ? tx.insert(leavePeriods).values(insert).returning() : []
+  })
 }

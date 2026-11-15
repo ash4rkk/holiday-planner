@@ -73,6 +73,20 @@ Kolor typu nie znaczy nic poza typem: linki nie są morskie, kwoty nie są pomar
   autobus morski; pociąg pomarańczowy; pieszo przerywana `muted`; autem śliwka). Bez kolorów stanów.
 - **Kolory osób** (kursory, awatary): akcent, niebieski, śliwka, lawenda — też bez kolorów stanów.
 
+- **Urlop w planerze urlopów:** urlop wspólny ma pełne tło akcentu, urlop jednej osoby tło
+  `person-a` / `person-b` (niebieski, śliwka; kolejność osób z `USER_NAMES`), tekst `on-accent`
+  (`LEAVE_CELL` w `components/leave/model.ts`). To wybór, nie stan, i ma być widoczny z daleka.
+  Urlop do zatwierdzenia (`.leave-pending`) to ten sam kolor osoby, jako lekki odcień (22% z tłem)
+  z tekstem w kolorze osoby i pustą kropką ◌ z prawej (`PendingMark`) — status kształtem, nie tylko jasnością.
+  Bez bursztynu stanów, bo kolor mówi „kto”.
+  Znaczki mają własne tokeny (`hol-pl`, `hol-bb`, `event`, `trip` w `globals.css`; dziś aliasy
+  lawendy, morskiego, pomarańczy i śliwki — na ekranie planera nie ma kart, więc kolory typów nic
+  tu nie mylą). Kształt i kolor naraz: święto w Polsce kropka, w Brandenburgii romb, wydarzenie mała
+  kropka, wyjazd kreska; na urlopie z jasną obwódką. Legenda (`legend.tsx`) pod ikoną ⓘ w nagłówku; kolory osób widać przy ich sumach.
+  Kolory etykiet TimeTree nie idą wprost: `eventTone` sprowadza je do najbliższego stonowanego
+  odcienia `--ev-*` (czerwień, pomarańcz, żółć, zieleń, morski, niebieski, fiolet, róż, szary), żeby
+  pasowały do motywu i nie udawały kolorów stanów.
+
 ### Kwoty
 
 Bez koloru: pogrubione, cyfry o stałej szerokości (`font-bold tabular-nums`, `AmountBadge`,

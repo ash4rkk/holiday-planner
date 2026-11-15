@@ -16,6 +16,9 @@
   --plum: #85638a; --teal: #2e7680; --orange: #9c5c1c; --blue: #3f6b8c; --lavender: #62629a;
   /* Stany: źle, do zrobienia, dobrze. */
   --red: #b8382c; --amber: #836608; --green: #4f7637;
+  /* Wydarzenia z kalendarzy (etykiety TimeTree) w stonowanych odcieniach motywu — nie stany. */
+  --ev-red: #a35d57; --ev-orange: #9c6a3c; --ev-yellow: #8a7735; --ev-green: #5d7f58;
+  --ev-teal: #457a76; --ev-blue: #4f7090; --ev-purple: #6f6593; --ev-pink: #94607b; --ev-gray: #76747e;
 }
 
 [data-theme="dark"] {
@@ -26,6 +29,8 @@
   --accent: #c48282; --accent-hover: #d49a9a; --on-accent: #1e1e22;
   --plum: #bb9dbd; --teal: #72b5ba; --orange: #e0a363; --blue: #6e94b2; --lavender: #aeaed1;
   --red: #ee6d5f; --amber: #ddbd57; --green: #7fa563;
+  --ev-red: #d39189; --ev-orange: #d3a57a; --ev-yellow: #c9b677; --ev-green: #9cbb93;
+  --ev-teal: #8bbab4; --ev-blue: #93b0c9; --ev-purple: #b2a8d1; --ev-pink: #cf9fb7; --ev-gray: #a9a7b3;
   --float-shadow: 0 10px 28px -8px rgb(0 0 0 / 0.55), 0 2px 8px -2px rgb(0 0 0 / 0.4);
 }
 
@@ -68,6 +73,18 @@
   --color-orange: var(--orange);
   --color-green: var(--green);
   --color-red: var(--red);
+  /* Planer urlopów: znaczki w kalendarzu. Na tym ekranie nie ma kart, więc kolory typów są wolne;
+     nazwy znaczeniowe, żeby zmiana koloru była w jednym miejscu (docs/wyglad.md). */
+  --color-hol-pl: var(--lavender);
+  --color-hol-bb: var(--teal);
+  --color-event: var(--ev-orange);
+  /* pionowy tytuł wydarzenia w kolumnach: biały z czarnym obrysem w obu motywach */
+  --color-ev-label: #ffffff;
+  --color-ev-label-outline: #111114;
+  --color-trip: var(--muted);
+  /* Urlop jednej osoby (wspólny = akcent); kolejność osób jak w USER_NAMES / DEFAULT_PROFILE. */
+  --color-person-a: var(--blue);
+  --color-person-b: var(--plum);
   --shadow-float: var(--float-shadow);
   --radius-island: var(--radius-island);
   --radius-inner: var(--radius-inner);
@@ -125,6 +142,23 @@ body {
     right: 0;
     width: max-content;
   }
+  /* Urlop do zatwierdzenia: przygaszony kolor osoby (`--leave-tone`) i pusta kropka `PendingMark`. */
+  .leave-pending {
+    /* lekki odcień zamiast pół na pół (to dawało bury brąz), tekst w kolorze osoby */
+    background-color: color-mix(in srgb, var(--leave-tone) 22%, var(--panel));
+    color: color-mix(in srgb, var(--leave-tone) 75%, var(--text));
+    font-weight: 700;
+  }
+
+  /* Dzień urlopu, który nikomu nie zużywa dnia (weekend, święto): ukośne jasne paski na kolorze. */
+  .leave-free {
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0 4px,
+      color-mix(in srgb, var(--panel) 55%, transparent) 4px 7px
+    );
+  }
+
   /* Gęste przyciski (dojazdy, zakładki dni): wyglądają nisko, ale łapią dotyk na 44 × 44 px. */
   .hit {
     position: relative;

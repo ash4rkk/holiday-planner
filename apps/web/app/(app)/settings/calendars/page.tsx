@@ -1,13 +1,15 @@
-import { HOLIDAY_REGIONS, REGION_LABEL } from '@planer/core'
+import { HOLIDAY_REGIONS, REGION_LABEL, regionOf } from '@planer/core'
 import { calendarEvents, count, getDb } from '@planer/core/db'
-import { getLeaveRegion } from '@planer/core/settings'
+import { getLeaveRegions } from '@planer/core/settings'
 import { type TimeTreeCalendar, timetreeClient, timetreeConfigured } from '@planer/core/timetree'
 import { connection } from 'next/server'
 import { CalendarActions, IcsUpload } from '@/components/settings/calendar-controls'
 import { TopBar } from '@/components/top-bar'
 import { buttonClass, inputClass, SectionLabel } from '@/components/ui'
+import { getCurrentUser } from '@/lib/auth/user'
 import { appSettingsBack } from '@/lib/back'
 import { listCalendars } from '@/lib/leave'
+import { listProfiles } from '@/lib/profiles'
 import { addTimetreeCalendar, saveLeaveRegion } from './actions'
 
 // Ustawienia czytają bazę (i TimeTree) przy każdym wejściu — wejście może chwilę poczekać.
@@ -24,14 +26,16 @@ const synced = new Intl.DateTimeFormat('pl-PL', {
 export default async function CalendarsPage({ searchParams }: PageProps<'/settings/calendars'>) {
   await connection()
   const { from } = await searchParams
-  const [region, list, counts] = await Promise.all([
-    getLeaveRegion(),
+  const [user, region, list, counts] = await Promise.all([
+    getCurrentUser(),
+    getLeaveRegions(),
     listCalendars(),
     getDb()
       .select({ id: calendarEvents.calendarId, n: count() })
       .from(calendarEvents)
       .groupBy(calendarEvents.calendarId),
   ])
+  const persons = listProfiles(user.name).map((p) => p.name)
   const countOf = new Map(counts.map((c) => [c.id, c.n]))
 
   let remote: TimeTreeCalendar[] = []
@@ -59,25 +63,30 @@ export default async function CalendarsPage({ searchParams }: PageProps<'/settin
       <SectionLabel>liczenie urlopu</SectionLabel>
       <form action={saveLeaveRegion} className="island flex flex-col gap-3 p-4 text-sm">
         <p className="text-xs text-subtle">
-          dni urlopu to dni robocze bez weekendów i świąt wybranego regionu — wspólne dla was obojga
+          dni urlopu to dni robocze bez weekendów i świąt tam, gdzie dana osoba pracuje
         </p>
-        <div className="grid grid-cols-2 gap-1">
-          {HOLIDAY_REGIONS.map((r) => (
-            <label
-              key={r}
-              className="flex min-h-11 items-center gap-2 rounded-small border border-line px-3 has-checked:border-accent has-checked:bg-active"
-            >
-              <input
-                type="radio"
-                name="region"
-                value={r}
-                defaultChecked={region === r}
-                className="accent-(--accent)"
-              />
-              {REGION_LABEL[r]}
-            </label>
-          ))}
-        </div>
+        {persons.map((person) => (
+          <fieldset key={person} className="flex flex-col gap-1">
+            <legend className="mb-1 font-bold">{person}</legend>
+            <div className="grid grid-cols-2 gap-1">
+              {HOLIDAY_REGIONS.map((r) => (
+                <label
+                  key={r}
+                  className="flex min-h-11 items-center gap-2 rounded-small border border-line px-3 has-checked:border-accent has-checked:bg-active"
+                >
+                  <input
+                    type="radio"
+                    name={`region:${person}`}
+                    value={r}
+                    defaultChecked={regionOf(region, person) === r}
+                    className="accent-(--accent)"
+                  />
+                  {REGION_LABEL[r]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ))}
         <button type="submit" className={buttonClass('primary')}>
           zapisz
         </button>

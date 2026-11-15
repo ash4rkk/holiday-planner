@@ -289,6 +289,10 @@ export const leavePeriods = pgTable(
     startDate: date('start_date').notNull(),
     endDate: date('end_date').notNull(),
     note: text('note'),
+    // Czyj urlop: imię profilu (USER_NAMES / DEFAULT_PROFILE); puste = wspólny dla obojga.
+    person: text('person'),
+    // Urlop zatwierdzony w pracy; nowy (namalowany, dodany) jest „do zatwierdzenia”.
+    approved: boolean('approved').notNull().default(false),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -326,6 +330,8 @@ export const calendarEvents = pgTable(
     startTime: text('start_time'),
     endTime: text('end_time'),
     allDay: boolean('all_day').notNull().default(true),
+    // kolor etykiety z TimeTree ('#rrggbb'); puste = kolor wydarzeń z motywu
+    color: text('color'),
   },
   (t) => [
     unique('calendar_events_uid_uq').on(t.calendarId, t.uid),

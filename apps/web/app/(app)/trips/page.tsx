@@ -1,6 +1,6 @@
-import { daysBetween, leaveInYear, todayLocal } from '@planer/core'
+import { daysBetween, leaveInYear, personLeaveDays, regionOf, todayLocal } from '@planer/core'
 import type { Trip } from '@planer/core/db'
-import { getLeaveRegion } from '@planer/core/settings'
+import { getLeaveRegions } from '@planer/core/settings'
 import { CalendarDays, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { connection } from 'next/server'
@@ -12,6 +12,7 @@ import { TripRow } from '@/components/trips/trip-row'
 import { buttonClass, SectionLabel } from '@/components/ui'
 import { getCurrentUser } from '@/lib/auth/user'
 import { listLeave } from '@/lib/leave'
+import { listProfiles } from '@/lib/profiles'
 import { tripSummary } from '@/lib/trip-summary'
 import { listTrips } from '@/lib/trips'
 
@@ -45,9 +46,18 @@ export default async function TripsPage() {
     getCurrentUser(),
     listTrips(),
     listLeave(`${year}-01-01`, `${year}-12-31`).catch(() => []),
-    getLeaveRegion().catch(() => 'PL' as const),
+    getLeaveRegions().catch(() => ({ fallback: 'PL' as const, byPerson: {} })),
   ])
-  const leaveDaysUsed = leaveInYear(leave, year, region)
+  const persons = listProfiles(user.name).map((p) => p.name)
+  // Dni urlopu w tym roku na osobę („Arek 18 · Wera 14”); bez profili jedna suma.
+  const leaveText = persons.length
+    ? persons
+        .map(
+          (p) =>
+            `${p} ${personLeaveDays(leave, p, `${year}-01-01`, `${year}-12-31`, regionOf(region, p))}`,
+        )
+        .join(' · ')
+    : `${leaveInYear(leave, year, region.fallback)} dni`
   const summaries = await Promise.all(current.map((t) => tripSummary(t, today)))
   const empty = !current.length && !upcoming.length && !past.length && !archived.length
 
@@ -117,7 +127,7 @@ export default async function TripsPage() {
         <CalendarDays className="size-4 shrink-0 text-muted" aria-hidden="true" />
         <span className="flex-1">planer urlopów</span>
         <span className="text-muted tabular-nums">
-          {year}: {leaveDaysUsed} {leaveDaysUsed === 1 ? 'dzień' : 'dni'}
+          {year}: {leaveText}
         </span>
         <span aria-hidden="true" className="text-muted">
           ›
