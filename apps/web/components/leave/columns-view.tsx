@@ -62,7 +62,9 @@ export function ColumnsView({
   }, [year, today])
 
   return (
-    <div className="island overflow-hidden">
+    // `contain-paint`: bez tego Chrome na telefonie liczy szerokość strony z całej tabeli (555 px
+    // zamiast ekranu) i okna `fixed` (arkusz urlopu, menu) wychodzą poza ekran.
+    <div className="island overflow-hidden contain-paint">
       <div ref={scroller} className="overflow-x-auto overflow-y-hidden overscroll-x-contain">
         <table className="w-full min-w-[720px] table-fixed border-separate border-spacing-0 text-xs tabular-nums">
           <thead>

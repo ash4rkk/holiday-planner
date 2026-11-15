@@ -104,6 +104,7 @@ pnpm db:sample           # przykład „Lizbona (przykład)” z datami od dziś
 - Testy przejść w headless Chrome: wyjście z Tablicy z View Transition wisi (brak klatek) — testuj z `headless: false`. W dev wskaźnik Next w lewym dolnym rogu zasłania „dziś”.
 - Pytanie do czatu z innego miejsca aplikacji przez `askChat(tekst)` — otwiera czat w widocznym widoku i wysyła je po wczytaniu rozmowy. Czat niczego nie zmienia sam: plan dnia i zamienniki na deszcz to propozycje do zatwierdzenia.
 - TimeTree nie ma oficjalnego API: `timetree.ts` loguje się jak aplikacja webowa (`/auth/email/signin`, cookie `_session_id`) i może przestać działać po zmianach u nich. Wydarzenia TimeTree zamieniamy na iCalendar i rozwijamy tym samym `parseIcs`. Import i sync kalendarza zastępują wszystkie jego wydarzenia w transakcji.
+- Szerokie tabele przewijane w bok (kolumny planera urlopów) owijaj w `contain-paint`: Chrome na telefonie potrafi mimo `overflow-hidden` policzyć szerokość strony z tabeli, a wtedy okna `fixed` (arkusze, menu) wychodzą poza ekran.
 - Mapa offline pobiera tylko ulice wokół miejsc z kart (`DETAIL_RADIUS_KM`), średnie zoomy wokół skupisk i zarys do zoomu 6 — nie licz kafelków z prostokąta całego wyjazdu (lotnisko w innym kraju = cała Europa). Style i TileJSON OpenFreeMap są NetworkFirst (co tydzień nowa wersja kafelków), kafelki, czcionki i sprite CacheFirst.
 
 ## Auth

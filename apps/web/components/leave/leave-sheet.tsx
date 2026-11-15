@@ -60,14 +60,14 @@ export function LeaveSheet({
         className="island shadow-float sheet-in relative mx-px mb-px flex w-full max-w-xl flex-col gap-3 p-4 pb-[max(16px,env(safe-area-inset-bottom))]"
       >
         <h2 className="font-bold">{title}</h2>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
           <Field label="od">
             <input
               type="date"
               required
               value={v.startDate}
               onChange={(e) => setV({ ...v, startDate: e.target.value })}
-              className={inputClass}
+              className={cx(inputClass, 'min-w-0')}
             />
           </Field>
           <Field label="do">
@@ -76,7 +76,7 @@ export function LeaveSheet({
               required
               value={v.endDate}
               onChange={(e) => setV({ ...v, endDate: e.target.value })}
-              className={inputClass}
+              className={cx(inputClass, 'min-w-0')}
             />
           </Field>
         </div>
