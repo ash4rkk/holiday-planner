@@ -38,6 +38,9 @@ function Folded({ label, trips }: { label: string; trips: Trip[] }) {
   )
 }
 
+/** Ile lat urlopu (od bieżącego) pokazuje wiersz planera. */
+const LEAVE_YEARS = 3
+
 export default async function TripsPage() {
   await connection()
   const today = todayLocal()
@@ -45,19 +48,29 @@ export default async function TripsPage() {
   const [user, { current, upcoming, past, archived }, leave, region] = await Promise.all([
     getCurrentUser(),
     listTrips(),
-    listLeave(`${year}-01-01`, `${year}-12-31`).catch(() => []),
+    listLeave(`${year}-01-01`, `${year + LEAVE_YEARS - 1}-12-31`).catch(() => []),
     getLeaveRegions().catch(() => ({ fallback: 'PL' as const, byPerson: {} })),
   ])
   const persons = listProfiles(user.name).map((p) => p.name)
-  // Dni urlopu w tym roku na osobę („Arek 18 · Wera 14”); bez profili jedna suma.
-  const leaveText = persons.length
-    ? persons
-        .map(
-          (p) =>
-            `${p} ${personLeaveDays(leave, p, `${year}-01-01`, `${year}-12-31`, regionOf(region, p))}`,
-        )
-        .join(' · ')
-    : `${leaveInYear(leave, year, region.fallback)} dni`
+  // Dni urlopu na osobę w tym roku i kolejnych, w których już coś zaplanowano („2027: Arek 18 ·
+  // Wera 14”); bez profili jedna suma. Bieżący rok zawsze, kolejne tylko z urlopem.
+  const yearText = (y: number) => {
+    const from = `${y}-01-01`
+    const to = `${y}-12-31`
+    const counts = persons.length
+      ? persons.map((p) => ({ p, n: personLeaveDays(leave, p, from, to, regionOf(region, p)) }))
+      : [{ p: '', n: leaveInYear(leave, y, region.fallback) }]
+    return {
+      y,
+      any: counts.some((c) => c.n > 0),
+      text: persons.length
+        ? counts.map((c) => `${c.p} ${c.n}`).join(' · ')
+        : `${counts[0]?.n ?? 0} dni`,
+    }
+  }
+  const leaveYears = Array.from({ length: LEAVE_YEARS }, (_, i) => yearText(year + i)).filter(
+    (r, i) => r.any || i === 0,
+  )
   const summaries = await Promise.all(current.map((t) => tripSummary(t, today)))
   const empty = !current.length && !upcoming.length && !past.length && !archived.length
 
@@ -122,12 +135,16 @@ export default async function TripsPage() {
 
       <Link
         href="/leave"
-        className="island mt-1 flex min-h-12 items-center gap-3 px-4 text-sm hover:text-accent"
+        className="island mt-1 flex min-h-12 items-center gap-3 px-4 py-2 text-sm hover:text-accent"
       >
         <CalendarDays className="size-4 shrink-0 text-muted" aria-hidden="true" />
         <span className="flex-1">planer urlopów</span>
-        <span className="text-muted tabular-nums">
-          {year}: {leaveText}
+        <span className="flex flex-col items-end text-muted tabular-nums">
+          {leaveYears.map((r) => (
+            <span key={r.y}>
+              {r.y}: {r.text}
+            </span>
+          ))}
         </span>
         <span aria-hidden="true" className="text-muted">
           ›
