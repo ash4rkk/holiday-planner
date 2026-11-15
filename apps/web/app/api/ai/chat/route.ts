@@ -11,7 +11,13 @@ import {
 } from '@planer/core'
 import { aiMessages, and, asc, desc, eq, getDb, sql, users } from '@planer/core/db'
 import { z } from 'zod'
-import { budgetLeftPln, MONTHLY_BUDGET_PLN, recordUsage, spentThisMonthPln } from '@/lib/ai/budget'
+import {
+  budgetAllows,
+  MONTHLY_BUDGET_PLN,
+  recordUsage,
+  spentThisMonthPln,
+  WORST_CASE,
+} from '@/lib/ai/budget'
 import { activeRun, endRun, startRun } from '@/lib/ai/chat-runs'
 import { AI_MODEL, aiConfigured, anthropic, fallback } from '@/lib/ai/client'
 import { attachmentBlock } from '@/lib/ai/files'
@@ -296,7 +302,7 @@ export async function POST(request: Request) {
   if (!trip) return Response.json({ error: 'nie ma takiego wyjazdu' }, { status: 404 })
   if (!aiConfigured())
     return Response.json({ error: 'AI nie jest skonfigurowane na serwerze' }, { status: 503 })
-  if ((await budgetLeftPln()) <= 0) {
+  if (!(await budgetAllows(WORST_CASE.chatRound))) {
     return Response.json(
       { error: `limit AI na ten miesiąc (${MONTHLY_BUDGET_PLN} zł) wyczerpany` },
       { status: 402 },
@@ -394,8 +400,9 @@ export async function POST(request: Request) {
     let failure: unknown
     try {
       for (let round = 0; round < MAX_ROUNDS; round++) {
-        // Długie pytanie (kilka rund z wyszukiwaniem) nie przekracza limitu po cichu.
-        if (round > 0 && (await budgetLeftPln()) <= 0) {
+        // Długie pytanie (kilka rund z wyszukiwaniem) nie przekracza limitu po cichu: kolejna runda
+        // tylko, gdy w limicie mieści się jej najgorszy koszt.
+        if (round > 0 && !(await budgetAllows(WORST_CASE.chatRound))) {
           const note = '\n\n_(limit AI na ten miesiąc się skończył — przerwano)_'
           answer += note
           send('text', { delta: note })

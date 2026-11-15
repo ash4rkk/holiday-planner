@@ -2,6 +2,12 @@ import 'server-only'
 import { and, eq, getDb, type InboxItem, inboxItems, isNull } from '@planer/core/db'
 import type { ResolvedPlace } from './maps-resolve'
 
+/** Wpis z tym clientKey, gdy już jest — ponowienie z kolejki nie rozwija linku drugi raz. */
+export async function inboxItemByClientKey(clientKey: string): Promise<InboxItem | undefined> {
+  const [item] = await getDb().select().from(inboxItems).where(eq(inboxItems.clientKey, clientKey))
+  return item
+}
+
 /** Dodaje miejsce; ten sam clientKey (ponowienie z kolejki offline) zwraca istniejący wpis. */
 export async function addToInbox(values: {
   tripId: string

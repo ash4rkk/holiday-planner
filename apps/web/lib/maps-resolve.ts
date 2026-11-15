@@ -41,7 +41,7 @@ async function followRedirects(start: string): Promise<string> {
 }
 
 /** Jedno zapytanie do Nominatim (OSM). */
-async function nominatim(query: string): Promise<LatLng | undefined> {
+async function nominatimFetch(query: string): Promise<LatLng | undefined> {
   const url = new URL('https://nominatim.openstreetmap.org/search')
   url.search = new URLSearchParams({
     q: query,
@@ -58,14 +58,31 @@ async function nominatim(query: string): Promise<LatLng | undefined> {
   return hit ? { lat: Number(hit.lat), lng: Number(hit.lon) } : undefined
 }
 
-// Zasady Nominatim: najwyżej jedno zapytanie na sekundę.
+// Zasady Nominatim: najwyżej jedno zapytanie na sekundę — dla całego procesu (czat, import,
+// skrzynka i „znajdź na mapie” mogą pytać naraz), inaczej grozi blokada adresu serwera.
 const NOMINATIM_GAP_MS = 1100
+let nominatimQueue: Promise<unknown> = Promise.resolve()
+let nominatimLastAt = 0
+
+/** Zapytanie do Nominatim w kolejce: jedno naraz, z odstępem od poprzedniego. */
+function nominatim(query: string): Promise<LatLng | undefined> {
+  const turn = nominatimQueue.then(async () => {
+    const wait = nominatimLastAt + NOMINATIM_GAP_MS - Date.now()
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+    try {
+      return await nominatimFetch(query)
+    } finally {
+      nominatimLastAt = Date.now()
+    }
+  })
+  nominatimQueue = turn.catch(() => {})
+  return turn
+}
 
 /** Geokodowanie zapasowe: kolejne warianty adresu (`geocodeQueries`), aż któryś trafi. */
 export async function geocode(query: string): Promise<LatLng | undefined> {
   const queries = geocodeQueries(query)
-  for (const [i, q] of queries.entries()) {
-    if (i > 0) await new Promise((r) => setTimeout(r, NOMINATIM_GAP_MS))
+  for (const q of queries) {
     const hit = await nominatim(q)
     if (hit) return hit
   }

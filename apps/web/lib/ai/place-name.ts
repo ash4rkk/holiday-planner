@@ -1,7 +1,7 @@
 import 'server-only'
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod'
 import { z } from 'zod'
-import { budgetLeftPln, recordUsage } from '@/lib/ai/budget'
+import { budgetAllows, recordUsage, WORST_CASE } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured, anthropic, fallback } from '@/lib/ai/client'
 import { memoCache } from '@/lib/memo-cache'
 
@@ -35,8 +35,9 @@ export async function originalPlaceQuery(
     .slice(0, 500)
   try {
     const query = await cache(text.toLowerCase(), async () => {
-      if ((await budgetLeftPln()) <= 0) throw new Error('limit AI')
-      const response = await anthropic().beta.messages.parse(
+      if (!(await budgetAllows(WORST_CASE.place))) throw new Error('limit AI')
+      // Strumień: po przekroczeniu czasu zostaje usage tego, co przyszło (też kosztuje).
+      const stream = anthropic().beta.messages.stream(
         {
           model: AI_MODEL,
           max_tokens: 1000,
@@ -45,8 +46,14 @@ export async function originalPlaceQuery(
           system: INSTRUCTIONS,
           messages: [{ role: 'user', content: text }],
         },
-        { maxRetries: 1, timeout: 20_000 },
+        { maxRetries: 1, signal: AbortSignal.timeout(20_000) },
       )
+      const response = await stream.finalMessage().catch(async (error) => {
+        const partial = stream.currentMessage
+        if (partial)
+          await recordUsage({ userId, kind: 'place', model: partial.model, usage: partial.usage })
+        throw error
+      })
       await recordUsage({ userId, kind: 'place', model: response.model, usage: response.usage })
       if (response.stop_reason === 'refusal') return null
       const out = response.parsed_output as z.infer<typeof Answer> | null

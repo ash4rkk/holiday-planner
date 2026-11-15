@@ -1,7 +1,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getCurrentUser } from '@/lib/auth/user'
-import { addToInbox } from '@/lib/inbox'
+import { addToInbox, inboxItemByClientKey } from '@/lib/inbox'
 import { resolvePlace } from '@/lib/maps-resolve'
 import { tripArea, tripPlace } from '@/lib/trip-place'
 import { getTrip } from '@/lib/trips'
@@ -23,6 +23,9 @@ export async function POST(request: Request) {
   const { tripId, note, clientKey, ...shared } = parsed.data
   const trip = await getTrip(tripId)
   if (!trip) return Response.json({ error: 'nie ma takiego wyjazdu' }, { status: 404 })
+  // Ponowienie z kolejki offline: wpis już jest, więc bez Google Places i AI drugi raz.
+  const existing = clientKey ? await inboxItemByClientKey(clientKey) : undefined
+  if (existing) return Response.json(existing)
   const place = await resolvePlace(shared, {
     userId: user.id,
     near: tripArea(trip),

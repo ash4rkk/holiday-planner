@@ -10,7 +10,7 @@ import {
   withoutAmounts,
 } from '@planer/core'
 import { z } from 'zod'
-import { budgetLeftPln, MONTHLY_BUDGET_PLN, recordUsage } from '@/lib/ai/budget'
+import { budgetAllows, MONTHLY_BUDGET_PLN, recordUsage, WORST_CASE } from '@/lib/ai/budget'
 import { AI_MODEL, aiConfigured, anthropic, fallback } from '@/lib/ai/client'
 import { attachmentBlock } from '@/lib/ai/files'
 import { IMPORT_INSTRUCTIONS } from '@/lib/ai/prompts'
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
   if (!trip) return Response.json({ error: 'nie ma takiego wyjazdu' }, { status: 404 })
   if (!aiConfigured())
     return Response.json({ error: 'AI nie jest skonfigurowane na serwerze' }, { status: 503 })
-  if ((await budgetLeftPln()) <= 0) {
+  if (!(await budgetAllows(WORST_CASE.import))) {
     return Response.json(
       { error: `limit AI na ten miesiąc (${MONTHLY_BUDGET_PLN} zł) wyczerpany` },
       { status: 402 },
@@ -82,36 +82,47 @@ export async function POST(request: Request) {
   const file = await attachmentBlock(attachmentId, tripId)
   if ('error' in file) return Response.json({ error: file.error }, { status: 422 })
 
-  let response: Awaited<ReturnType<ReturnType<typeof anthropic>['beta']['messages']['parse']>>
+  // Strumień zamiast parse: po przekroczeniu czasu zostaje usage z tego, co już przyszło, i trafia
+  // do limitu (przerwane wywołanie też kosztuje, a kolejka w telefonie ponawia do 3 razy).
+  const stream = anthropic().beta.messages.stream(
+    {
+      model: AI_MODEL,
+      max_tokens: 16000,
+      ...fallback(),
+      output_config: { effort: 'medium', format: betaZodOutputFormat(Extracted) },
+      system: IMPORT_INSTRUCTIONS,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            file.block,
+            {
+              type: 'text',
+              text: `Wyjazd: ${trip.title} (${formatDateSpan(trip.startDate, trip.endDate)}), waluty: PLN${
+                trip.currencies.length ? `, ${trip.currencies.join(', ')}` : ''
+              }. Teraz: ${nowInTrip(trip.timezone)}. Plik: ${file.name}. Zamień ten dokument na kartę planu.`,
+            },
+          ],
+        },
+      ],
+    },
+    // Bez ponowień w SDK (każde kosztuje, a kolejka w telefonie i tak ponawia) i z limitem
+    // krótszym niż 100 s Cloudflare, żeby telefon dostał odpowiedź, a nie zerwane połączenie.
+    { maxRetries: 0, signal: AbortSignal.timeout(90_000) },
+  )
+  let response: Awaited<ReturnType<typeof stream.finalMessage>>
   try {
-    response = await anthropic().beta.messages.parse(
-      {
-        model: AI_MODEL,
-        max_tokens: 16000,
-        ...fallback(),
-        output_config: { effort: 'medium', format: betaZodOutputFormat(Extracted) },
-        system: IMPORT_INSTRUCTIONS,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              file.block,
-              {
-                type: 'text',
-                text: `Wyjazd: ${trip.title} (${formatDateSpan(trip.startDate, trip.endDate)}), waluty: PLN${
-                  trip.currencies.length ? `, ${trip.currencies.join(', ')}` : ''
-                }. Teraz: ${nowInTrip(trip.timezone)}. Plik: ${file.name}. Zamień ten dokument na kartę planu.`,
-              },
-            ],
-          },
-        ],
-      },
-      // Bez ponowień w SDK (każde kosztuje, a kolejka w telefonie i tak ponawia) i z limitem
-      // krótszym niż 100 s Cloudflare, żeby telefon dostał odpowiedź, a nie zerwane połączenie.
-      { maxRetries: 0, timeout: 90_000 },
-    )
+    response = await stream.finalMessage()
   } catch (error) {
     console.warn('[ai] import', String(error))
+    const partial = stream.currentMessage
+    if (partial)
+      await recordUsage({
+        userId: user.id,
+        kind: 'import',
+        model: partial.model,
+        usage: partial.usage,
+      }).catch(() => {})
     // Błąd trwały (plik za duży, za dużo stron, nieczytelny PDF): ponawianie nic nie da.
     if (
       error instanceof Anthropic.BadRequestError ||
