@@ -4,8 +4,10 @@ import {
   applyLeaveChange,
   type DayEvent,
   diffLeave,
+  formatDateSpan,
   type LeaveRegions,
   leaveDayCounts,
+  leaveDays,
   leaveInRange,
   mergeSharedLeave,
   type PaintMode,
@@ -35,7 +37,7 @@ import {
 } from '@/app/(app)/leave/actions'
 import { Toast } from '@/components/toast-stack'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
-import { cx } from '@/components/ui'
+import { buttonClass, cx } from '@/components/ui'
 import { UndoToast } from '@/components/undo-toast'
 import { offerUndo } from '@/lib/undo'
 import { useDismiss } from '@/lib/use-dismiss'
@@ -124,12 +126,12 @@ export function LeavePlanner({
   const [periods, setPeriods] = useState(initialPeriods)
   const [view, setView] = useState(initialView)
   const [month, setMonth] = useState(initialMonth)
-  const [picking, setPicking] = useState<string | null>(null)
   const [sheet, setSheet] = useState<Sheet | null>(null)
   const [error, setError] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [layers, setLayers] = useLeaveLayers()
   const [brush, setBrush] = useState(false)
+  const [paintMode, setPaintMode] = useState<PaintMode>('add')
   const painting = brush && PAINT_VIEWS.includes(view)
   // Regiony, w których pracujecie: dzień jest szary, gdy wolny dla wszystkich.
   const workRegions = useMemo(
@@ -171,7 +173,6 @@ export function LeavePlanner({
 
   const openNew = (startDate = today, endDate = startDate) => {
     setError(undefined)
-    setPicking(null)
     setSheet({
       kind: 'new',
       value: { startDate, endDate, note: '', person: null, approved: false },
@@ -235,12 +236,17 @@ export function LeavePlanner({
     })
   }
   const tooltip = useDayTooltip(!painting)
-  const paint = usePaint({
-    enabled: painting,
-    isLeave: (date) =>
-      index.periods(date).some((p) => brushPerson === null || p.person === brushPerson),
-    onCommit: paintCommit,
-  })
+  const paint = usePaint({ enabled: painting, mode: paintMode, onCommit: paintCommit })
+  // Podpis zaznaczonego palcem zakresu w pasku pędzla.
+  const pendingText = (() => {
+    const r = paint.pending
+    if (!r) return ''
+    const span = formatDateSpan(r.from, r.to)
+    if (paintMode === 'erase') return `usuń urlop · ${span}`
+    const owner = brushPerson ?? persons[0]
+    const n = leaveDays(r.from, r.to, owner ? regionOf(regions, owner) : regions.fallback)
+    return `${span} · ${n} ${daysWord(n)} urlopu`
+  })()
 
   /** Urlop w dniu tak, jak go widać: z podglądem malowania pędzlem osoby `brushPerson`. */
   const leaveAt: LeaveAt = (date) => {
@@ -266,22 +272,13 @@ export function LeavePlanner({
     }
   }
 
+  /** Dotknięcie dnia: dymek z tym, co się dzieje (urlop dodaje tylko pędzel). */
   const pick = (date: string) => {
-    // W trybie malowania dotknięcie obsługuje malowanie (jeden dzień).
     if (painting) return
-    if (!picking) {
-      const period = index.period(date)
-      if (period) {
-        setError(undefined)
-        setSheet({ kind: 'edit', period })
-        return
-      }
-      setPicking(date)
-      return
-    }
-    const [a, b] = picking <= date ? [picking, date] : [date, picking]
-    openNew(a, b)
+    tooltip.toggle(date)
   }
+  // Dzień z otwartym dymkiem jest zaznaczony w kalendarzu.
+  const picking = tooltip.tip?.pinned ? tooltip.tip.date : null
 
   /**
    * Ten sam okres u obu osób → jeden urlop wspólny: zapis w bazie i w stanie. Po zapisie z arkusza
@@ -463,16 +460,16 @@ export function LeavePlanner({
         </div>
       </div>
 
-      {/* Przy malowaniu dni nie przewijają strony (touch-action na samych komórkach, bo widok
-          kolumn ma własne przewijanie w bok). */}
+      {/* Przy malowaniu kalendarz dalej się przewija (zaznacza dotknięcie albo przytrzymanie, nie
+          przesunięcie palca); bez menu systemowego przy przytrzymaniu. */}
       <div
         {...tooltip.bind}
-        onPointerDown={(e) => {
-          paint.onPointerDown(e)
-          tooltip.bind.onPointerDown(e)
+        onContextMenu={(e) => {
+          if (painting) e.preventDefault()
         }}
+        onPointerDown={paint.onPointerDown}
         className={cx(
-          painting && 'select-none [&_[data-date]]:touch-none [&_[data-date]]:cursor-crosshair',
+          painting && 'select-none [-webkit-touch-callout:none] [&_[data-date]]:cursor-crosshair',
         )}
       >
         {view === 'months' && (
@@ -540,41 +537,64 @@ export function LeavePlanner({
       {painting && !paint.active && (
         <Toast>
           <div role="status" className="island pop-in flex flex-col gap-2 p-2 text-sm">
-            <span className="px-2">● maluj po dniach · na urlopie gumka · ✓ kończy</span>
-            <PersonPicker
-              persons={persons}
-              value={brushPerson}
-              onChange={setBrushPerson}
-              label="czyj urlop maluje pędzel"
-            />
+            {paint.pending ? (
+              <>
+                <span className="px-2 font-bold tabular-nums">{pendingText}</span>
+                <div className="grid grid-cols-2 gap-1">
+                  <button type="button" onClick={paint.cancel} className={buttonClass('island')}>
+                    anuluj
+                  </button>
+                  <button type="button" onClick={paint.confirm} className={buttonClass('primary')}>
+                    zapisz
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="flex items-center gap-2 px-2">
+                  {paint.anchor
+                    ? `● ${formatDateSpan(paint.anchor, paint.anchor)} · dotknij ostatniego dnia`
+                    : '● dotknij pierwszego dnia · albo przytrzymaj i przeciągnij'}
+                  {paint.anchor && (
+                    <button
+                      type="button"
+                      onClick={paint.cancel}
+                      className="hit ml-auto text-xs text-muted hover:text-accent"
+                    >
+                      anuluj
+                    </button>
+                  )}
+                </span>
+                <div role="radiogroup" aria-label="co robi pędzel" className="flex gap-1">
+                  {(['add', 'erase'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={paintMode === m}
+                      onClick={() => setPaintMode(m)}
+                      className={cx(
+                        'flex min-h-11 flex-1 items-center justify-center rounded-small border px-3',
+                        paintMode === m
+                          ? 'border-accent bg-active font-bold text-text'
+                          : 'border-line text-muted hover:text-accent',
+                      )}
+                    >
+                      {m === 'add' ? 'dodaj' : 'usuń'}
+                    </button>
+                  ))}
+                </div>
+                <PersonPicker
+                  persons={persons}
+                  value={brushPerson}
+                  onChange={setBrushPerson}
+                  label="czyj urlop maluje pędzel"
+                />
+              </>
+            )}
           </div>
         </Toast>
       )}
-      {picking && (
-        <Toast>
-          <div
-            role="status"
-            className="island pop-in flex min-h-11 items-center gap-3 pr-1 pl-4 text-sm"
-          >
-            <span>● wybierz ostatni dzień urlopu</span>
-            <button
-              type="button"
-              onClick={() => openNew(picking)}
-              className="min-h-11 px-2 text-accent"
-            >
-              jeden dzień
-            </button>
-            <button
-              type="button"
-              onClick={() => setPicking(null)}
-              className="min-h-11 px-2 text-muted"
-            >
-              anuluj
-            </button>
-          </div>
-        </Toast>
-      )}
-
       {sheet && (
         <LeaveSheet
           key={
@@ -607,7 +627,7 @@ export function LeavePlanner({
         <PaintNavButton
           on={brush}
           onToggle={() => {
-            setPicking(null)
+            tooltip.close()
             setBrush((b) => !b)
           }}
         />
@@ -619,6 +639,12 @@ export function LeavePlanner({
           regions={regions}
           calendars={calendars}
           persons={persons}
+          tipRef={tooltip.ref}
+          onEdit={(period) => {
+            tooltip.close()
+            setError(undefined)
+            setSheet({ kind: 'edit', period })
+          }}
         />
       )}
       <UndoToast />

@@ -11,6 +11,7 @@ import {
 import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
   useCallback,
   useEffect,
   useRef,
@@ -24,15 +25,15 @@ import {
   eventColor,
   leaveCellClass,
   type PlannerCalendar,
+  type PlannerPeriod,
   periodDaysText,
 } from './model'
 
-// Dymek dnia w planerze urlopów: co i kiedy się dzieje. Myszą po najechaniu, na telefonie po
-// przytrzymaniu dnia (zwykłe dotknięcie dalej zaznacza urlop). Komórki rozpoznaje po `data-date`.
+// Dymek dnia w planerze urlopów: co i kiedy się dzieje. Dotknięcie albo kliknięcie dnia przypina
+// dymek (z „edytuj” przy urlopie), mysz pokazuje go też po najechaniu. Urlop dodaje tylko pędzel.
+// Komórki rozpoznaje po `data-date`.
 
 const HOVER_MS = 250
-const HOLD_MS = 450
-const MOVE_PX = 10
 const WIDTH = 288
 
 type Tip = { date: string; rect: DOMRect; pinned: boolean }
@@ -43,12 +44,10 @@ const cellOf = (el: EventTarget | null) =>
 export function useDayTooltip(enabled: boolean) {
   const [tip, setTip] = useState<Tip | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const hold = useRef<{ x: number; y: number } | null>(null)
-  const suppressClick = useRef(false)
+  const ref = useRef<HTMLDivElement>(null)
 
   const close = useCallback(() => {
     clearTimeout(timer.current)
-    hold.current = null
     setTip(null)
   }, [])
 
@@ -56,22 +55,43 @@ export function useDayTooltip(enabled: boolean) {
     if (!enabled) close()
   }, [enabled, close])
 
-  // Przypięty dymek (po przytrzymaniu) zamyka dotknięcie gdziekolwiek, przewinięcie albo Esc.
+  // Przypięty dymek zamyka dotknięcie obok (nie w dymku i nie w tym samym dniu — ten przełącza),
+  // przewinięcie albo Esc.
   useEffect(() => {
     if (!tip?.pinned) return
+    const date = tip.date
+    const down = (e: PointerEvent) => {
+      if (ref.current?.contains(e.target as Node)) return
+      if (cellOf(e.target)?.dataset.date === date) return
+      setTip(null)
+    }
     const off = () => setTip(null)
     const key = (e: KeyboardEvent) => e.key === 'Escape' && off()
-    // Opóźnione, żeby puszczenie palca po przytrzymaniu nie zamknęło dymka od razu.
-    const t = setTimeout(() => document.addEventListener('pointerdown', off, true), 0)
+    document.addEventListener('pointerdown', down, true)
     window.addEventListener('scroll', off, true)
     document.addEventListener('keydown', key)
     return () => {
-      clearTimeout(t)
-      document.removeEventListener('pointerdown', off, true)
+      document.removeEventListener('pointerdown', down, true)
       window.removeEventListener('scroll', off, true)
       document.removeEventListener('keydown', key)
     }
-  }, [tip?.pinned])
+  }, [tip?.pinned, tip?.date])
+
+  /** Dotknięcie dnia: przypina dymek, drugie dotknięcie tego samego dnia go zamyka. */
+  const toggle = useCallback(
+    (date: string) => {
+      if (!enabled) return
+      clearTimeout(timer.current)
+      const cell = document.querySelector<HTMLElement>(`[data-date="${date}"]`)
+      if (!cell) return
+      setTip((t) =>
+        t?.pinned && t.date === date
+          ? null
+          : { date, rect: cell.getBoundingClientRect(), pinned: true },
+      )
+    },
+    [enabled],
+  )
 
   const onPointerOver = (e: ReactPointerEvent) => {
     if (!enabled || e.pointerType !== 'mouse') return
@@ -83,7 +103,10 @@ export function useDayTooltip(enabled: boolean) {
     }
     const date = cell.dataset.date
     timer.current = setTimeout(
-      () => setTip({ date, rect: cell.getBoundingClientRect(), pinned: false }),
+      () =>
+        setTip((t) =>
+          t?.pinned ? t : { date, rect: cell.getBoundingClientRect(), pinned: false },
+        ),
       HOVER_MS,
     )
   }
@@ -93,61 +116,7 @@ export function useDayTooltip(enabled: boolean) {
     setTip((t) => (t?.pinned ? t : null))
   }
 
-  const onPointerDown = (e: ReactPointerEvent) => {
-    if (!enabled || e.pointerType === 'mouse') return
-    const cell = cellOf(e.target)
-    if (!cell?.dataset.date) return
-    const date = cell.dataset.date
-    hold.current = { x: e.clientX, y: e.clientY }
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => {
-      hold.current = null
-      suppressClick.current = true
-      navigator.vibrate?.(10)
-      setTip({ date, rect: cell.getBoundingClientRect(), pinned: true })
-    }, HOLD_MS)
-  }
-
-  const onPointerMove = (e: ReactPointerEvent) => {
-    const h = hold.current
-    if (h && Math.hypot(e.clientX - h.x, e.clientY - h.y) > MOVE_PX) {
-      clearTimeout(timer.current)
-      hold.current = null
-    }
-  }
-
-  const onPointerUp = () => {
-    if (hold.current) clearTimeout(timer.current)
-    hold.current = null
-  }
-
-  /** Puszczenie palca po przytrzymaniu nie zaznacza dnia. */
-  const onClickCapture = (e: ReactMouseEvent) => {
-    if (!suppressClick.current) return
-    suppressClick.current = false
-    e.stopPropagation()
-    e.preventDefault()
-  }
-
-  /** Bez menu systemowego przy przytrzymaniu dnia. */
-  const onContextMenu = (e: ReactMouseEvent) => {
-    if (enabled && cellOf(e.target)) e.preventDefault()
-  }
-
-  return {
-    tip,
-    close,
-    bind: {
-      onPointerOver,
-      onPointerLeave,
-      onPointerDown,
-      onPointerMove,
-      onPointerUp,
-      onPointerCancel: onPointerUp,
-      onClickCapture,
-      onContextMenu,
-    },
-  }
+  return { tip, close, toggle, ref, bind: { onPointerOver, onPointerLeave } }
 }
 
 export function DayTooltip({
@@ -156,12 +125,16 @@ export function DayTooltip({
   regions,
   calendars,
   persons,
+  tipRef,
+  onEdit,
 }: {
   tip: Tip
   index: DayIndex
   regions: LeaveRegions
   calendars: PlannerCalendar[]
   persons: string[]
+  tipRef: RefObject<HTMLDivElement | null>
+  onEdit: (period: PlannerPeriod) => void
 }) {
   const { date, rect } = tip
   const periods = index.periods(date)
@@ -197,9 +170,14 @@ export function DayTooltip({
 
   return createPortal(
     <div
-      role="tooltip"
+      ref={tipRef}
+      role={tip.pinned ? 'dialog' : 'tooltip'}
+      aria-label={tip.pinned ? formatDayHeader(date) : undefined}
       style={style}
-      className="island shadow-float fade-in pointer-events-none fixed z-(--z-popover) flex flex-col gap-2 p-3 text-sm"
+      className={cx(
+        'island shadow-float fade-in fixed z-(--z-popover) flex flex-col gap-2 p-3 text-sm',
+        !tip.pinned && 'pointer-events-none',
+      )}
     >
       <p className="font-bold">
         {formatDayHeader(date)} {date.slice(0, 4)}
@@ -229,6 +207,15 @@ export function DayTooltip({
             {periodDaysText(period, persons, regions)}
             {period.note ? ` · ${period.note}` : ''}
           </span>
+          {tip.pinned && (
+            <button
+              type="button"
+              onClick={() => onEdit(period)}
+              className="hit -mb-0.5 self-start text-xs font-bold underline-offset-2 hover:underline"
+            >
+              edytuj ›
+            </button>
+          )}
         </div>
       ))}
       {kind && <p className="text-xs text-subtle">{kind}</p>}
