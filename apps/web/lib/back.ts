@@ -5,6 +5,7 @@ import { TRIPS_BACK } from '@/components/top-bar'
 const VIEWS = ['today', 'list', 'board', 'map', 'weather']
 const TRIP_VIEW = /^\/trips\/[\w-]+\/(today|list|board|map|weather)$/
 export const BACK_TO_TRIP = 'wróć do wyjazdu'
+export const LEAVE_BACK = { href: '/leave', label: 'wróć do urlopów' }
 
 /** Ustawienia wyjazdu: z listy wyjazdów (`from=trips`) albo z widoku wyjazdu (`from=board`…). */
 export function tripSettingsBack(tripId: string, from: unknown) {
@@ -15,6 +16,7 @@ export function tripSettingsBack(tripId: string, from: unknown) {
 
 /** Ustawienia aplikacji: z widoku wyjazdu (pełna ścieżka) albo z listy wyjazdów. */
 export function appSettingsBack(from: unknown) {
+  if (from === '/leave') return LEAVE_BACK
   return typeof from === 'string' && TRIP_VIEW.test(from)
     ? { href: from, label: BACK_TO_TRIP }
     : TRIPS_BACK

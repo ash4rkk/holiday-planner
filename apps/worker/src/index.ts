@@ -9,6 +9,7 @@ import {
   TRAVEL_MODE_LABELS,
   weatherPlace,
 } from '@planer/core'
+import { syncAllTimetree } from '@planer/core/calendars-db'
 import { and, eq, getDb, gte, lte, tripDocs, trips } from '@planer/core/db'
 import { logEvent, pruneEvents } from '@planer/core/events'
 import { dayForecast } from '@planer/core/forecast'
@@ -19,8 +20,9 @@ import { legsFromDoc, markLegAlerted, planLeg, sweepRouteCache } from '@planer/c
 import { briefingSentFor, getBriefingSettings, markBriefingSent } from '@planer/core/settings'
 import { nightlyBackup } from './backup'
 
-// Zadania w tle: przypomnienia push z kart (co 30 s), odświeżanie kursów NBP (co 6 h)
-// i nocna kopia bazy oraz plików (sprawdzane co 10 min, robione raz dziennie).
+// Zadania w tle: przypomnienia push z kart (co 30 s), odświeżanie kursów NBP (co 6 h),
+// kalendarze TimeTree do planera urlopów (co godzinę) i nocna kopia bazy oraz plików
+// (sprawdzane co 10 min, robione raz dziennie).
 
 const REMINDERS_EVERY_MS = 30_000
 const FX_EVERY_MS = 6 * 60 * 60_000
@@ -29,6 +31,7 @@ const LEAVE_CHECK_MS = 2 * 60_000
 const LEAVE_LOOKAHEAD_MIN = 150
 const LEAVE_NOTICE_MIN = 10
 const BRIEFING_CHECK_MS = 2 * 60_000
+const TIMETREE_EVERY_MS = 60 * 60_000
 // Po tym czasie od ustawionej godziny podsumowanie już nie idzie (np. worker stał w nocy).
 const BRIEFING_LATE_MIN = 180
 
@@ -222,6 +225,7 @@ every(
 every(FX_EVERY_MS, refreshRates, 'kursy NBP')
 every(LEAVE_CHECK_MS, leaveReminders, 'czas wyjść')
 every(BRIEFING_CHECK_MS, eveningBriefing, 'podsumowanie na jutro')
+every(TIMETREE_EVERY_MS, syncAllTimetree, 'timetree')
 every(
   BACKUP_CHECK_MS,
   async () => {

@@ -1,6 +1,7 @@
 import { type BriefingSettings, DEFAULT_BRIEFING } from './briefing'
 import type { CardType } from './cards'
 import { appSettings, eq, getDb } from './db'
+import { HOLIDAY_REGIONS, type HolidayRegion } from './holidays'
 import { DEFAULT_PACKING_DAYS, MAX_PACKING_DAYS } from './packing'
 import { DEFAULT_REMIND_MIN, type ReminderDefaults } from './reminders'
 
@@ -94,4 +95,26 @@ export async function markBriefingSent(tripId: string, date: string): Promise<vo
     .insert(appSettings)
     .values({ key: briefingSentKey(tripId), value: date })
     .onConflictDoUpdate({ target: appSettings.key, set: { value: date, updatedAt: new Date() } })
+}
+
+// ---------- planer urlopów ----------
+
+const LEAVE_KEY = 'leave'
+
+/** Według świąt którego regionu planer liczy dni urlopu (wspólne dla obu osób). */
+export async function getLeaveRegion(): Promise<HolidayRegion> {
+  const [row] = await getDb()
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, LEAVE_KEY))
+  const region = (row?.value as { region?: unknown } | undefined)?.region
+  return HOLIDAY_REGIONS.includes(region as HolidayRegion) ? (region as HolidayRegion) : 'PL'
+}
+
+export async function setLeaveRegion(region: HolidayRegion): Promise<void> {
+  const clean = { region: HOLIDAY_REGIONS.includes(region) ? region : 'PL' }
+  await getDb()
+    .insert(appSettings)
+    .values({ key: LEAVE_KEY, value: clean })
+    .onConflictDoUpdate({ target: appSettings.key, set: { value: clean, updatedAt: new Date() } })
 }

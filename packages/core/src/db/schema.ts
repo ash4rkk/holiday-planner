@@ -12,6 +12,7 @@ import {
   real,
   text,
   timestamp,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core'
 import type { DemoWeatherDay } from '../demo-weather'
@@ -280,6 +281,58 @@ export const appEvents = pgTable(
   (t) => [index('app_events_at_idx').on(t.at)],
 )
 
+/** Planer urlopów: okresy urlopu (wspólne dla obu osób), od–do włącznie. */
+export const leavePeriods = pgTable(
+  'leave_periods',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    startDate: date('start_date').notNull(),
+    endDate: date('end_date').notNull(),
+    note: text('note'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('leave_periods_start_idx').on(t.startDate)],
+)
+
+/** Kalendarze zewnętrzne do podglądu w planerze urlopów: plik .ics albo kalendarz TimeTree. */
+export const calendars = pgTable('calendars', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  source: text('source').$type<'ics' | 'timetree'>().notNull(),
+  // id kalendarza w TimeTree (sync w workerze); dla .ics puste
+  externalId: text('external_id'),
+  lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/**
+ * Wydarzenia kalendarza już rozwinięte w pojedyncze wystąpienia (powtarzające się liczymy przy
+ * imporcie/sync w oknie lat), daty i godziny lokalne (Europe/Warsaw). Import zastępuje całość.
+ */
+export const calendarEvents = pgTable(
+  'calendar_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    calendarId: uuid('calendar_id')
+      .notNull()
+      .references(() => calendars.id, { onDelete: 'cascade' }),
+    // uid wydarzenia + data wystąpienia
+    uid: text('uid').notNull(),
+    title: text('title').notNull(),
+    startDate: date('start_date').notNull(),
+    endDate: date('end_date').notNull(),
+    startTime: text('start_time'),
+    endTime: text('end_time'),
+    allDay: boolean('all_day').notNull().default(true),
+  },
+  (t) => [
+    unique('calendar_events_uid_uq').on(t.calendarId, t.uid),
+    index('calendar_events_range_idx').on(t.startDate, t.endDate),
+  ],
+)
+
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Trip = typeof trips.$inferSelect
@@ -289,3 +342,6 @@ export type Attachment = typeof attachments.$inferSelect
 export type CardTemplate = typeof cardTemplates.$inferSelect
 export type AiMessage = typeof aiMessages.$inferSelect
 export type AppEvent = typeof appEvents.$inferSelect
+export type LeavePeriod = typeof leavePeriods.$inferSelect
+export type Calendar = typeof calendars.$inferSelect
+export type CalendarEvent = typeof calendarEvents.$inferSelect

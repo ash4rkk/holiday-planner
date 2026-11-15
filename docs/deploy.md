@@ -55,6 +55,13 @@ Klucz API z console.anthropic.com → `/srv/planer/.env`: `ANTHROPIC_API_KEY`. O
 tylko `planer-web`; przeglądarka go nie dostaje. Koszt każdego wywołania zapisuje się w `ai_usage`,
 licznik jest w ustawieniach aplikacji.
 
+### 2b′. Kalendarze TimeTree w planerze urlopów [L] (opcjonalnie)
+
+`/srv/planer/.env`: `TIMETREE_EMAIL` i `TIMETREE_PASSWORD` (konto TimeTree z e-mailem i hasłem, nie
+logowanie przez Google/Apple). Czyta je `planer-web` (lista kalendarzy w `/settings/calendars`) i
+`planer-worker` (pobieranie co godzinę). To nieoficjalne API aplikacji webowej TimeTree — błędy
+lądują w „logi i problemy” (`timetree`) i przy kalendarzu. Bez tych zmiennych zostaje import `.ics`.
+
 ### 2c. Dojazdy komunikacją [L] (opcjonalnie)
 
 Klucz Google Routes API → `/srv/planer/.env`: `GOOGLE_ROUTES_API_KEY`. Rachunek rozliczeniowy z adresem w

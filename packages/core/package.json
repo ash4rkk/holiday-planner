@@ -16,7 +16,10 @@
     "./push": "./src/push.ts",
     "./routes": "./src/routes.ts",
     "./places": "./src/places.ts",
-    "./forecast": "./src/forecast.ts"
+    "./forecast": "./src/forecast.ts",
+    "./ics": "./src/ics.ts",
+    "./timetree": "./src/timetree.ts",
+    "./calendars-db": "./src/calendars-db.ts"
   },
   "scripts": {
     "typecheck": "tsc",
@@ -27,6 +30,7 @@
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
+    "ical.js": "2.2.1",
     "jose": "6.2.13",
     "nanoid": "6.0.2",
     "postgres": "3.4.9",

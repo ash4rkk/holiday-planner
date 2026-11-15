@@ -1,6 +1,7 @@
-import { daysBetween, todayLocal } from '@planer/core'
+import { daysBetween, leaveInYear, todayLocal } from '@planer/core'
 import type { Trip } from '@planer/core/db'
-import { Plus } from 'lucide-react'
+import { getLeaveRegion } from '@planer/core/settings'
+import { CalendarDays, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { connection } from 'next/server'
 import { ProfilePhoto } from '@/components/profile/profile-photo'
@@ -10,6 +11,7 @@ import { countryName, Flag } from '@/components/trips/flag'
 import { TripRow } from '@/components/trips/trip-row'
 import { buttonClass, SectionLabel } from '@/components/ui'
 import { getCurrentUser } from '@/lib/auth/user'
+import { listLeave } from '@/lib/leave'
 import { tripSummary } from '@/lib/trip-summary'
 import { listTrips } from '@/lib/trips'
 
@@ -38,10 +40,14 @@ function Folded({ label, trips }: { label: string; trips: Trip[] }) {
 export default async function TripsPage() {
   await connection()
   const today = todayLocal()
-  const [user, { current, upcoming, past, archived }] = await Promise.all([
+  const year = Number(today.slice(0, 4))
+  const [user, { current, upcoming, past, archived }, leave, region] = await Promise.all([
     getCurrentUser(),
     listTrips(),
+    listLeave(`${year}-01-01`, `${year}-12-31`).catch(() => []),
+    getLeaveRegion().catch(() => 'PL' as const),
   ])
+  const leaveDaysUsed = leaveInYear(leave, year, region)
   const summaries = await Promise.all(current.map((t) => tripSummary(t, today)))
   const empty = !current.length && !upcoming.length && !past.length && !archived.length
 
@@ -103,6 +109,20 @@ export default async function TripsPage() {
           countdown={t.startDate ? daysBetween(today, t.startDate) : undefined}
         />
       ))}
+
+      <Link
+        href="/leave"
+        className="island mt-1 flex min-h-12 items-center gap-3 px-4 text-sm hover:text-accent"
+      >
+        <CalendarDays className="size-4 shrink-0 text-muted" aria-hidden="true" />
+        <span className="flex-1">planer urlopów</span>
+        <span className="text-muted tabular-nums">
+          {year}: {leaveDaysUsed} {leaveDaysUsed === 1 ? 'dzień' : 'dni'}
+        </span>
+        <span aria-hidden="true" className="text-muted">
+          ›
+        </span>
+      </Link>
 
       <Folded label="minione" trips={past} />
       <Folded label="archiwum" trips={archived} />

@@ -3,7 +3,16 @@ import { recentEvents } from '@planer/core/events'
 import type { ReminderDefaults } from '@planer/core/reminders'
 import { routesLimit, routesUsedThisMonth } from '@planer/core/routes'
 import { getBriefingSettings, getPackingDays, getReminderDefaults } from '@planer/core/settings'
-import { Bell, Clock, Link2, Route, ScrollText, Sparkles, SunMoon } from 'lucide-react'
+import {
+  Bell,
+  CalendarDays,
+  Clock,
+  Link2,
+  Route,
+  ScrollText,
+  Sparkles,
+  SunMoon,
+} from 'lucide-react'
 import Link from 'next/link'
 import { connection } from 'next/server'
 import { ProfilePhoto } from '@/components/profile/profile-photo'
@@ -92,6 +101,10 @@ export default async function SettingsPage({ searchParams }: PageProps<'/setting
             .filter(Boolean)
             .join(' · ')}
         />
+      </SettingsGroup>
+
+      <SettingsGroup label="urlopy">
+        <SettingsRow href="/settings/calendars" label="kalendarze i święta" icon={CalendarDays} />
       </SettingsGroup>
 
       <SettingsGroup label="udostępnianie">
