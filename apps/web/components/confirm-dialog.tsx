@@ -3,6 +3,7 @@
 import { type FormEvent, type ReactNode, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { buttonClass, inputClass } from '@/components/ui'
+import { useExit } from '@/lib/exit'
 import { useDismiss } from '@/lib/use-dismiss'
 
 /** Szkielet okna nad wszystkim; portal, bo widoki tworzą własne konteksty warstw. Esc i tło anulują. */
@@ -16,8 +17,12 @@ export function DialogFrame({
   children: ReactNode
 }) {
   useDismiss(true, onCancel)
+  const exit = useExit('pop')
   return createPortal(
-    <div className="fade-in fixed inset-0 z-(--z-dialog) flex items-center justify-center p-4">
+    <div
+      ref={exit}
+      className="fade-in fixed inset-0 z-(--z-dialog) flex items-center justify-center p-4"
+    >
       <button
         type="button"
         aria-label="anuluj"

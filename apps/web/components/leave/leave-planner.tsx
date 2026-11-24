@@ -39,6 +39,7 @@ import { Toast } from '@/components/toast-stack'
 import { TopBar, TRIPS_BACK } from '@/components/top-bar'
 import { buttonClass, cx } from '@/components/ui'
 import { UndoToast } from '@/components/undo-toast'
+import { useExit } from '@/lib/exit'
 import { offerUndo } from '@/lib/undo'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useLeaveLayers } from '@/lib/use-leave-layers'
@@ -359,7 +360,7 @@ export function LeavePlanner({
               href="/settings/calendars?from=/leave"
               aria-label="kalendarze i święta"
               title="kalendarze i święta"
-              className="flex size-11 items-center justify-center text-muted hover:text-accent"
+              className="press flex size-11 items-center justify-center text-muted hover:text-accent"
             >
               <CalendarCog className="size-5" aria-hidden="true" />
             </Link>
@@ -368,7 +369,7 @@ export function LeavePlanner({
               onClick={() => openNew()}
               aria-label="dodaj urlop"
               title="dodaj urlop"
-              className="flex size-11 items-center justify-center text-accent hover:text-accent-hover"
+              className="press flex size-11 items-center justify-center text-accent hover:text-accent-hover"
             >
               <Plus className="size-5" aria-hidden="true" />
             </button>
@@ -382,7 +383,7 @@ export function LeavePlanner({
           <Link
             href={yearHref(year - 1)}
             aria-label={`rok ${year - 1}`}
-            className="flex size-11 items-center justify-center text-lg text-muted hover:text-accent"
+            className="press flex size-11 items-center justify-center text-lg text-muted hover:text-accent"
           >
             ‹
           </Link>
@@ -390,7 +391,7 @@ export function LeavePlanner({
           <Link
             href={yearHref(year + 1)}
             aria-label={`rok ${year + 1}`}
-            className="flex size-11 items-center justify-center text-lg text-muted hover:text-accent"
+            className="press flex size-11 items-center justify-center text-lg text-muted hover:text-accent"
           >
             ›
           </Link>
@@ -436,7 +437,7 @@ export function LeavePlanner({
                 title={VIEW_LABELS[v]}
                 onClick={() => go({ view: v })}
                 className={cx(
-                  'flex size-10 items-center justify-center rounded-inner',
+                  'press flex size-10 items-center justify-center rounded-inner',
                   view === v ? 'bg-active text-text' : 'text-muted hover:text-accent',
                 )}
               >
@@ -664,6 +665,7 @@ function LayersMenu({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useDismiss(open, () => setOpen(false), ref)
+  const exit = useExit('pop')
   const toggleCalendar = (id: string) =>
     setLayers({
       hiddenCalendars: layers.hiddenCalendars.includes(id)
@@ -694,14 +696,17 @@ function LayersMenu({
         aria-label="warstwy"
         title="warstwy"
         className={cx(
-          'flex size-10 items-center justify-center rounded-inner',
+          'press flex size-10 items-center justify-center rounded-inner',
           open ? 'bg-active text-text' : 'text-muted hover:text-accent',
         )}
       >
         <LayersIcon className="size-5" aria-hidden="true" />
       </button>
       {open && (
-        <div className="island shadow-float pop-in absolute right-0 top-12 z-(--z-popover) flex w-72 flex-col p-1 max-md:fixed max-md:inset-x-2 max-md:top-auto max-md:mt-1 max-md:w-auto">
+        <div
+          ref={exit}
+          className="island shadow-float pop-in absolute right-0 top-12 z-(--z-popover) flex w-72 flex-col p-1 max-md:fixed max-md:inset-x-2 max-md:top-auto max-md:mt-1 max-md:w-auto"
+        >
           {row('święta w Polsce', layers.pl, () => setLayers({ pl: !layers.pl }), '●')}
           {row('święta w Brandenburgii', layers.bb, () => setLayers({ bb: !layers.bb }), '○')}
           {row('wyjazdy', layers.trips, () => setLayers({ trips: !layers.trips }))}

@@ -3,6 +3,7 @@
 import { Info } from 'lucide-react'
 import { type ReactNode, useRef, useState } from 'react'
 import { cx } from '@/components/ui'
+import { useExit } from '@/lib/exit'
 import { useDismiss } from '@/lib/use-dismiss'
 import { Mark } from './day-cell'
 import { type Layers, leaveBg } from './model'
@@ -83,6 +84,7 @@ export function Legend({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useDismiss(open, () => setOpen(false), ref)
+  const exit = useExit('pop')
   const row = (i: (typeof items)[number]) => (
     <li key={i.key} className="flex items-center gap-1.5">
       <span aria-hidden="true" className="flex size-3 items-center justify-center">
@@ -101,14 +103,17 @@ export function Legend({
         title="legenda"
         onClick={() => setOpen((o) => !o)}
         className={cx(
-          'flex size-10 items-center justify-center rounded-inner',
+          'press flex size-10 items-center justify-center rounded-inner',
           open ? 'bg-active text-text' : 'text-muted hover:text-accent',
         )}
       >
         <Info className="size-5" aria-hidden="true" />
       </button>
       {open && (
-        <div className="island shadow-float pop-in absolute top-full right-0 z-(--z-popover) mt-1 flex w-72 flex-col gap-2 p-3 text-xs text-muted max-md:fixed max-md:inset-x-2 max-md:top-auto max-md:w-auto">
+        <div
+          ref={exit}
+          className="island shadow-float pop-in absolute top-full right-0 z-(--z-popover) mt-1 flex w-72 flex-col gap-2 p-3 text-xs text-muted max-md:fixed max-md:inset-x-2 max-md:top-auto max-md:w-auto"
+        >
           <ul aria-label="legenda" className="flex flex-col gap-2">
             {items.map(row)}
           </ul>

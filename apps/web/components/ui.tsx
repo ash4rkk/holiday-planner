@@ -13,7 +13,7 @@ const BUTTON = {
 
 export function buttonClass(variant: keyof typeof BUTTON = 'island', extra?: string): string {
   return cx(
-    'inline-flex min-h-11 items-center justify-center gap-2 rounded-island px-4 transition-colors',
+    'press inline-flex min-h-11 items-center justify-center gap-2 rounded-island px-4 transition-colors',
     'disabled:opacity-50 disabled:pointer-events-none',
     BUTTON[variant],
     extra,

@@ -91,7 +91,7 @@ function CardTileView({
       onPointerCancel={cancelHold}
       onContextMenu={(e) => onHold && e.preventDefault()}
       className={cx(
-        'island relative isolate flex w-full gap-3 overflow-hidden py-3 pr-3 pl-4 text-left transition-colors select-none hover:border-sel',
+        'press-soft island relative isolate flex w-full gap-3 overflow-hidden py-3 pr-3 pl-4 text-left transition-colors select-none hover:border-sel',
         card.aiDraft && 'border-dashed border-accent',
         fresh && 'pop-in',
         card.skipped && 'opacity-50',

@@ -15,6 +15,7 @@ import {
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cx } from '@/components/ui'
+import { useExit } from '@/lib/exit'
 
 export type CardMenuActions = {
   togglePin: () => void
@@ -79,6 +80,7 @@ export function CardMenu({
 }) {
   const [view, setView] = useState<'main' | 'days'>('main')
   const ref = useRef<HTMLDivElement>(null)
+  const exit = useExit(wide ? 'fade' : 'sheet')
   const [pos, setPos] = useState<{ left: number; top: number }>()
 
   // Przy kursorze, ale w całości na ekranie.
@@ -163,7 +165,11 @@ export function CardMenu({
     )
 
   return createPortal(
-    <div className="fixed inset-0 z-(--z-dialog)" onContextMenu={(e) => e.preventDefault()}>
+    <div
+      ref={exit}
+      className="fixed inset-0 z-(--z-dialog)"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {/* Zamyka nowe dotknięcie, nie „klik” z puszczenia palca, który właśnie otworzył menu. */}
       <button
         type="button"

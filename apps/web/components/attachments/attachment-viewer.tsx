@@ -39,7 +39,7 @@ export function AttachmentViewer({
           type="button"
           onClick={onClose}
           aria-label="zamknij podgląd"
-          className="island flex size-11 items-center justify-center text-muted hover:text-accent"
+          className="press island flex size-11 items-center justify-center text-muted hover:text-accent"
         >
           <X className="size-5" aria-hidden="true" />
         </button>
@@ -52,7 +52,7 @@ export function AttachmentViewer({
           target="_blank"
           rel="noreferrer"
           aria-label="otwórz osobno"
-          className="island flex size-11 items-center justify-center text-muted hover:text-accent"
+          className="press island flex size-11 items-center justify-center text-muted hover:text-accent"
         >
           <ExternalLink className="size-5" aria-hidden="true" />
         </a>
@@ -68,7 +68,7 @@ export function AttachmentViewer({
             if (ok) onDelete()
           }}
           aria-label="odłącz plik"
-          className="island flex size-11 items-center justify-center text-muted hover:text-red"
+          className="press island flex size-11 items-center justify-center text-muted hover:text-red"
         >
           <Trash2 className="size-5" aria-hidden="true" />
         </button>

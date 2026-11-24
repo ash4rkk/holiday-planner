@@ -171,7 +171,7 @@ export function PackingList({ people }: { people: string[] }) {
                   aria-pressed={active}
                   onClick={() => setFilter(c)}
                   className={cx(
-                    'flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm transition-colors',
+                    'press flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm transition-colors',
                     active
                       ? 'border-accent bg-active text-accent'
                       : 'border-line bg-panel text-muted',
@@ -248,7 +248,7 @@ export function PackingList({ people }: { people: string[] }) {
                       onPointerDown={keepFocus}
                       onClick={() => remove(item)}
                       aria-label={`usuń ${item.text}`}
-                      className="flex size-11 shrink-0 items-center justify-center text-subtle hover:text-red"
+                      className="press flex size-11 shrink-0 items-center justify-center text-subtle hover:text-red"
                     >
                       <X className="size-4" aria-hidden="true" />
                     </button>
@@ -262,7 +262,7 @@ export function PackingList({ people }: { people: string[] }) {
                         onPointerDown={keepFocus}
                         onClick={() => updatePackingItem(doc, item.id, { category: c })}
                         className={cx(
-                          'hit min-h-9 shrink-0 rounded-full border px-3 text-xs',
+                          'press hit min-h-9 shrink-0 rounded-full border px-3 text-xs',
                           item.category === c
                             ? 'border-accent bg-active text-accent'
                             : 'border-line bg-panel text-muted',
@@ -281,7 +281,7 @@ export function PackingList({ people }: { people: string[] }) {
                     aria-checked={false}
                     aria-label={`spakuj: ${item.text}`}
                     onClick={() => updatePackingItem(doc, item.id, { packed: true })}
-                    className="flex size-12 shrink-0 items-center justify-center"
+                    className="press flex size-12 shrink-0 items-center justify-center"
                   >
                     <span className="size-6 rounded-full border-2 border-line transition-colors hover:border-accent" />
                   </button>
@@ -302,7 +302,7 @@ export function PackingList({ people }: { people: string[] }) {
                       updatePackingItem(doc, item.id, { owner: nextOwner(people, me, item.owner) })
                     }
                     aria-label={`kto bierze: ${ownerLabel(me, item.owner)}, zmień`}
-                    className="flex size-11 shrink-0 items-center justify-center"
+                    className="press flex size-11 shrink-0 items-center justify-center"
                   >
                     <OwnerDot me={me} owner={item.owner} />
                   </button>
@@ -380,7 +380,7 @@ export function PackingList({ people }: { people: string[] }) {
                   setPicking(false)
                 }}
                 className={cx(
-                  'hit flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs',
+                  'press hit flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs',
                   newCategory === c
                     ? 'border-accent bg-active text-accent'
                     : 'border-line bg-panel text-muted',
@@ -404,7 +404,7 @@ export function PackingList({ people }: { people: string[] }) {
           onClick={() => setOwner(nextOwner(people, me, owner))}
           aria-label={`kto bierze: ${ownerLabel(me, owner)}, zmień`}
           title={`kto bierze: ${ownerLabel(me, owner)}`}
-          className="flex size-11 shrink-0 items-center justify-center"
+          className="press flex size-11 shrink-0 items-center justify-center"
         >
           <OwnerDot me={me} owner={owner} />
         </button>
@@ -428,7 +428,7 @@ export function PackingList({ people }: { people: string[] }) {
           aria-label="dodaj"
           onPointerDown={keepFocus}
           className={cx(
-            'flex size-11 shrink-0 items-center justify-center rounded-full transition-colors',
+            'press flex size-11 shrink-0 items-center justify-center rounded-full transition-colors',
             text.trim() ? 'bg-accent text-on-accent' : 'bg-raised text-subtle',
           )}
         >
@@ -458,7 +458,7 @@ function CategoryButton({
       aria-label={`kategoria: ${category}, zmień`}
       title={category}
       className={cx(
-        'flex size-11 shrink-0 items-center justify-center rounded-full transition-colors',
+        'press flex size-11 shrink-0 items-center justify-center rounded-full transition-colors',
         open ? 'bg-active text-accent' : 'text-muted hover:text-accent',
       )}
     >

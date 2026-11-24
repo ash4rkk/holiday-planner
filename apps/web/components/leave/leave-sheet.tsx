@@ -4,6 +4,7 @@ import { isIsoDate, type LeaveRegions } from '@planer/core'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { buttonClass, cx, Field, inputClass } from '@/components/ui'
+import { useExit } from '@/lib/exit'
 import { useDismiss } from '@/lib/use-dismiss'
 import { periodDaysText, type Who } from './model'
 import { PersonPicker } from './person-picker'
@@ -41,6 +42,7 @@ export function LeaveSheet({
   const [v, setV] = useState(initial)
   const ref = useRef<HTMLFormElement>(null)
   useDismiss(true, onClose, ref)
+  const exit = useExit('sheet')
   const valid = isIsoDate(v.startDate) && isIsoDate(v.endDate)
   const [a, b] = v.startDate <= v.endDate ? [v.startDate, v.endDate] : [v.endDate, v.startDate]
   const daysText = valid
@@ -48,7 +50,7 @@ export function LeaveSheet({
     : ''
 
   return createPortal(
-    <div className="fixed inset-0 z-(--z-sheet) flex items-end justify-center">
+    <div ref={exit} className="fixed inset-0 z-(--z-sheet) flex items-end justify-center">
       <div className="fade-in absolute inset-0 bg-bg/60" aria-hidden="true" />
       <form
         ref={ref}

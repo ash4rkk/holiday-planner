@@ -35,6 +35,14 @@
 }
 
 :root {
+  /* Ruch: sprężyny (te same parametry co w lib/spring.ts) i krzywa do przenikania. Czas to pełne
+     ustanie, widoczny ruch kończy się wcześniej. `quick` to ta sama krzywa co `smooth`, krócej. */
+  --spring-smooth: linear(0, 0.0349, 0.1157, 0.2172, 0.3237, 0.4263, 0.5202, 0.6032, 0.6748, 0.7356, 0.7864, 0.8284, 0.8627, 0.8907, 0.9133, 0.9314, 0.946, 0.9575, 0.9667, 0.9739, 0.9796, 0.9841, 0.9876, 0.9904, 0.9925, 0.9942, 0.9955, 0.9965, 0.9973, 0.9979, 0.9984, 0.9988, 1);
+  --spring-smooth-ms: 740ms;
+  --spring-quick-ms: 444ms;
+  --spring-snappy: linear(0, 0.0306, 0.1045, 0.2008, 0.3056, 0.4097, 0.5073, 0.5955, 0.6729, 0.7392, 0.7949, 0.8409, 0.8783, 0.9083, 0.932, 0.9505, 0.9647, 0.9755, 0.9835, 0.9894, 0.9936, 0.9966, 0.9987, 1, 1.0008, 1.0013, 1.0015, 1.0015, 1.0015, 1.0013, 1.0012, 1.001, 1);
+  --spring-snappy-ms: 478ms;
+  --ease-soft: cubic-bezier(0.23, 1, 0.32, 1);
   --radius-island: 12px;
   /* Element w wysepce z p-1: 12 − 3 px, żeby łuki szły równo z brzegiem wysepki. */
   --radius-inner: 9px;
@@ -189,6 +197,42 @@ body {
     transition: none !important;
     animation: none !important;
   }
+  /* Zamiast ruchu krótkie przenikanie: widać, co się zmieniło. */
+  .sheet-in, .panel-in, .panel-left-in, .pop-in, .pop-menu, .pop-radial, .fade-in {
+    animation: fade-in 150ms ease-out both !important;
+  }
+  ::view-transition-old(*) {
+    animation: fade-out 150ms ease-out both !important;
+  }
+  ::view-transition-new(*) {
+    animation: fade-in 150ms ease-out both !important;
+  }
+}
+
+/* Odpowiedź na dotyk: przycisk ugina się od razu, wraca sprężyną. Poza warstwą, bo musi dołożyć
+   `scale` do `transition-colors`; kolory przechodzą tak samo. `scale`, nie `transform`: nie koliduje
+   z obrotem ani przesunięciem. */
+.press,
+.press-soft {
+  transition:
+    scale var(--spring-snappy-ms) var(--spring-snappy),
+    color 150ms ease-out,
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    opacity 150ms ease-out;
+}
+.press:active { scale: 0.94; transition-duration: 80ms; }
+/* Szerokie elementy (karta, wiersz): ten sam gest, mniejsze ugięcie. */
+.press-soft:active { scale: 0.985; transition-duration: 80ms; }
+@media (prefers-reduced-motion: reduce) {
+  .press:active, .press-soft:active { scale: none; opacity: 0.7; }
+}
+
+/* Duch zamkniętego okna (lib/exit.ts): animacje wejścia nie startują w nim od nowa. */
+.exit-ghost,
+.exit-ghost * {
+  animation: none !important;
+  transition: none !important;
 }
 
 /* Przejścia między ekranami (React ViewTransition): krótkie przenikanie, menu stoi w miejscu. */
@@ -196,16 +240,19 @@ body {
 ::view-transition-old(*),
 ::view-transition-new(*) {
   animation-duration: 200ms;
-  animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  animation-timing-function: var(--ease-soft);
 }
 .bottom-nav {
   view-transition-name: bottom-nav;
 }
+/* Menu jest w obu widokach to samo, więc bez przenikania: pigułka jedzie na żywo. */
+::view-transition-old(bottom-nav) { display: none; }
+::view-transition-new(bottom-nav) { animation: none !important; }
 /* Zmiana widoku wyjazdu: krótkie przesunięcie w stronę ruchu z przenikaniem (nie cały ekran). */
 ::view-transition-old(.slide-forward) { animation: 160ms ease-in both vt-out-left; }
-::view-transition-new(.slide-forward) { animation: 240ms cubic-bezier(0.23, 1, 0.32, 1) both vt-in-right; }
+::view-transition-new(.slide-forward) { animation: 240ms var(--ease-soft) both vt-in-right; }
 ::view-transition-old(.slide-back) { animation: 160ms ease-in both vt-out-right; }
-::view-transition-new(.slide-back) { animation: 240ms cubic-bezier(0.23, 1, 0.32, 1) both vt-in-left; }
+::view-transition-new(.slide-back) { animation: 240ms var(--ease-soft) both vt-in-left; }
 @keyframes vt-out-left { to { opacity: 0; transform: translateX(-28px); } }
 @keyframes vt-out-right { to { opacity: 0; transform: translateX(28px); } }
 @keyframes vt-in-right { from { opacity: 0; transform: translateX(28px); } }
@@ -214,11 +261,11 @@ body {
 @keyframes sheet-in {
   from { transform: translateY(100%); }
 }
-@keyframes sheet-out {
-  to { transform: translateY(100%); }
-}
 @keyframes fade-in {
   from { opacity: 0; }
+}
+@keyframes fade-out {
+  to { opacity: 0; }
 }
 @keyframes pop-in {
   from { opacity: 0; transform: translateY(8px) scale(0.96); }
@@ -230,21 +277,20 @@ body {
   from { stroke-dashoffset: 1; }
   to { stroke-dashoffset: 0; }
 }
-.panel-in { animation: panel-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.panel-in { animation: panel-in var(--spring-quick-ms) var(--spring-smooth) both; }
 /* Panel z lewej (czat na szerokim ekranie). */
-.panel-left-in { animation: panel-left-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.panel-left-in { animation: panel-left-in var(--spring-quick-ms) var(--spring-smooth) both; }
 @keyframes panel-left-in { from { transform: translateX(-100%); } }
 .panel-out { animation: panel-out 190ms ease-in both; }
 @keyframes panel-in { from { transform: translateX(100%); } }
 @keyframes panel-out { to { transform: translateX(100%); } }
-.sheet-in { animation: sheet-in 260ms cubic-bezier(0.23, 1, 0.32, 1) both; }
-.sheet-out { animation: sheet-out 200ms cubic-bezier(0.4, 0, 1, 1) both; }
+.sheet-in { animation: sheet-in var(--spring-smooth-ms) var(--spring-smooth) both; }
 .fade-in { animation: fade-in 200ms ease-out both; }
-.pop-in { animation: pop-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
-.pop-menu { transform-origin: bottom right; animation: pop-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both; }
-.pop-menu > * { animation: pop-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i, 0) * 30ms); }
+.pop-in { animation: pop-in var(--spring-quick-ms) var(--spring-smooth) both; }
+.pop-menu { transform-origin: bottom right; animation: pop-in var(--spring-quick-ms) var(--spring-smooth) both; }
+.pop-menu > * { animation: pop-in var(--spring-quick-ms) var(--spring-smooth) both; animation-delay: calc(var(--i, 0) * 30ms); }
 /* Menu kołowe „+”: pozycje wyskakują po kolei wzdłuż łuku. */
-.pop-radial { animation: pop-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
+.pop-radial { animation: pop-in var(--spring-quick-ms) var(--spring-smooth) both; animation-delay: calc(var(--i, 0) * 35ms); }
 
 /* Lista: oś dnia łącząca karty, jak strzałki na Tablicy. */
 /* Treść karty (Tiptap). */
@@ -273,7 +319,7 @@ body {
   transition: color 200ms ease-out, text-decoration-color 200ms ease-out;
 }
 .card-prose ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--subtle); text-decoration-color: currentColor; }
-.card-prose ul[data-type="taskList"] li[data-checked="true"] > label input { animation: check-pop 220ms ease-out; }
+.card-prose ul[data-type="taskList"] li[data-checked="true"] > label input { animation: check-pop var(--spring-snappy-ms) var(--spring-snappy); }
 .card-prose p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   color: var(--subtle);
@@ -294,7 +340,11 @@ body {
   opacity: 0.6;
 }
 .planer-board.is-arranging .react-flow__node {
-  transition: transform 350ms cubic-bezier(0.23, 1, 0.32, 1), width 350ms, height 350ms;
+  transition: transform 350ms var(--ease-soft), width 350ms, height 350ms;
+}
+/* Upuszczona karta dosuwa się do siatki albo do miejsca w dniu. */
+.planer-board.is-settling .react-flow__node {
+  transition: transform var(--spring-snappy-ms) var(--spring-snappy);
 }
 .planer-board.is-arranging .order-arrow {
   stroke-dasharray: 1;
@@ -499,7 +549,7 @@ body {
 }
 
 .profile-zoom {
-  animation: profile-zoom 300ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation: profile-zoom 300ms var(--ease-soft) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -100,6 +100,8 @@ import { useDaySkies } from '@/components/weather'
 import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
+import { useExit } from '@/lib/exit'
+import { motionMs } from '@/lib/motion'
 import { pasteAsCard } from '@/lib/place-card'
 import { offerUndo, withUndo } from '@/lib/undo'
 import { useCardSheet } from '@/lib/use-card-sheet'
@@ -225,8 +227,10 @@ function BoardCanvas() {
   )
   const menuRef = useRef<HTMLDivElement>(null)
   useDismiss(!!menu, () => setMenu(null), menuRef)
+  const menuExit = useExit('pop', menuRef)
   const [undo, setUndo] = useState<Positions | null>(null)
   const [arranging, setArranging] = useState(false)
+  const [settling, setSettling] = useState(false)
   const [legPlans, setLegPlans] = useState<Record<string, LegPlan | null>>({})
   const [skiesByDay, setSkiesByDay] = useState<Record<string, Map<string, Sky>>>({})
   const addSkies = useCallback(
@@ -990,6 +994,14 @@ function BoardCanvas() {
     setTimeout(() => setArranging(false), 700)
   }
 
+  // Upuszczone dosuwają się do siatki albo na miejsce w dniu (bez rysowania strzałek od nowa).
+  const settleTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const settleNodes = () => {
+    setSettling(true)
+    clearTimeout(settleTimer.current)
+    settleTimer.current = setTimeout(() => setSettling(false), 500)
+  }
+
   // ---------- pomysły: drawer i przeciąganie na dzień ----------
   const [drawerOpen, setDrawerOpen] = useState(false)
   // Menu karty (prawy klik, przytrzymanie) w punkcie ekranu.
@@ -1119,6 +1131,9 @@ function BoardCanvas() {
       void rf.setViewport({ x: x + dx, y: y + dy, zoom })
     },
     dragStart: (kind, id) => {
+      // Złapana w trakcie dosuwania idzie od razu za palcem.
+      clearTimeout(settleTimer.current)
+      setSettling(false)
       setMenu(null)
       setCardMenu(null)
       // Przypięta bez dnia ma stałe miejsce w pasie nad dniami; żeby ją przenieść, trzeba odpiąć.
@@ -1150,8 +1165,9 @@ function BoardCanvas() {
       const zoom = rf.getZoom()
       const lead = d.start.get(d.lead)
       if (!lead) return
-      d.dx = snapToGrid(lead.x + dx / zoom) - lead.x
-      d.dy = snapToGrid(lead.y + dy / zoom) - lead.y
+      // Pod palcem 1:1; do siatki karta dosuwa się dopiero po puszczeniu.
+      d.dx = dx / zoom
+      d.dy = dy / zoom
       setNodes((ns) =>
         ns.map((n) => {
           const s = d.start.get(n.id)
@@ -1176,7 +1192,19 @@ function BoardCanvas() {
       setDrop(null)
       setBoardDragging(false)
       setDragCard(null)
-      if (!d || (!d.dx && !d.dy)) return
+      const from = d?.start.get(d.lead)
+      if (!d || !from || (!d.dx && !d.dy)) return
+      settleNodes()
+      d.dx = snapToGrid(from.x + d.dx) - from.x
+      d.dy = snapToGrid(from.y + d.dy) - from.y
+      // Od razu na siatce: zapis tego samego miejsca nie odświeża węzłów.
+      setNodes((ns) =>
+        ns.map((n) => {
+          const s = d.start.get(n.id)
+          return s ? { ...n, position: { x: s.x + d.dx, y: s.y + d.dy } } : n
+        }),
+      )
+      if (!d.dx && !d.dy) return
       if (d.card && target) {
         setUndo(null)
         place(d.card, target)
@@ -1308,7 +1336,7 @@ function BoardCanvas() {
     if (placed)
       void rf.setCenter((placed.get('x') as number) + w / 2, (placed.get('y') as number) + h / 2, {
         zoom: rf.getZoom(),
-        duration: 300,
+        duration: motionMs(300),
       })
     setSelection({ kind: 'widget', id: 'packing' })
   }
@@ -1434,14 +1462,14 @@ function BoardCanvas() {
       : nowY !== undefined
         ? FOCUS.top + height * FOCUS.nowAt - nowY * zoom
         : FOCUS.top - node.position.y * zoom
-    void rf.setViewport({ x, y, zoom }, { duration })
+    void rf.setViewport({ x, y, zoom }, { duration: motionMs(duration) })
   }
 
   const arrange = () => {
     setSelection(null)
     animate()
     setUndo(arrangeByDays(doc, cards, trip))
-    requestAnimationFrame(() => rf.fitView({ padding: 0.2, maxZoom: 1, duration: 200 }))
+    requestAnimationFrame(() => rf.fitView({ padding: 0.2, maxZoom: 1, duration: motionMs(200) }))
   }
 
   return (
@@ -1516,7 +1544,7 @@ function BoardCanvas() {
           selectionKeyCode={null}
           multiSelectionKeyCode={null}
           proOptions={{ hideAttribution: true }}
-          className={cx('planer-board', arranging && 'is-arranging')}
+          className={cx('planer-board', arranging && 'is-arranging', settling && 'is-settling')}
         >
           <Background variant={BackgroundVariant.Dots} gap={GRID} size={1.4} />
         </ReactFlow>
@@ -1553,7 +1581,7 @@ function BoardCanvas() {
                   onClick={arrange}
                   aria-label="ułóż karty wg dni"
                   title="ułóż wg dni"
-                  className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
+                  className="press island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
                 >
                   <Columns3 className="size-5" aria-hidden="true" />
                 </button>
@@ -1632,8 +1660,8 @@ function BoardCanvas() {
 
         {ghost && (
           <div
-            className="island pointer-events-none fixed z-(--z-dialog) max-w-48 -translate-x-1/2 -translate-y-1/2 truncate border-accent px-3 py-2 text-sm font-bold"
-            style={{ left: ghost.x, top: ghost.y }}
+            className="island shadow-float pointer-events-none fixed top-0 left-0 z-(--z-dialog) max-w-48 -translate-x-1/2 -translate-y-1/2 truncate border-accent px-3 py-2 text-sm font-bold"
+            style={{ transform: `translate(${ghost.x}px, ${ghost.y}px)` }}
           >
             {ghost.card.title || 'bez tytułu'}
           </div>
@@ -1678,7 +1706,7 @@ function BoardCanvas() {
 
         {menu && menuItems && (
           <div
-            ref={menuRef}
+            ref={menuExit}
             role="menu"
             className="island fade-in shadow-float absolute z-(--z-popover) flex min-w-48 flex-col p-1"
             // Cały na ekranie: szerokość min-w-48, wysokość z liczby pozycji (44 px + ramka).

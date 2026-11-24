@@ -98,7 +98,7 @@ export function FormatToolbar({ editor }: { editor: Editor }) {
           aria-pressed={active}
           onPointerDown={run(fn)}
           className={cx(
-            'flex size-11 items-center justify-center rounded-small transition-colors',
+            'press flex size-11 items-center justify-center rounded-small transition-colors',
             active ? 'bg-active text-accent' : 'text-muted',
           )}
         >
@@ -118,7 +118,7 @@ export function FormatToolbar({ editor }: { editor: Editor }) {
         type="button"
         aria-label="cofnij"
         onPointerDown={run(() => chain().undo().run())}
-        className="flex size-11 items-center justify-center text-muted"
+        className="press flex size-11 items-center justify-center text-muted"
       >
         <Undo2 className="size-5" strokeWidth={1.8} aria-hidden="true" />
       </button>
@@ -126,7 +126,7 @@ export function FormatToolbar({ editor }: { editor: Editor }) {
         type="button"
         aria-label="ponów"
         onPointerDown={run(() => chain().redo().run())}
-        className="flex size-11 items-center justify-center text-muted"
+        className="press flex size-11 items-center justify-center text-muted"
       >
         <Redo2 className="size-5" strokeWidth={1.8} aria-hidden="true" />
       </button>

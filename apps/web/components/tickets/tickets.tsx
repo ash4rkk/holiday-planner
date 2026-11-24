@@ -15,6 +15,8 @@ import { createPortal } from 'react-dom'
 import { PdfPages } from '@/components/attachments/attachment-viewer'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { cx } from '@/components/ui'
+import { useExit } from '@/lib/exit'
+import { scrollBehavior } from '@/lib/motion'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
 import { useAttachments, useCards } from '@/lib/yjs/trip-doc'
@@ -94,7 +96,7 @@ export function TicketsButton({
           onClick={() => setOpen(true)}
           aria-label={`bilety dnia · ${today}`}
           title="bilety dnia"
-          className={cx('flex size-11 items-center justify-center text-accent', className)}
+          className={cx('press flex size-11 items-center justify-center text-accent', className)}
         >
           <Ticket className="size-4" aria-hidden="true" />
         </button>
@@ -131,10 +133,12 @@ function TicketsSheet({ days, onClose }: { days: TicketDay[]; onClose: () => voi
   const all = days.flatMap((d) => d.items.flatMap((i) => i.files))
   const missing = useMissing(all)
   useDismiss(!viewing, onClose)
+  const exit = useExit()
   const labels = ['dziś', 'jutro', 'pojutrze']
 
   return (
     <div
+      ref={exit}
       role="dialog"
       aria-modal="true"
       aria-label="bilety"
@@ -145,7 +149,7 @@ function TicketsSheet({ days, onClose }: { days: TicketDay[]; onClose: () => voi
           type="button"
           onClick={onClose}
           aria-label="zamknij bilety"
-          className="flex size-11 items-center justify-center text-muted hover:text-accent"
+          className="press flex size-11 items-center justify-center text-muted hover:text-accent"
         >
           <X className="size-5" aria-hidden="true" />
         </button>
@@ -236,7 +240,7 @@ function TicketViewer({
     if (el) el.scrollLeft = el.clientWidth * start
   }, [start])
   const go = (i: number) =>
-    track.current?.scrollTo({ left: track.current.clientWidth * i, behavior: 'smooth' })
+    track.current?.scrollTo({ left: track.current.clientWidth * i, behavior: scrollBehavior() })
   const current = slides[index]
 
   return (
@@ -252,7 +256,7 @@ function TicketViewer({
           type="button"
           onClick={onClose}
           aria-label="zamknij bilet"
-          className="flex size-11 items-center justify-center text-muted"
+          className="press flex size-11 items-center justify-center text-muted"
         >
           <X className="size-5" aria-hidden="true" />
         </button>
@@ -272,7 +276,7 @@ function TicketViewer({
               onClick={() => go(index - 1)}
               disabled={index === 0}
               aria-label="poprzedni bilet"
-              className="flex size-11 items-center justify-center text-muted disabled:opacity-30"
+              className="press flex size-11 items-center justify-center text-muted disabled:opacity-30"
             >
               <ChevronLeft className="size-5" aria-hidden="true" />
             </button>
@@ -284,7 +288,7 @@ function TicketViewer({
               onClick={() => go(index + 1)}
               disabled={index === slides.length - 1}
               aria-label="następny bilet"
-              className="flex size-11 items-center justify-center text-muted disabled:opacity-30"
+              className="press flex size-11 items-center justify-center text-muted disabled:opacity-30"
             >
               <ChevronRight className="size-5" aria-hidden="true" />
             </button>

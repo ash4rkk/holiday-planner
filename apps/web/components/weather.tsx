@@ -166,7 +166,7 @@ export function RainPlanB({
       }
       title={`deszcz ${spans} — zapytaj o plan B`}
       className={cx(
-        'hit flex min-h-7 shrink-0 items-center gap-1 rounded-full border border-blue/40 px-2 text-xs text-blue hover:bg-blue/10',
+        'press hit flex min-h-7 shrink-0 items-center gap-1 rounded-full border border-blue/40 px-2 text-xs text-blue hover:bg-blue/10',
         className,
       )}
     >

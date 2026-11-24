@@ -5,8 +5,12 @@ import Link from 'next/link'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { cx } from '@/components/ui'
+import { useExit } from '@/lib/exit'
+import { SpringMotion } from '@/lib/motion'
+import { project, release, VelocityTracker } from '@/lib/spring'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useScrollHidden } from '@/lib/use-scroll-direction'
+import { useNavPill } from './use-nav-pill'
 
 const LAST_TRIP_KEY = 'planer-last-trip'
 const VIEWS = [
@@ -24,8 +28,11 @@ export function navDirection(from: number, to: number): string[] | undefined {
 /** Wysepka menu: pełne tło `raised`, obwódka `sel`, cień warstwy pływającej. */
 export const NAV_ISLAND =
   'pointer-events-auto flex items-center gap-0.5 rounded-full border border-sel bg-raised p-1 shadow-float'
-const SWIPE_MIN_PX = 70
-const SWIPE_MAX_MS = 600
+/** Część szerokości ekranu, za którą (z rzutem prędkości) gest zmienia widok. */
+const SWIPE_PART = 0.3
+/** Widok idzie za palcem z oporem; za pierwszym i ostatnim większym. */
+const SWIPE_FOLLOW = 0.35
+const SWIPE_EDGE = 0.12
 export const NAV_SLOT = 'nav-slot'
 /**
  * Zdarzenie „miejsce na „+” gotowe”. Widok wstawia tam „+” portalem dopiero po hydratacji menu:
@@ -33,6 +40,13 @@ export const NAV_SLOT = 'nav-slot'
  * nieuwodnionym menu to błąd hydratacji (React buduje menu od nowa i „+” zostaje w odpiętym węźle).
  */
 export const NAV_SLOT_READY = 'nav-slot-ready'
+
+/** Zdejmuje z ekranu przesunięcie z gestu. */
+function clear(el: HTMLElement | null) {
+  if (!el) return
+  el.style.transform = ''
+  el.style.opacity = ''
+}
 
 /** Widoczny ekran (ukryte przez router widoki mają display: none). */
 function activePage(): HTMLElement | null {
@@ -88,6 +102,9 @@ export function BottomNav({
     href: tripHref(v.view),
     active: current.endsWith(`/${v.view}`),
   }))
+  const island = useRef<HTMLDivElement>(null)
+  const pill = useRef<HTMLSpanElement>(null)
+  useNavPill(island, pill, items.find((i) => i.active)?.view)
   const activeIndex = VIEWS.findIndex((v) => pathname.endsWith(`/${v.view}`))
 
   // Przesunięcie palcem w bok zmienia ekran. Na Tablicy i Mapie palec rusza widokiem, więc tam nie.
@@ -97,20 +114,33 @@ export function BottomNav({
   useEffect(() => {
     if (!/\/(today|list)$/.test(pathname) || !orderKey) return
     const hrefs = orderKey.split(',')
-    let start: { x: number; y: number; at: number } | null = null
+    let start: { x: number; y: number } | null = null
     // Widok idzie za palcem (z oporem), więc widać, że gest działa i dokąd prowadzi.
     let page: HTMLElement | null = null
     let dragging = false
+    const speed = new VelocityTracker()
+    const slide = new SpringMotion((x) => [
+      [
+        page,
+        {
+          transform: x === 0 ? 'none' : `translateX(${x}px)`,
+          opacity: String(1 - Math.min(Math.abs(x) / 400, 0.25)),
+        },
+      ],
+    ])
     const from = () => hrefs.indexOf(window.location.pathname)
     const down = (e: TouchEvent) => {
       const t = e.touches[0]
       const target = e.target as HTMLElement
       // Filtry przewijane w bok, pola tekstowe i otwarte okna mają własne gesty.
       const own = target.closest('.overflow-x-auto, input, textarea, [role=dialog]')
-      start =
-        t && e.touches.length === 1 && !own ? { x: t.clientX, y: t.clientY, at: e.timeStamp } : null
+      start = t && e.touches.length === 1 && !own ? { x: t.clientX, y: t.clientY } : null
       dragging = false
-      page = start ? activePage() : null
+      if (!start || !t) return
+      slide.set(0)
+      clear(page)
+      page = activePage()
+      speed.reset(e.timeStamp, t.clientX)
     }
     const move = (e: TouchEvent) => {
       const t = e.touches[0]
@@ -125,43 +155,40 @@ export function BottomNav({
         }
         if (Math.abs(dx) < 12) return
         dragging = true
-        page.style.transition = 'none'
       }
+      speed.add(e.timeStamp, t.clientX)
       // Za krawędzią (pierwszy/ostatni widok) opór jest większy.
       const edge = !hrefs[from() + (dx < 0 ? 1 : -1)]
-      const shift = dx * (edge ? 0.12 : 0.35)
-      page.style.transform = `translateX(${shift}px)`
-      page.style.opacity = String(1 - Math.min(Math.abs(shift) / 400, 0.25))
+      slide.set(dx * (edge ? SWIPE_EDGE : SWIPE_FOLLOW))
     }
-    const settle = (el: HTMLElement | null) => {
-      if (!el) return
-      el.style.transition = 'transform 200ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms'
-      el.style.transform = ''
-      el.style.opacity = ''
+    /** Powrót na miejsce z prędkością palca; `transform` znika, żeby nie zmieniał układu `fixed`. */
+    const settle = (velocity = 0) => {
+      const el = page
+      if (slide.value === 0) return clear(el)
+      slide.to(0, { velocity, spring: release(velocity), onDone: () => clear(el) })
     }
     const up = (e: TouchEvent) => {
       const t = e.changedTouches[0]
-      const el = page
-      page = null
-      if (!start || !t) return settle(el)
-      const dx = t.clientX - start.x
-      const dy = t.clientY - start.y
-      const quick = e.timeStamp - start.at < SWIPE_MAX_MS
-      const far = Math.abs(dx) > window.innerWidth * 0.3
+      const at = start
       start = null
-      if ((!quick && !far) || Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dy) > Math.abs(dx) / 2)
-        return settle(el)
-      const at = from()
-      const to = at + (dx < 0 ? 1 : -1)
+      if (!at || !t || !dragging) return settle()
+      const dx = t.clientX - at.x
+      const dy = t.clientY - at.y
+      const v = speed.at(e.timeStamp)
+      const aimed = dx + project(v)
+      const i = from()
+      const to = i + (dx < 0 ? 1 : -1)
       const next = hrefs[to]
-      if (!next) return settle(el)
+      const enough =
+        Math.sign(aimed) === Math.sign(dx) && Math.abs(aimed) > window.innerWidth * SWIPE_PART
+      if (!next || !enough || Math.abs(dy) > Math.abs(dx) / 2)
+        return settle(v * (next ? SWIPE_FOLLOW : SWIPE_EDGE))
       navigator.vibrate?.(5)
-      router.push(next, { transitionTypes: navDirection(at, to) })
+      router.push(next, { transitionTypes: navDirection(i, to) })
     }
     const cancel = () => {
-      settle(page)
-      page = null
       start = null
+      settle()
     }
     document.addEventListener('touchstart', down, { passive: true })
     document.addEventListener('touchmove', move, { passive: true })
@@ -177,11 +204,7 @@ export function BottomNav({
 
   // Po zmianie widoku przesunięcie z gestu znika (ukryty widok wraca potem na swoje miejsce).
   useEffect(() => {
-    for (const el of document.querySelectorAll<HTMLElement>('.app main')) {
-      el.style.transition = ''
-      el.style.transform = ''
-      el.style.opacity = ''
-    }
+    for (const el of document.querySelectorAll<HTMLElement>('.app main')) clear(el)
   }, [pathname])
 
   if (pathname === '/') return null
@@ -197,7 +220,16 @@ export function BottomNav({
     >
       {/* Dwie wysepki z „+” pośrodku. Siatka 1fr · auto · 1fr trzyma „+” na środku ekranu,
           a wysepki rosną na zewnątrz, gdy wybrana pozycja rozwija się z nazwą. */}
-      <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4">
+      <div
+        ref={island}
+        className="relative grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4"
+      >
+        {/* Pigułka wybranej pozycji, widoczna tylko w drodze (tło w spoczynku ma sama pozycja). */}
+        <span
+          ref={pill}
+          aria-hidden="true"
+          className="pointer-events-none absolute rounded-full bg-active opacity-0"
+        />
         <ul className={cx(NAV_ISLAND, 'justify-self-end')}>
           {items.slice(0, 2).map((item, i) => (
             <NavItem
@@ -239,6 +271,7 @@ export function BottomNav({
 }
 
 function NavItem({
+  view,
   href,
   label,
   icon: Icon,
@@ -246,6 +279,7 @@ function NavItem({
   dir,
   onTap,
 }: {
+  view: string
   href: string
   label: string
   icon: (typeof VIEWS)[number]['icon']
@@ -256,18 +290,27 @@ function NavItem({
   return (
     <li>
       <Link
+        data-nav={view}
         href={href}
         transitionTypes={dir}
         onNavigate={() => onTap(href)}
         aria-label={label}
         aria-current={active ? 'page' : undefined}
         className={cx(
-          'flex h-11 items-center justify-center gap-1.5 rounded-full transition-colors',
-          active ? 'bg-active px-3.5 text-accent' : 'w-11 text-muted hover:text-text',
+          // Ikona zawsze 12 px od lewej: stoi w miejscu, gdy nazwa się zwija i rozwija.
+          'press relative flex h-11 items-center gap-1.5 overflow-hidden rounded-full pl-3',
+          active ? 'bg-active pr-3.5 text-accent' : 'w-11 text-muted hover:text-text',
         )}
       >
-        <Icon className="size-5" aria-hidden="true" strokeWidth={1.8} />
-        {active && <span className="text-sm font-bold">{label}</span>}
+        <Icon className="size-5 shrink-0" aria-hidden="true" strokeWidth={1.8} />
+        <span
+          className={cx(
+            'text-sm font-bold whitespace-nowrap transition-opacity duration-150',
+            !active && 'opacity-0',
+          )}
+        >
+          {label}
+        </span>
       </Link>
     </li>
   )
@@ -293,6 +336,7 @@ function TripSwitch({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useDismiss(open, () => setOpen(false), ref)
+  const exit = useExit('pop')
   const trip = trips.find((t) => t.id === current)
   if (!trip) return null
   return (
@@ -304,12 +348,13 @@ function TripSwitch({
         aria-haspopup="menu"
         aria-label={`wyjazd: ${trip.title} · zmień`}
         title={trip.title}
-        className="flex size-14 items-center justify-center rounded-full border-2 border-accent bg-raised shadow-float"
+        className="press flex size-14 items-center justify-center rounded-full border-2 border-accent bg-raised shadow-float"
       >
         {trip.flag ?? <Luggage className="size-5 text-accent" aria-hidden="true" />}
       </button>
       {open && (
         <div
+          ref={exit}
           role="menu"
           aria-label="wyjazdy"
           className="island pop-menu shadow-float absolute bottom-[calc(100%+8px)] left-1/2 origin-bottom flex w-64 -translate-x-1/2 flex-col p-1"

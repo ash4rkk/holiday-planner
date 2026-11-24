@@ -60,7 +60,7 @@ export function ImportStatus() {
               type="button"
               onClick={importStore.dismissError}
               aria-label="zamknij"
-              className="-mr-2 flex size-11 items-center justify-center text-muted"
+              className="press -mr-2 flex size-11 items-center justify-center text-muted"
             >
               <X className="size-4" aria-hidden="true" />
             </button>

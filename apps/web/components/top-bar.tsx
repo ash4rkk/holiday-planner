@@ -38,7 +38,7 @@ export function TopBar({
             href={back.href}
             aria-label={back.label}
             title={back.label}
-            className="flex size-11 shrink-0 items-center justify-center pl-1 text-muted hover:text-accent"
+            className="press flex size-11 shrink-0 items-center justify-center pl-1 text-muted hover:text-accent"
           >
             <span aria-hidden="true" className="text-lg">
               ‹

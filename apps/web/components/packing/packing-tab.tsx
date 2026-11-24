@@ -2,9 +2,11 @@
 
 import { showPackingBar, todayLocal } from '@planer/core'
 import { Check, Luggage } from 'lucide-react'
-import { type PointerEvent, useEffect, useRef, useState } from 'react'
+import { type PointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cx } from '@/components/ui'
+import { springFrom } from '@/lib/motion'
+import { project, release, VelocityTracker } from '@/lib/spring'
 import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
 import { openPacking, usePackingOpen } from '@/lib/use-packing-drawer'
 import { usePacking, useTrip } from '@/lib/yjs/trip-doc'
@@ -46,8 +48,28 @@ export function PackingTab() {
   useHideWhenInactive(ref)
   const [mounted, setMounted] = useState(false)
   const [spot, setSpot] = useState<Spot>(DEFAULT)
-  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
-  const from = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  /** Lewy górny róg zakładki pod palcem. */
+  const [drag, setDrag] = useState<{ left: number; top: number } | null>(null)
+  const from = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(
+    null,
+  )
+  const speedX = useRef(new VelocityTracker())
+  const speedY = useRef(new VelocityTracker())
+  /** Skąd i z jaką prędkością zakładka dojeżdża do krawędzi po puszczeniu. */
+  const thrown = useRef<{ left: number; top: number; vx: number; vy: number } | null>(null)
+  const anim = useRef<Animation | undefined>(undefined)
+  useLayoutEffect(() => {
+    const t = thrown.current
+    const el = ref.current
+    if (!t || !el || drag) return
+    thrown.current = null
+    const r = el.getBoundingClientRect()
+    anim.current = springFrom(
+      el,
+      { dx: t.left - r.left, dy: t.top - r.top, vx: t.vx, vy: t.vy },
+      release(Math.hypot(t.vx, t.vy)),
+    )
+  }, [drag])
 
   useEffect(() => {
     setMounted(true)
@@ -70,15 +92,24 @@ export function PackingTab() {
 
   const handlers = {
     onPointerDown: (e: PointerEvent) => {
-      from.current = { x: e.clientX, y: e.clientY, moved: false }
+      // W locie zostaje tam, gdzie ją złapano.
+      const r = e.currentTarget.getBoundingClientRect()
+      const flying = anim.current?.playState === 'running'
+      anim.current?.cancel()
+      from.current = { x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: flying }
+      if (flying) setDrag({ left: r.left, top: r.top })
+      speedX.current.reset(e.timeStamp, e.clientX)
+      speedY.current.reset(e.timeStamp, e.clientY)
       e.currentTarget.setPointerCapture(e.pointerId)
     },
     onPointerMove: (e: PointerEvent) => {
       const f = from.current
       if (!f) return
+      speedX.current.add(e.timeStamp, e.clientX)
+      speedY.current.add(e.timeStamp, e.clientY)
       if (!f.moved && Math.hypot(e.clientX - f.x, e.clientY - f.y) < DRAG_PX) return
       f.moved = true
-      setDrag({ x: e.clientX, y: e.clientY })
+      setDrag({ left: f.left + e.clientX - f.x, top: f.top + e.clientY - f.y })
     },
     onPointerUp: (e: PointerEvent) => {
       const f = from.current
@@ -89,15 +120,23 @@ export function PackingTab() {
         openPacking()
         return
       }
+      const vx = speedX.current.at(e.timeStamp)
+      const vy = speedY.current.at(e.timeStamp)
+      const left = f.left + e.clientX - f.x
+      const top = f.top + e.clientY - f.y
+      thrown.current = { left, top, vx, vy }
+      // Bok i wysokość z miejsca, do którego zakładka doleciałaby rzucona.
       const next: Spot = {
-        side: e.clientX < window.innerWidth / 2 ? 'left' : 'right',
-        top: clampTop(e.clientY - 40),
+        side: e.clientX + project(vx) < window.innerWidth / 2 ? 'left' : 'right',
+        top: clampTop(top + project(vy, 0.99)),
       }
       setSpot(next)
       saveSpot(next)
     },
     onPointerCancel: () => {
+      const f = from.current
       from.current = null
+      if (f && drag) thrown.current = { ...drag, vx: 0, vy: 0 }
       setDrag(null)
     },
   }
@@ -117,9 +156,8 @@ export function PackingTab() {
           : spot.side === 'right'
             ? 'right-0 rounded-l-island border-r-0 pr-2 pl-3'
             : 'left-0 rounded-r-island border-l-0 pr-3 pl-2',
-        !drag && 'transition-[top] duration-200',
       )}
-      style={drag ? { left: drag.x - 32, top: drag.y - 40 } : { top: `${spot.top * 100}%` }}
+      style={drag ?? { top: `${spot.top * 100}%` }}
     >
       <div className="relative">
         <Ring value={packed} total={items.length} size={40} stroke={4} />

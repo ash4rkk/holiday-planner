@@ -1,19 +1,17 @@
 'use client'
 
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { type PointerEvent, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useKeyboardInset } from '@/components/card/format-toolbar'
 import { cx } from '@/components/ui'
 import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
 import { closePacking, usePackingOpen } from '@/lib/use-packing-drawer'
+import { useSheet } from '@/lib/use-sheet'
 import { useWide } from '@/lib/use-wide'
 import { PackingList } from './packing-list'
 
 const PANEL_WIDTH = 400
-const CLOSE_MS = 190
-/** Tyle trzeba pociągnąć w dół, żeby schować drawer (jak arkusz karty). */
-const DRAG_CLOSE_PX = 110
 
 /**
  * Lista pakowania nad każdym widokiem wyjazdu (`?packing`): na telefonie arkusz z dołu, na
@@ -34,24 +32,16 @@ export function PackingDrawer({ people }: { people: string[] }) {
 function Drawer({ people }: { people: string[] }) {
   const wide = useWide()
   const keyboard = useKeyboardInset()
-  const [closing, setClosing] = useState(false)
-  const [dragY, setDragY] = useState(0)
-  const dragFrom = useRef<number | null>(null)
-  const pulled = useRef(0)
-
-  const dismissRef = useRef(() => {})
-  const dismiss = () => {
-    if (closing) return
-    setClosing(true)
-    setTimeout(closePacking, CLOSE_MS)
-  }
-  dismissRef.current = dismiss
+  const { closing, dismiss, sheet, backdrop, grip } = useSheet({
+    enabled: !wide,
+    onClose: closePacking,
+  })
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && dismissRef.current()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && dismiss()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [dismiss])
 
   // Bez przewijania strony pod arkuszem; obok panelu widok dalej się przewija.
   useEffect(() => {
@@ -63,37 +53,22 @@ function Drawer({ people }: { people: string[] }) {
     }
   }, [wide])
 
-  const grip = {
-    onPointerDown: (e: PointerEvent) => {
-      dragFrom.current = e.clientY
-      pulled.current = 0
-      e.currentTarget.setPointerCapture(e.pointerId)
-    },
-    onPointerMove: (e: PointerEvent) => {
-      if (dragFrom.current === null) return
-      pulled.current = e.clientY - dragFrom.current
-      setDragY(Math.max(0, pulled.current))
-    },
-    onPointerUp: () => {
-      dragFrom.current = null
-      setDragY(0)
-      if (pulled.current > DRAG_CLOSE_PX) dismiss()
-    },
-  }
-
   const Close = wide ? ChevronRight : ChevronDown
 
   return (
     <>
       {!wide && (
         <button
+          ref={backdrop}
           type="button"
+          tabIndex={-1}
           aria-label="zamknij listę pakowania"
           onClick={dismiss}
-          className="fade-in fixed inset-0 z-(--z-sheet) bg-bg/50"
+          className="fixed inset-0 z-(--z-sheet) bg-bg/50"
         />
       )}
       <div
+        ref={sheet}
         role="dialog"
         aria-modal={!wide}
         aria-label="lista pakowania"
@@ -102,18 +77,15 @@ function Drawer({ people }: { people: string[] }) {
           wide
             ? cx('inset-y-0 right-0 border-l border-line', closing ? 'panel-out' : 'panel-in')
             : cx(
-                'inset-x-0 bottom-0 rounded-t-island border-t border-line',
+                'inset-x-0 bottom-0 rounded-t-island border-t border-line after:absolute after:inset-x-0 after:top-full after:h-24 after:bg-bg',
                 // Przy klawiaturze arkusz kończy się nad nią (pasek kategorii i osób tuż nad klawiszami).
                 !keyboard && 'h-[85dvh]',
-                closing ? 'sheet-out' : 'sheet-in',
               ),
-          dragFrom.current === null && dragY > 0 && 'transition-transform duration-200',
         )}
         style={{
           ...(wide && { width: PANEL_WIDTH }),
           ...(!wide &&
             keyboard > 0 && { bottom: keyboard, height: `calc(100dvh - ${keyboard}px)` }),
-          ...(dragY > 0 && { transform: `translateY(${dragY}px)` }),
         }}
       >
         {!wide && (
@@ -125,12 +97,15 @@ function Drawer({ people }: { people: string[] }) {
             <span className="h-1 w-10 rounded-full bg-line" />
           </div>
         )}
-        <div className="flex shrink-0 items-center gap-2 p-1">
+        <div
+          {...grip}
+          className={cx('flex shrink-0 items-center gap-2 p-1', !wide && 'touch-none')}
+        >
           <button
             type="button"
             onClick={dismiss}
             aria-label="zamknij listę pakowania"
-            className="island flex size-11 items-center justify-center text-muted hover:text-accent"
+            className="press island flex size-11 items-center justify-center text-muted hover:text-accent"
           >
             <Close className="size-5" aria-hidden="true" />
           </button>

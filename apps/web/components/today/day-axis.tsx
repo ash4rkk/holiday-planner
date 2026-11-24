@@ -252,7 +252,7 @@ function AxisPreview({
               onClick={onPrev}
               disabled={!onPrev}
               aria-label="poprzednie miejsce"
-              className="flex size-11 items-center justify-center hover:text-accent disabled:opacity-30"
+              className="press flex size-11 items-center justify-center hover:text-accent disabled:opacity-30"
             >
               ‹
             </button>
@@ -262,7 +262,7 @@ function AxisPreview({
               onClick={onNext}
               disabled={!onNext}
               aria-label="następne miejsce"
-              className="flex size-11 items-center justify-center hover:text-accent disabled:opacity-30"
+              className="press flex size-11 items-center justify-center hover:text-accent disabled:opacity-30"
             >
               ›
             </button>

@@ -2,14 +2,17 @@
 
 import { useSyncExternalStore } from 'react'
 import { Toast } from '@/components/toast-stack'
+import { useExit } from '@/lib/exit'
 import { undoStore } from '@/lib/undo'
 
 export function UndoToast() {
   const undo = useSyncExternalStore(undoStore.subscribe, undoStore.get, () => null)
+  const exit = useExit('pop')
   if (!undo) return null
   return (
     <Toast>
       <div
+        ref={exit}
         role="status"
         className="island pop-in flex min-h-11 items-center gap-3 pr-1 pl-4 text-sm"
       >

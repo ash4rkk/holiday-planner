@@ -6,6 +6,7 @@ import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { cx } from '@/components/ui'
+import { useExit } from '@/lib/exit'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
@@ -25,7 +26,7 @@ export function SearchButton({ onOpenCard }: { onOpenCard: (id: string) => void 
         onClick={() => setOpen(true)}
         aria-label="szukaj kart"
         title="szukaj"
-        className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
+        className="press island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
       >
         <Search className="size-5" aria-hidden="true" />
       </button>
@@ -85,6 +86,7 @@ function SearchPanel({
   // Bez useDeferredValue: odroczone odświeżenie uruchamia <ViewTransition> layoutu (miganie ekranu).
   const hits = useMemo(() => searchCards(doc, query), [doc, query, cards])
   useDismiss(true, onClose)
+  const exit = useExit()
 
   const change = (value: string) => {
     setQuery(value)
@@ -94,6 +96,7 @@ function SearchPanel({
 
   return (
     <div
+      ref={exit}
       role="dialog"
       aria-modal="true"
       aria-label="szukaj kart"
@@ -125,7 +128,7 @@ function SearchPanel({
               type="button"
               onClick={() => change('')}
               aria-label="wyczyść"
-              className="flex size-11 shrink-0 items-center justify-center text-subtle hover:text-accent"
+              className="press flex size-11 shrink-0 items-center justify-center text-subtle hover:text-accent"
             >
               <X className="size-4" aria-hidden="true" />
             </button>

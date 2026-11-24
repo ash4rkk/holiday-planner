@@ -16,7 +16,7 @@ import {
 } from '@planer/core'
 import type { Editor } from '@tiptap/react'
 import { ChevronDown, ChevronRight, Lightbulb, Pin, Trash2 } from 'lucide-react'
-import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AmountBadge } from '@/components/amounts'
 import { CardAttachments } from '@/components/attachments/card-attachments'
@@ -24,6 +24,7 @@ import { askText } from '@/components/confirm-dialog'
 import { cx } from '@/components/ui'
 import { withUndo } from '@/lib/undo'
 import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
+import { useSheet } from '@/lib/use-sheet'
 import { useWide } from '@/lib/use-wide'
 import { useCards, useTrip } from '@/lib/yjs/trip-doc'
 import { CardEditor } from './card-editor'
@@ -35,9 +36,8 @@ import { AddVariantChip, VariantBar } from './variant-bar'
 
 export const CARD_PANEL_WIDTH = 440
 
-const CLOSE_MS = 190
-const DRAG_CLOSE_PX = 110
-const DRAG_OPEN_PX = 60
+/** Wysokości arkusza na telefonie: pełny ekran i ponad pół. */
+const DETENTS = [1, 0.6] as const
 
 /** Pole, które otwiera klawiaturę: wybór daty i godziny ma własne okno systemowe. */
 function opensKeyboard(target: EventTarget): boolean {
@@ -71,10 +71,18 @@ export function CardSheet({
   // Typy jako chipy pod tytułem: od razu w nowej karcie, w starej po dotknięciu kafla typu.
   const [typesOpen, setTypesOpen] = useState(false)
   const showTypes = isNew || typesOpen
-  const [closing, setClosing] = useState(false)
-  const [dragY, setDragY] = useState(0)
-  const dragFrom = useRef<number | null>(null)
-  const pulled = useRef(0)
+
+  const closeRef = useRef(() => {})
+  const { closing, dismiss, sheet, backdrop, foot, grip } = useSheet({
+    enabled: !wide,
+    detents: DETENTS,
+    rest: tall ? 0 : 1,
+    onRest: (i) => {
+      setExpanded(i === 0)
+      if (i > 0) setTyping(false)
+    },
+    onClose: () => closeRef.current(),
+  })
 
   // Bez przewijania strony pod arkuszem; obok panelu plan dalej się przewija.
   useEffect(() => {
@@ -94,12 +102,11 @@ export function CardSheet({
     hadKeyboard.current = keyboard > 0
   }, [keyboard])
 
-  const dismissRef = useRef(() => {})
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && dismissRef.current()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && dismiss()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [dismiss])
 
   if (!card || !cardMap) return null
 
@@ -115,12 +122,7 @@ export function CardSheet({
     onClose()
   }
 
-  const dismiss = () => {
-    if (closing) return
-    setClosing(true)
-    setTimeout(close, CLOSE_MS)
-  }
-  dismissRef.current = dismiss
+  closeRef.current = close
 
   // Kosz i pomysły od razu, bez pytania — pasek „cofnij” odwraca zmianę.
   const remove = (label = 'karta w koszu') => {
@@ -129,30 +131,6 @@ export function CardSheet({
   }
 
   const toIdeas = () => withUndo(doc, 'karta w pomysłach', () => moveToIdeas(doc, cardId))
-
-  const grip = {
-    onPointerDown: (e: PointerEvent) => {
-      dragFrom.current = e.clientY
-      pulled.current = 0
-      e.currentTarget.setPointerCapture(e.pointerId)
-    },
-    onPointerMove: (e: PointerEvent) => {
-      if (dragFrom.current === null) return
-      pulled.current = e.clientY - dragFrom.current
-      setDragY(Math.max(0, pulled.current))
-    },
-    onPointerUp: () => {
-      dragFrom.current = null
-      setDragY(0)
-      if (pulled.current < -DRAG_OPEN_PX) setExpanded(true)
-      else if (pulled.current > DRAG_CLOSE_PX) {
-        if (tall) {
-          setExpanded(false)
-          setTyping(false)
-        } else dismiss()
-      }
-    },
-  }
 
   const style = TYPE_STYLE[card.type]
   const TypeIcon = style.icon
@@ -174,15 +152,18 @@ export function CardSheet({
 
   return (
     <SheetPortal>
-      {!wide && !tall && (
+      {!wide && (
         <button
+          ref={backdrop}
           type="button"
+          tabIndex={-1}
           aria-label="zamknij kartę"
           onClick={dismiss}
-          className="fade-in fixed inset-0 z-(--z-sheet) bg-bg/50"
+          className="fixed inset-0 z-(--z-sheet) bg-bg/50"
         />
       )}
       <div
+        ref={sheet}
         role="dialog"
         aria-modal={!wide}
         aria-label="karta"
@@ -191,16 +172,12 @@ export function CardSheet({
           wide
             ? cx('inset-y-0 right-0 border-l border-line', closing ? 'panel-out' : 'panel-in')
             : cx(
-                'inset-x-0 bottom-0 rounded-t-island border-t border-line transition-[height] duration-200 motion-reduce:transition-none',
+                // Pod arkuszem ten sam kolor: opór przy pociągnięciu w górę nie odsłania tła.
+                'inset-x-0 bottom-0 rounded-t-island border-t border-line after:absolute after:inset-x-0 after:top-full after:h-24 after:bg-bg',
                 tall ? 'h-dvh' : 'h-[60dvh]',
-                closing ? 'sheet-out' : 'sheet-in',
               ),
-          dragFrom.current === null && dragY > 0 && 'transition-transform duration-200',
         )}
-        style={{
-          ...(wide && { width: CARD_PANEL_WIDTH }),
-          ...(dragY > 0 && { transform: `translateY(${dragY}px)` }),
-        }}
+        style={wide ? { width: CARD_PANEL_WIDTH } : undefined}
       >
         {!wide && (
           <div
@@ -211,12 +188,15 @@ export function CardSheet({
             <span className="h-1 w-10 rounded-full bg-line" />
           </div>
         )}
-        <div className="flex shrink-0 items-center gap-1 p-1">
+        <div
+          {...grip}
+          className={cx('flex shrink-0 items-center gap-1 p-1', !wide && 'touch-none')}
+        >
           <button
             type="button"
             onClick={dismiss}
             aria-label="zamknij kartę"
-            className="island flex size-11 items-center justify-center text-muted hover:text-accent"
+            className="press island flex size-11 items-center justify-center text-muted hover:text-accent"
           >
             <Close className="size-5" aria-hidden="true" />
           </button>
@@ -229,7 +209,7 @@ export function CardSheet({
             aria-label={card.pinned ? 'odepnij' : 'przypnij'}
             title={card.pinned ? 'odepnij' : 'przypnij'}
             className={cx(
-              'flex size-11 items-center justify-center transition-colors hover:text-accent',
+              'press flex size-11 items-center justify-center transition-colors hover:text-accent',
               card.pinned ? 'text-accent' : 'text-muted',
             )}
           >
@@ -241,7 +221,7 @@ export function CardSheet({
             onClick={() => remove()}
             aria-label="do kosza"
             title="do kosza"
-            className="flex size-11 items-center justify-center text-muted hover:text-red"
+            className="press flex size-11 items-center justify-center text-muted hover:text-red"
           >
             <Trash2 className="size-5" aria-hidden="true" />
           </button>
@@ -253,7 +233,7 @@ export function CardSheet({
           onBlurCapture={(e) => {
             if (!e.relatedTarget || !opensKeyboard(e.relatedTarget)) setTyping(false)
           }}
-          className="flex flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain px-1 pb-24 [&>*]:shrink-0"
+          className="flex flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain px-1 pb-[calc(96px+var(--sheet-hidden,0px))] [&>*]:shrink-0"
         >
           <VariantBar card={card} />
           <div
@@ -286,7 +266,7 @@ export function CardSheet({
                 aria-label={`typ: ${CARD_TYPE_LABELS[card.type]}, zmień`}
                 title={CARD_TYPE_LABELS[card.type]}
                 className={cx(
-                  'flex size-14 shrink-0 items-center justify-center rounded-island transition-colors',
+                  'press flex size-14 shrink-0 items-center justify-center rounded-island transition-colors',
                   style.chip,
                 )}
               >
@@ -326,7 +306,7 @@ export function CardSheet({
                       if (!isNew) setTypesOpen(false)
                     }}
                     className={cx(
-                      'flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm transition-colors',
+                      'press flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm transition-colors',
                       active
                         ? cx('border-transparent font-bold', chip)
                         : 'border-line bg-panel text-muted',
@@ -358,36 +338,41 @@ export function CardSheet({
           <SaveAsTemplate card={card} editor={editor} />
         </div>
 
-        {!typing && (
-          <div className="island shadow-float fade-in absolute inset-x-2 bottom-[max(8px,env(safe-area-inset-bottom))] flex items-center gap-1 rounded-full p-1">
-            {card.variantOf === undefined &&
-              (idea ? (
-                <span className="flex min-h-11 items-center gap-2 rounded-full bg-active px-4 text-sm text-accent">
-                  <Lightbulb className="size-4" aria-hidden="true" />w pomysłach
+        <div
+          ref={foot}
+          className="absolute inset-x-2 bottom-[max(8px,env(safe-area-inset-bottom))] empty:hidden"
+        >
+          {!typing && (
+            <div className="island shadow-float fade-in flex items-center gap-1 rounded-full p-1">
+              {card.variantOf === undefined &&
+                (idea ? (
+                  <span className="flex min-h-11 items-center gap-2 rounded-full bg-active px-4 text-sm text-accent">
+                    <Lightbulb className="size-4" aria-hidden="true" />w pomysłach
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={toIdeas}
+                    className="press flex min-h-11 items-center gap-2 rounded-full px-4 text-sm text-muted hover:text-accent"
+                  >
+                    <Lightbulb className="size-4" aria-hidden="true" />
+                    do pomysłów
+                  </button>
+                ))}
+              <button
+                type="button"
+                onClick={dismiss}
+                className="press flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full bg-accent px-4 text-sm font-bold text-on-accent"
+              >
+                <span className="truncate">
+                  {card.date
+                    ? `gotowe · ${formatShortDate(card.date)}${card.time ? `, ${card.time}` : ''}`
+                    : 'gotowe'}
                 </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={toIdeas}
-                  className="flex min-h-11 items-center gap-2 rounded-full px-4 text-sm text-muted hover:text-accent"
-                >
-                  <Lightbulb className="size-4" aria-hidden="true" />
-                  do pomysłów
-                </button>
-              ))}
-            <button
-              type="button"
-              onClick={dismiss}
-              className="flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-full bg-accent px-4 text-sm font-bold text-on-accent"
-            >
-              <span className="truncate">
-                {card.date
-                  ? `gotowe · ${formatShortDate(card.date)}${card.time ? `, ${card.time}` : ''}`
-                  : 'gotowe'}
-              </span>
-            </button>
-          </div>
-        )}
+              </button>
+            </div>
+          )}
+        </div>
 
         {editor && <FormatToolbar editor={editor} />}
       </div>

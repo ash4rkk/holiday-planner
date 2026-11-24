@@ -74,7 +74,7 @@ export function MonthView({
           aria-label="poprzedni miesiąc"
           disabled={month === 0}
           onClick={() => onMonth(month - 1)}
-          className="flex size-11 items-center justify-center text-lg text-muted hover:text-accent disabled:opacity-30"
+          className="press flex size-11 items-center justify-center text-lg text-muted hover:text-accent disabled:opacity-30"
         >
           ‹
         </button>
@@ -86,7 +86,7 @@ export function MonthView({
           aria-label="następny miesiąc"
           disabled={month === 11}
           onClick={() => onMonth(month + 1)}
-          className="flex size-11 items-center justify-center text-lg text-muted hover:text-accent disabled:opacity-30"
+          className="press flex size-11 items-center justify-center text-lg text-muted hover:text-accent disabled:opacity-30"
         >
           ›
         </button>

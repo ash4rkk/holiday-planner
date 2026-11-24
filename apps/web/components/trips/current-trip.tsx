@@ -66,7 +66,7 @@ export function CurrentTrip({
     <div className="relative">
       <Link
         href={`/trips/${trip.id}/today`}
-        className="island flex flex-col gap-3 border-accent p-4 transition-colors hover:border-accent-hover"
+        className="press-soft island flex flex-col gap-3 border-accent p-4 transition-colors hover:border-accent-hover"
       >
         <div>
           <p className="text-xs text-accent">

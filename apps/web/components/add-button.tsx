@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom'
 import { NAV_SLOT, NAV_SLOT_READY } from '@/components/nav/bottom-nav'
 import { cx } from '@/components/ui'
 import type { Template } from '@/lib/card-templates'
+import { useExit } from '@/lib/exit'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
 import { usePacking } from '@/lib/yjs/trip-doc'
@@ -91,6 +92,7 @@ export function AddButton({
   }, [open])
   // Menu leży w portalu nad menu dolnym, więc „poza” liczy się względem niego.
   useDismiss(open, () => setOpen(false), overlay)
+  const overlayRef = useExit('fade', overlay)
 
   const toggle = () => {
     setPlusAt(plus.current?.getBoundingClientRect() ?? null)
@@ -173,7 +175,7 @@ export function AddButton({
             onClick={toggle}
             aria-label="dodaj"
             aria-expanded={open}
-            className="flex size-14 items-center justify-center rounded-full bg-accent text-on-accent shadow-float transition-colors hover:bg-accent-hover"
+            className="press flex size-14 items-center justify-center rounded-full bg-accent text-on-accent shadow-float transition-colors hover:bg-accent-hover"
           >
             <Plus
               className={cx('size-7 transition-transform duration-200', open && 'rotate-45')}
@@ -186,7 +188,7 @@ export function AddButton({
       {open &&
         createPortal(
           <div
-            ref={overlay}
+            ref={overlayRef}
             role="menu"
             aria-label="dodaj"
             className="fixed inset-0 z-(--z-drawer)"
@@ -224,7 +226,7 @@ export function AddButton({
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="zamknij menu"
-                className="fixed flex items-center justify-center rounded-full bg-accent text-on-accent"
+                className="press fixed flex items-center justify-center rounded-full bg-accent text-on-accent"
                 style={{
                   left: plusAt.left,
                   top: plusAt.top,

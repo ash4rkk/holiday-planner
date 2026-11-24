@@ -38,7 +38,7 @@ export function PaintNavButton({ on, onToggle }: { on: boolean; onToggle: () => 
         aria-label={on ? 'zakończ malowanie' : 'maluj urlop'}
         title={on ? 'zakończ malowanie' : 'maluj urlop'}
         className={cx(
-          'flex size-14 items-center justify-center rounded-full bg-accent text-on-accent shadow-float transition-colors hover:bg-accent-hover',
+          'press flex size-14 items-center justify-center rounded-full bg-accent text-on-accent shadow-float transition-colors hover:bg-accent-hover',
           on && 'ring-4 ring-active',
         )}
       >

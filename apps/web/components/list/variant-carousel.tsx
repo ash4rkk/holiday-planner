@@ -3,6 +3,7 @@
 import { type CardSnapshot, chooseVariant } from '@planer/core'
 import { type PointerEvent, type ReactNode, useRef, useState } from 'react'
 import { cx } from '@/components/ui'
+import { scrollBehavior } from '@/lib/motion'
 import { useTrip } from '@/lib/yjs/trip-doc'
 
 // Powyżej progu przeciągania karta nie dostaje już ruchu, więc jej przytrzymanie musi odpaść wcześniej.
@@ -40,7 +41,8 @@ export function VariantCarousel({
     const all = offsets().map((o) => Math.abs(o - left))
     return all.indexOf(Math.min(...all))
   }
-  const go = (i: number) => track.current?.scrollTo({ left: offsets()[i] ?? 0, behavior: 'smooth' })
+  const go = (i: number) =>
+    track.current?.scrollTo({ left: offsets()[i] ?? 0, behavior: scrollBehavior() })
 
   // Palec przesuwa natywnie; mysz trzeba poprowadzić samemu, bez zatrzaskiwania w trakcie ruchu.
   const mouse = {

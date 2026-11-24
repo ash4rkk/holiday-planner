@@ -27,6 +27,7 @@ import { TYPE_STYLE } from '@/components/card/type-style'
 import { askConfirm } from '@/components/confirm-dialog'
 import { cx } from '@/components/ui'
 import { chatSuggestions } from '@/lib/chat-suggestions'
+import { useExit } from '@/lib/exit'
 import { offerUndo } from '@/lib/undo'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useHideWhenInactive } from '@/lib/use-hide-when-inactive'
@@ -142,7 +143,7 @@ export function ChatButton({ onOpenCard }: { onOpenCard: (id: string) => void })
         onClick={() => setOpen((v) => !v)}
         aria-label="czat AI"
         aria-expanded={open}
-        className="island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent aria-expanded:text-accent"
+        className="press island flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent aria-expanded:text-accent"
       >
         <Sparkles className="size-5" aria-hidden="true" />
       </button>
@@ -294,7 +295,7 @@ function Proposals({
                     href={card.ticketsUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="hit rounded-full border border-accent/50 px-2 py-0.5 text-2xs text-accent"
+                    className="press hit rounded-full border border-accent/50 px-2 py-0.5 text-2xs text-accent"
                   >
                     bilety ›
                   </a>
@@ -764,6 +765,7 @@ function ChatPanel({
     () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches,
     [],
   )
+  const exit = useExit(wide ? 'panel-left' : 'sheet')
   const overBudget = Boolean(budget && budget.spent >= budget.limit)
   const blocked = !configured || overBudget || offline
   const today = todayLocal()
@@ -797,7 +799,7 @@ function ChatPanel({
             disabled={busy || Boolean(pending)}
             aria-label="nowa rozmowa"
             title="nowa rozmowa"
-            className="flex size-11 items-center justify-center text-muted hover:text-accent disabled:opacity-50"
+            className="press flex size-11 items-center justify-center text-muted hover:text-accent disabled:opacity-50"
           >
             <RotateCcw className="size-5" aria-hidden="true" />
           </button>
@@ -806,7 +808,7 @@ function ChatPanel({
           type="button"
           onClick={onClose}
           aria-label="zamknij czat"
-          className="flex size-11 items-center justify-center text-muted hover:text-accent"
+          className="press flex size-11 items-center justify-center text-muted hover:text-accent"
         >
           <X className="size-5" aria-hidden="true" />
         </button>
@@ -970,7 +972,7 @@ function ChatPanel({
             type="submit"
             aria-label="zatrzymaj odpowiedź"
             title="zatrzymaj"
-            className="flex size-11 shrink-0 items-center justify-center rounded-small border border-line text-text hover:text-red"
+            className="press flex size-11 shrink-0 items-center justify-center rounded-small border border-line text-text hover:text-red"
           >
             <Square className="size-4 fill-current" aria-hidden="true" />
           </button>
@@ -979,7 +981,7 @@ function ChatPanel({
             type="submit"
             disabled={!input.trim() || blocked || Boolean(otherAsking)}
             aria-label="wyślij"
-            className="flex size-11 shrink-0 items-center justify-center rounded-small bg-accent text-on-accent disabled:opacity-50"
+            className="press flex size-11 shrink-0 items-center justify-center rounded-small bg-accent text-on-accent disabled:opacity-50"
           >
             <Send className="size-4" aria-hidden="true" />
           </button>
@@ -1000,6 +1002,7 @@ function ChatPanel({
   if (wide)
     return (
       <div
+        ref={exit}
         role="dialog"
         aria-label="czat AI"
         className="fixed inset-y-0 left-0 z-(--z-panel) flex w-[420px] flex-col"
@@ -1009,6 +1012,7 @@ function ChatPanel({
     )
   return (
     <div
+      ref={exit}
       role="dialog"
       aria-modal="true"
       aria-label="czat AI"

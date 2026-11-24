@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useRef, useState, ViewTransition } from 'react'
 import { cx } from '@/components/ui'
 import { tripView } from '@/lib/back'
+import { useExit } from '@/lib/exit'
 import { useDismiss } from '@/lib/use-dismiss'
 import { useTrip } from '@/lib/yjs/trip-doc'
 
@@ -36,6 +37,7 @@ export function TripMenu() {
   const settings = `/trips/${trip.id}/settings${view ? `?from=${view}` : ''}`
 
   useDismiss(open, () => setOpen(false), ref)
+  const exit = useExit('pop')
 
   return (
     <div ref={ref} className="relative flex self-stretch border-l border-line">
@@ -55,6 +57,7 @@ export function TripMenu() {
       </button>
       {open && (
         <div
+          ref={exit}
           role="menu"
           className="island fade-in shadow-float absolute top-full right-0 z-(--z-nav) mt-2 flex w-56 flex-col p-1"
         >

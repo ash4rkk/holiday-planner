@@ -85,7 +85,7 @@ export function VariantBar({ card }: { card: CardSnapshot }) {
         type="button"
         onClick={addOption}
         aria-label="dodaj wariant"
-        className="flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
+        className="press flex size-11 shrink-0 items-center justify-center text-muted hover:text-accent"
       >
         <Plus className="size-4" aria-hidden="true" />
       </button>

@@ -93,7 +93,7 @@ export default async function TripsPage() {
             href="/settings"
             aria-label="ustawienia"
             title="ustawienia"
-            className="flex size-11 shrink-0 items-center justify-center"
+            className="press flex size-11 shrink-0 items-center justify-center"
           >
             <ProfilePhoto
               name={user.name}

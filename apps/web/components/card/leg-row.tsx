@@ -318,7 +318,7 @@ export function LegRow({
                   onClick={() => setMode(m)}
                   aria-pressed={m === mode}
                   className={cx(
-                    'flex min-h-11 items-center rounded-full border px-3',
+                    'press flex min-h-11 items-center rounded-full border px-3',
                     m === mode
                       ? 'border-accent bg-active font-bold text-accent'
                       : 'border-line text-muted hover:text-accent',
@@ -354,7 +354,7 @@ export function LegRow({
                 disabled={searching}
                 onClick={() => void shift('earlier')}
                 aria-label="wcześniejsze połączenie"
-                className="flex min-h-11 items-center rounded-full border border-line px-3 text-muted hover:text-accent disabled:opacity-50"
+                className="press flex min-h-11 items-center rounded-full border border-line px-3 text-muted hover:text-accent disabled:opacity-50"
               >
                 ‹ wcześniej
               </button>
@@ -368,7 +368,7 @@ export function LegRow({
                 disabled={searching}
                 onClick={() => void shift('later')}
                 aria-label="późniejsze połączenie"
-                className="flex min-h-11 items-center rounded-full border border-line px-3 text-muted hover:text-accent disabled:opacity-50"
+                className="press flex min-h-11 items-center rounded-full border border-line px-3 text-muted hover:text-accent disabled:opacity-50"
               >
                 później ›
               </button>

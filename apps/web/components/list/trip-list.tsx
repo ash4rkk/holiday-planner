@@ -49,6 +49,7 @@ import { DayWeather, RainPlanB, useDaySkies } from '@/components/weather'
 import { enqueueImport, runImports } from '@/lib/ai-import'
 import { countByCard } from '@/lib/attachment-counts'
 import { createFromTemplate } from '@/lib/card-templates'
+import { useExit } from '@/lib/exit'
 import { pasteAsCard } from '@/lib/place-card'
 import { withUndo } from '@/lib/undo'
 import { useCardSheet } from '@/lib/use-card-sheet'
@@ -391,7 +392,7 @@ export function TripList() {
                       }
                       aria-label={`ułóż ${formatShortDate(day.date)} z pomysłów`}
                       title="ułóż z pomysłów"
-                      className="flex size-11 items-center justify-center text-muted hover:text-accent"
+                      className="press flex size-11 items-center justify-center text-muted hover:text-accent"
                     >
                       <WandSparkles className="size-4" aria-hidden="true" />
                     </button>
@@ -401,7 +402,7 @@ export function TripList() {
                     type="button"
                     onClick={() => add(day.date)}
                     aria-label={`dodaj kartę na ${formatShortDate(day.date)}`}
-                    className="flex size-11 items-center justify-center text-muted hover:text-accent"
+                    className="press flex size-11 items-center justify-center text-muted hover:text-accent"
                   >
                     <Plus className="size-4" aria-hidden="true" />
                   </button>
@@ -679,8 +680,10 @@ function MoveSheet({
   onClose: () => void
 }) {
   useDismiss(true, onClose)
+  const exit = useExit('sheet')
   return (
     <div
+      ref={exit}
       role="dialog"
       aria-modal="true"
       aria-label="przenieś kartę"

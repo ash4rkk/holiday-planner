@@ -9,14 +9,14 @@ import { OffMapMark } from '@/components/card/off-map-mark'
 import { TYPE_STYLE } from '@/components/card/type-style'
 import { VariantBadge } from '@/components/card/variant-badge'
 import { cx } from '@/components/ui'
+import { SpringMotion } from '@/lib/motion'
+import { project, release, rubber, SNAPPY, snapIndex, VelocityTracker } from '@/lib/spring'
 import { useHoldDrag } from './use-hold-drag'
 
 /** Szerokość wysepki pomysłów na szerokim ekranie. */
 export const PANEL_WIDTH = 300
 /** Wysepka pomysłów pod górnym paskiem (h-11 + odstępy). */
 const ISLAND_TOP = 'calc(64px + env(safe-area-inset-top))'
-/** Tyle trzeba pociągnąć w dół, żeby schować drawer (jak arkusz karty). */
-const DRAG_CLOSE_PX = 110
 
 /** Przyciski Tablicy: na szerokim ekranie w linii z dolnym menu, na telefonie rząd wyżej. */
 export function controlsBottom(wide: boolean): string {
@@ -125,37 +125,61 @@ export function IdeasDrawer({
   const Close = wide ? Minus : ChevronDown
 
   // Przeciągnięcie w dół chowa drawer (telefon): za uchwyt i nagłówek albo z listy przewiniętej do góry.
-  const [dragY, setDragY] = useState(0)
-  const from = useRef<number | null>(null)
-  const pulled = useRef(0)
+  const panel = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
-  const startPull = (y: number) => {
-    from.current = y
-    pulled.current = 0
+  const from = useRef<number | null>(null)
+  const velocity = useRef(new VelocityTracker())
+  const [pull] = useState(
+    () =>
+      new SpringMotion((y) => [
+        [panel.current, { transform: y === 0 ? 'none' : `translateY(${y}px)` }],
+      ]),
+  )
+  const startPull = (y: number, t: number) => {
+    from.current = y - pull.stop().value
+    velocity.current.reset(t, pull.value)
   }
-  const movePull = (y: number) => {
+  const movePull = (y: number, t: number) => {
     if (from.current === null) return
-    pulled.current = y - from.current
-    setDragY(Math.max(0, pulled.current))
+    // Przytrzymana karta schowała drawer i jedzie nad Tablicą: to już nie jest jego gest.
+    if (!open) {
+      from.current = null
+      return
+    }
+    const d = y - from.current
+    velocity.current.add(t, d)
+    pull.set(d < 0 ? rubber(d, panel.current?.offsetHeight ?? 0) : d)
   }
-  const endPull = () => {
+  const endPull = (t: number | null) => {
     if (from.current === null) return
     from.current = null
-    setDragY(0)
-    if (pulled.current > DRAG_CLOSE_PX) onToggle()
+    const v = t === null ? 0 : velocity.current.at(t)
+    const h = panel.current?.offsetHeight ?? 0
+    if (h && t !== null && snapIndex([0, h], pull.value, v) === 1) {
+      onToggle()
+      // Znika stamtąd, gdzie puścił palec; na miejsce wraca dopiero niewidoczny.
+      pull.to(pull.value + Math.min(60, Math.max(0, project(v, 0.99))), {
+        velocity: Math.max(0, v),
+        spring: SNAPPY,
+        onDone: () => pull.set(0),
+      })
+    } else pull.to(0, { velocity: v, spring: release(v) })
   }
+  useEffect(() => {
+    if (open && pull.value !== 0) pull.to(0)
+  }, [open, pull])
   const handle = wide
     ? {}
     : {
         onPointerDown: (e: PointerEvent) => {
           // Przyciski w nagłówku działają zwyczajnie; ciągnie się resztą paska.
           if ((e.target as HTMLElement).closest('button')) return
-          startPull(e.clientY)
+          startPull(e.clientY, e.timeStamp)
           e.currentTarget.setPointerCapture(e.pointerId)
         },
-        onPointerMove: (e: PointerEvent) => movePull(e.clientY),
-        onPointerUp: endPull,
-        onPointerCancel: endPull,
+        onPointerMove: (e: PointerEvent) => movePull(e.clientY, e.timeStamp),
+        onPointerUp: (e: PointerEvent) => endPull(e.timeStamp),
+        onPointerCancel: () => endPull(null),
       }
   // Lista: ciągnięcie w dół, gdy jest przewinięta do samej góry (dalej przewija się normalnie).
   const listPull = wide
@@ -163,10 +187,9 @@ export function IdeasDrawer({
     : {
         onTouchStart: (e: TouchEvent) => {
           const t = e.touches[0]
-          if (t && e.touches.length === 1 && (list.current?.scrollTop ?? 0) <= 0) {
-            from.current = t.clientY
-            pulled.current = 0
-          } else from.current = null
+          if (t && e.touches.length === 1 && (list.current?.scrollTop ?? 0) <= 0)
+            startPull(t.clientY, e.timeStamp)
+          else from.current = null
         },
         onTouchMove: (e: TouchEvent) => {
           const t = e.touches[0]
@@ -174,13 +197,13 @@ export function IdeasDrawer({
           // W górę to zwykłe przewijanie listy.
           if (t.clientY < from.current) {
             from.current = null
-            setDragY(0)
+            pull.set(0)
             return
           }
-          movePull(t.clientY)
+          movePull(t.clientY, e.timeStamp)
         },
-        onTouchEnd: endPull,
-        onTouchCancel: endPull,
+        onTouchEnd: (e: TouchEvent) => endPull(e.timeStamp),
+        onTouchCancel: () => endPull(null),
       }
 
   return (
@@ -193,7 +216,7 @@ export function IdeasDrawer({
           aria-label={`pomysły (${ideas.length})`}
           style={wide ? { top: ISLAND_TOP } : { bottom: controlsBottom(wide) }}
           className={cx(
-            'absolute z-(--z-overlay) flex items-center gap-2 text-sm',
+            'press absolute z-(--z-overlay) flex items-center gap-2 text-sm',
             wide
               ? 'right-2 h-11 rounded-full border border-sel bg-raised px-4 shadow-float'
               : // Ta sama wysepka co przełącznik dni po prawej (wysokość, kształt, cień).
@@ -211,26 +234,20 @@ export function IdeasDrawer({
         </button>
       )}
       <aside
+        ref={panel}
         aria-label="pomysły"
         aria-hidden={!open}
         inert={!open}
         data-ideas-drop
         className={cx(
           'fixed z-(--z-drawer) flex flex-col rounded-island border border-sel bg-raised p-1 shadow-float',
-          // Puszczony po pociągnięciu wraca płynnie; w trakcie idzie za palcem bez opóźnienia.
-          from.current === null
-            ? 'transition-[scale,opacity,transform]'
-            : 'transition-[scale,opacity]',
-          'duration-200 motion-reduce:transition-none',
+          'transition-[scale,opacity] duration-(--spring-quick-ms) ease-(--spring-smooth) motion-reduce:transition-none',
           wide
             ? 'right-2 max-h-[calc(100dvh-64px-150px)] origin-top-right'
             : 'inset-x-2 max-h-[min(60dvh,calc(100dvh-72px-140px))] origin-bottom-left',
           !open && 'pointer-events-none scale-90 opacity-0',
         )}
-        style={{
-          ...(wide ? { width: PANEL_WIDTH, top: ISLAND_TOP } : { bottom: controlsBottom(false) }),
-          ...(open && dragY > 0 && { transform: `translateY(${dragY}px)` }),
-        }}
+        style={wide ? { width: PANEL_WIDTH, top: ISLAND_TOP } : { bottom: controlsBottom(false) }}
       >
         {/* Na telefonie nagłówek ciągnięty w dół chowa wysepkę. */}
         <div
@@ -244,7 +261,7 @@ export function IdeasDrawer({
             type="button"
             onClick={onToggle}
             aria-label="zwiń pomysły"
-            className="ml-auto flex size-10 items-center justify-center rounded-inner text-muted hover:text-accent"
+            className="press ml-auto flex size-10 items-center justify-center rounded-inner text-muted hover:text-accent"
           >
             <Close className="size-4" aria-hidden="true" />
           </button>

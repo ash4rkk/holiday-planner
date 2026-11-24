@@ -48,6 +48,8 @@ export const CardNode = memo(function CardNode({
   const [hover, setHover] = useState(false)
   const body = useRef<HTMLDivElement>(null)
   const step = (by: number) => setShownIndex((index + by + all.length) % all.length)
+  /** Karta uniesiona pod palcem. */
+  const [lifted, setLifted] = useState(false)
   const gesture = useHoldDrag({
     // Tap w zaznaczoną kartę otwiera edytor (to też podwójny tap); Ctrl i Shift zbierają karty.
     onTap: (e) => {
@@ -55,9 +57,15 @@ export const CardNode = memo(function CardNode({
       else if (selected && !grouped) board.openCard(shown.id)
       else board.select({ kind: 'card', id })
     },
-    onStart: () => board.dragStart('card', id),
+    onStart: () => {
+      setLifted(true)
+      board.dragStart('card', id)
+    },
     onMove: board.dragMove,
-    onEnd: board.dragEnd,
+    onEnd: () => {
+      setLifted(false)
+      board.dragEnd()
+    },
     onPan: board.panBy,
     onMenu: (x, y) => board.openMenu(id, x, y),
   })
@@ -87,6 +95,8 @@ export const CardNode = memo(function CardNode({
           selected ? 'border-accent' : 'border-line',
           card.aiDraft && 'border-dashed border-accent',
           card.skipped && 'opacity-60',
+          'transition-[scale] duration-(--spring-snappy-ms) ease-(--spring-snappy)',
+          lifted && 'scale-[1.03] shadow-float',
         )}
         role="button"
         tabIndex={0}
@@ -107,7 +117,7 @@ export const CardNode = memo(function CardNode({
               type="button"
               onClick={() => step(-1)}
               aria-label="poprzednia opcja"
-              className="hit flex size-9 items-center justify-center rounded-small border border-line text-muted"
+              className="press hit flex size-9 items-center justify-center rounded-small border border-line text-muted"
             >
               <ChevronLeft className="size-4" aria-hidden="true" />
             </button>
@@ -118,7 +128,7 @@ export const CardNode = memo(function CardNode({
               type="button"
               onClick={() => step(1)}
               aria-label="następna opcja"
-              className="hit flex size-9 items-center justify-center rounded-small border border-line text-muted"
+              className="press hit flex size-9 items-center justify-center rounded-small border border-line text-muted"
             >
               <ChevronRight className="size-4" aria-hidden="true" />
             </button>
@@ -177,7 +187,7 @@ export function ToolButton({
       title={label}
       onClick={onClick}
       className={cx(
-        'flex size-11 items-center justify-center rounded-inner transition-colors',
+        'press flex size-11 items-center justify-center rounded-inner transition-colors',
         active
           ? 'bg-active text-accent'
           : danger

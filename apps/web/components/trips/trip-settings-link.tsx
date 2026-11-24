@@ -10,7 +10,7 @@ export function TripSettingsLink({ tripId, className }: { tripId: string; classN
       aria-label="ustawienia wyjazdu"
       title="ustawienia wyjazdu"
       className={cx(
-        'flex size-11 items-center justify-center text-muted transition-colors hover:text-accent',
+        'press flex size-11 items-center justify-center text-muted transition-colors hover:text-accent',
         className,
       )}
     >

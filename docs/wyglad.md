@@ -111,8 +111,19 @@ Bez koloru: pogrubione, cyfry o stałej szerokości (`font-bold tabular-nums`, `
 
 ## Ruch
 
-Krótkie przejścia (~200 ms), arkusze wysuwane od dołu, `prefers-reduced-motion` wyłącza animacje.
-Nigdy `transition` na `*` (Tablica zaczyna się spóźniać).
+- **Ruch to sprężyna, przenikanie to krzywa.** Tokeny w `globals.css`: `--spring-smooth` (arkusze),
+  `--spring-smooth` z `--spring-quick-ms` (menu i okna), `--spring-snappy` (pigułki, przyciski,
+  upuszczenie), `--ease-soft` (przenikanie). Te same parametry w JS: `lib/spring.ts`.
+- **Gest i ruch po nim są jednym ruchem.** Puszczenie oddaje prędkość palca sprężynie, o miejscu
+  decyduje rzut prędkości (`snapIndex`, `project`), za krawędzią jest opór (`rubber`). Odbicie tylko
+  po machnięciu, nigdy po zwykłym dotknięciu.
+- **Wszystko da się złapać w locie** (`SpringMotion.stop()` oddaje bieżące miejsce i prędkość).
+- Arkusze z dołu przez `useSheet`: w spoczynku bez `transform` (zmienia układ dla `fixed` w środku).
+- Zamknięte okna i menu gasną przez `useExit` (kopia, ok. 160 ms) — niczego nie blokują.
+- Przyciski mają `.press` (szerokie elementy `.press-soft`); nowe przyciski ikonowe i pigułki też.
+- „Ogranicz ruch”: zamiast sprężyn przenikanie 150 ms; w kodzie `reducedMotion()`, `scrollBehavior()`,
+  `motionMs()`.
+- Nigdy `transition` na `*` (Tablica zaczyna się spóźniać). Bez animowania `backdrop-filter`.
 
 ## Mapy
 

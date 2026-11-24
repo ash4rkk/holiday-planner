@@ -257,7 +257,7 @@ export function CardSections({
                     type="button"
                     onClick={() => clear(key)}
                     aria-label={`usuń: ${label}`}
-                    className="hit flex size-8 items-center justify-center rounded-full text-subtle hover:bg-raised hover:text-red"
+                    className="press hit flex size-8 items-center justify-center rounded-full text-subtle hover:bg-raised hover:text-red"
                   >
                     <X className="size-3.5" aria-hidden="true" />
                   </button>
@@ -302,7 +302,7 @@ export function CardSections({
                 type="button"
                 onClick={() => clear(key)}
                 aria-label={`usuń pole ${label}`}
-                className="-my-2.5 -mr-1.5 flex size-11 items-center justify-center text-subtle hover:text-red"
+                className="press -my-2.5 -mr-1.5 flex size-11 items-center justify-center text-subtle hover:text-red"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>
@@ -412,7 +412,7 @@ function Row({
           type="button"
           onClick={onClear}
           aria-label={`usuń pole ${label}`}
-          className="flex size-11 shrink-0 items-center justify-center text-subtle hover:text-red"
+          className="press flex size-11 shrink-0 items-center justify-center text-subtle hover:text-red"
         >
           <X className="size-4" aria-hidden="true" />
         </button>
@@ -481,7 +481,7 @@ function FieldInput({
                 })
               }
               className={cx(
-                'min-h-11 self-start rounded-full border px-3 text-sm',
+                'press min-h-11 self-start rounded-full border px-3 text-sm',
                 card.endDate === addDays(card.date, 1)
                   ? 'border-accent bg-active text-accent'
                   : 'border-line text-muted',

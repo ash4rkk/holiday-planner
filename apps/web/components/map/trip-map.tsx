@@ -703,7 +703,7 @@ export function TripMap() {
                   setTab(t.id)
                 }}
                 className={cx(
-                  'hit flex h-9 shrink-0 flex-col items-center justify-center rounded-full px-3 text-xs transition-colors',
+                  'press hit flex h-9 shrink-0 flex-col items-center justify-center rounded-full px-3 text-xs transition-colors',
                   tab === t.id ? 'bg-active font-bold text-accent' : 'text-muted hover:text-text',
                 )}
               >
