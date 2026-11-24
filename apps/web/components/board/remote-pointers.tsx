@@ -7,7 +7,12 @@ type State = { user: PresenceUser; pointer?: { x: number; y: number } | null }
 
 /** Kursory drugiej osoby na tablicy, stałej wielkości niezależnie od zoomu. */
 export function RemotePointers() {
-  const others = usePresence<State>()
+  const others = usePresence<State>().filter((o) => o.pointer)
+  // Sam na Tablicy: nic nie słucha przesuwania widoku.
+  return others.length ? <Pointers others={others} /> : null
+}
+
+function Pointers({ others }: { others: (State & { clientId: number })[] }) {
   const { x: vx, y: vy, zoom } = useViewport()
   return (
     <div className="pointer-events-none absolute inset-0 z-[5] overflow-hidden" aria-hidden="true">

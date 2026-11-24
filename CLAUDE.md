@@ -67,6 +67,8 @@ pnpm db:sample           # przykład „Lizbona (przykład)” z datami od dziś
 ## Pułapki
 
 - Nie uruchamiaj `next build` przy działającym `next dev` — dzielą `apps/web/.next`, a dev wpada w pętlę przeładowań („HMR hash mismatch”). Naprawa: zatrzymaj dev, `rm -rf apps/web/.next`.
+- `onNodesChange` na Tablicy przepuszcza tylko prawdziwe zmiany naszych węzłów: ramki dni i inne węzły rysowane w locie React Flow mierzy przy każdym odtworzeniu, a nowa tablica węzłów po takim pomiarze zapętla renderowanie (60 razy na sekundę, także bez dotykania). Przeciąganie idzie samym CSS (`translate` na elemencie węzła), zapis i render dopiero po upuszczeniu.
+- Czasów z tokenów CSS nie czytaj w JS (`parseFloat`): bundler zapisuje `478ms` jako `.478s`. W JS: `springTiming` z `lib/motion.ts`.
 - React Flow wyłącza zdarzenia wskaźnika na węzłach bez wbudowanego zaznaczania/przeciągania — elementy, które mają reagować, potrzebują `pointer-events-auto`.
 - SW rejestrowany jako `type: 'classic'` — worker modułowy przeglądarka pobiera bez cookie, więc za Cloudflare Access dostałby 401.
 - Zmiany samego URL (np. `?card=`) przez `window.history.pushState`, nie `router.push` — router pyta serwer, więc offline nic by się nie otworzyło.

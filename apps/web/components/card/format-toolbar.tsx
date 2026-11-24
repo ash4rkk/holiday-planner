@@ -2,7 +2,7 @@
 
 import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'
-import { Heading2, Link2, List, ListChecks, Redo2, Undo2 } from 'lucide-react'
+import { Heading2, KeyboardOff, Link2, List, ListChecks, Redo2, Undo2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { askText } from '@/components/confirm-dialog'
 import { cx } from '@/components/ui'
@@ -130,6 +130,18 @@ export function FormatToolbar({ editor }: { editor: Editor }) {
       >
         <Redo2 className="size-5" strokeWidth={1.8} aria-hidden="true" />
       </button>
+      {/* Tylko przy otwartej klawiaturze; arkusz wraca potem do swojej wysokości. */}
+      {inset > 0 && (
+        <button
+          type="button"
+          aria-label="schowaj klawiaturę"
+          title="schowaj klawiaturę"
+          onPointerDown={run(() => editor.commands.blur())}
+          className="press flex size-11 items-center justify-center rounded-small text-accent"
+        >
+          <KeyboardOff className="size-5" strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 }

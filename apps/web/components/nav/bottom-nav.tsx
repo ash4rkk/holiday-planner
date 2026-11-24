@@ -224,13 +224,16 @@ export function BottomNav({
         ref={island}
         className="relative grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 px-4"
       >
-        {/* Pigułka wybranej pozycji, widoczna tylko w drodze (tło w spoczynku ma sama pozycja). */}
+        {/* Tła wysepek i pigułka tylko na czas ruchu (use-nav-pill.ts); w spoczynku mają je same
+            wysepki i wybrana pozycja. */}
+        <IslandSkin />
+        <IslandSkin />
         <span
           ref={pill}
           aria-hidden="true"
-          className="pointer-events-none absolute rounded-full bg-active opacity-0"
+          className="pointer-events-none absolute origin-left rounded-full bg-active opacity-0 will-change-transform"
         />
-        <ul className={cx(NAV_ISLAND, 'justify-self-end')}>
+        <ul data-island className={cx(NAV_ISLAND, 'justify-self-end')}>
           {items.slice(0, 2).map((item, i) => (
             <NavItem
               key={item.view}
@@ -255,7 +258,7 @@ export function BottomNav({
             inTrip={!!params.tripId}
           />
         </div>
-        <ul className={cx(NAV_ISLAND, 'justify-self-start')}>
+        <ul data-island className={cx(NAV_ISLAND, 'justify-self-start')}>
           {items.slice(2).map((item, i) => (
             <NavItem
               key={item.view}
@@ -267,6 +270,19 @@ export function BottomNav({
         </ul>
       </div>
     </nav>
+  )
+}
+
+/** Wysepka z cienia, dwóch zaokrąglonych końców i środka: zmienia szerokość samym `transform`. */
+function IslandSkin() {
+  const part = 'absolute inset-y-0 border-sel bg-raised will-change-transform'
+  return (
+    <span data-skin aria-hidden="true" className="pointer-events-none absolute opacity-0">
+      <span className="absolute inset-0 origin-left rounded-full shadow-float will-change-transform" />
+      <span className={cx(part, 'left-0 w-[27px] rounded-l-full border border-r-0')} />
+      <span className={cx(part, 'inset-x-[26px] origin-left border-y')} />
+      <span className={cx(part, 'right-0 w-[27px] rounded-r-full border border-l-0')} />
+    </span>
   )
 }
 
@@ -303,12 +319,7 @@ function NavItem({
         )}
       >
         <Icon className="size-5 shrink-0" aria-hidden="true" strokeWidth={1.8} />
-        <span
-          className={cx(
-            'text-sm font-bold whitespace-nowrap transition-opacity duration-150',
-            !active && 'opacity-0',
-          )}
-        >
+        <span className={cx('text-sm font-bold whitespace-nowrap', !active && 'opacity-0')}>
           {label}
         </span>
       </Link>

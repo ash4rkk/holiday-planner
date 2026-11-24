@@ -26,6 +26,12 @@ export function crossfade(el: Element | null | undefined, show: boolean) {
   return FADE_MS
 }
 
+/** Sprężyna jako czas i krzywa dla animacji, której klatki podaje przeglądarka (0 → 1). */
+export function springTiming(spring: Spring): { duration: number; easing: string } {
+  const values = springFrames(spring, 0, 1000).map((v) => +(v / 1000).toFixed(4))
+  return { duration: (values.length - 1) * FRAME * 1000, easing: `linear(${values.join(', ')})` }
+}
+
 type Style = Record<string, string>
 type Frame = (value: number) => [HTMLElement | null | undefined, Style][]
 

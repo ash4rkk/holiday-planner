@@ -158,6 +158,7 @@ const STAY_GAP = 8
 const HOLD_MENU_MS = 500
 // Rozgałęzienie: warianty w pełnym rozmiarze obok karty głównej; kolejne dni odsuwają się w bok.
 const BRANCH_GAP = GRID
+const NO_IDS: ReadonlySet<string> = new Set()
 // Przy krawędzi ekranu przeciągany pomysł przesuwa tablicę.
 const EDGE_PX = 48
 const EDGE_STEP = 10
@@ -255,6 +256,8 @@ function BoardCanvas() {
     /** Przeciągany element: to on trafia w oczko siatki, reszta przesuwa się o tyle samo. */
     lead: string
     card?: CardSnapshot
+    /** Elementy w ruchu i ich warstwa sprzed uniesienia. */
+    els: { el: HTMLElement; z: string }[]
   } | null>(null)
 
   const live = useMemo(() => cards.filter((c) => !c.deletedAt), [cards])
@@ -569,13 +572,16 @@ function BoardCanvas() {
   }, [days, live, legPlans, trip.travelBufferMin])
 
   // Kolumny dni i miejsce pod przeciąganą kartą.
+  const [dragCard, setDragCard] = useState<CardSnapshot | null>(null)
+  /** Węzły w ruchu: na ich miejscu zostaje przerywany obrys. */
+  const [dragIds, setDragIds] = useState<ReadonlySet<string>>(NO_IDS)
   const columns = useMemo(
     () =>
       dropColumns(
         nodes.flatMap((n) => {
           const card = (n.data as { card?: CardSnapshot }).card
           // Przeciągana karta nie rozciąga swojej kolumny.
-          if (!card?.date || card.id === drag.current?.card?.id) return []
+          if (!card?.date || card.id === dragCard?.id) return []
           const { x, y } = n.position
           return [
             {
@@ -609,7 +615,7 @@ function BoardCanvas() {
           return { ...column, baseX: column.x, x: column.x + by, w: right - column.x - by, cards }
         })
         .concat(newDayColumn()),
-    [nodes, trip, live, shiftAt, insets, branchWidth],
+    [nodes, trip, live, shiftAt, insets, branchWidth, dragCard],
   )
   /**
    * Kolumna „+ nowy dzień” za ostatnim dniem wyjazdu: upuszczenie tam wydłuża wyjazd o dzień.
@@ -640,6 +646,8 @@ function BoardCanvas() {
   const [drop, setDropState] = useState<Drop>(null)
   const dropRef = useRef<Drop>(null)
   const setDrop = (next: Drop) => {
+    // Ten sam cel przy kolejnym ruchu palca niczego nie renderuje.
+    if (JSON.stringify(next) === JSON.stringify(dropRef.current)) return
     dropRef.current = next
     setDropState(next)
   }
@@ -681,7 +689,6 @@ function BoardCanvas() {
 
   // Podczas przeciągania: miejsca „+ godzina” w kolumnach, puste dni i „+ nowy dzień”, żeby było
   // widać, gdzie karta wyląduje — także za ostatnią kartą dnia.
-  const [dragCard, setDragCard] = useState<CardSnapshot | null>(null)
   const frameTop = useMemo(
     () => (dayNodes.length ? Math.min(...dayNodes.map((n) => n.position.y)) : 0),
     [dayNodes],
@@ -691,7 +698,11 @@ function BoardCanvas() {
   const emptyDayNodes = useMemo(
     (): Node[] =>
       columns
-        .filter((c) => !c.cards.length && !(c as { newDay?: boolean }).newDay)
+        // Dzień z jedyną kartą właśnie w ręku ma dalej swoją ramkę.
+        .filter(
+          (c) =>
+            !c.cards.length && !(c as { newDay?: boolean }).newDay && c.date !== dragCard?.date,
+        )
         .map((c): Node => {
           const index = dayIndexOf(c.date, trip.startDate, trip.endDate)
           return {
@@ -714,12 +725,14 @@ function BoardCanvas() {
             },
           }
         }),
-    [columns, frameTop, trip.startDate, trip.endDate, now],
+    [columns, frameTop, trip.startDate, trip.endDate, now, dragCard],
   )
   const slotNodes = useMemo((): Node[] => {
     if (!dragCard) return []
     return columns.flatMap((column): Node[] => {
       const { newDay } = column as { newDay?: boolean }
+      // W swoim dniu karta porusza się swobodnie, bez podpowiedzi godzin.
+      if (column.date === dragCard.date) return []
       if (!column.cards.length) {
         const label = newDay
           ? `+ nowy dzień · ${formatShortDate(column.date)}`
@@ -758,6 +771,9 @@ function BoardCanvas() {
     })
   }, [dragCard, columns, frameTop, trip.travelBufferMin, drop])
 
+  // Ten sam węzeł w tym samym stanie to ten sam obiekt: zmiana celu upuszczenia albo zaznaczenia
+  // renderuje tylko karty, których dotyczy.
+  const shownCache = useRef(new Map<string, { from: Node; key: string; node: Node }>())
   const shownNodes = useMemo(
     () => [
       ...dayNodes.map((n) => {
@@ -769,6 +785,25 @@ function BoardCanvas() {
       ...slotNodes,
       ...nowNode,
       ...dropNode,
+      ...nodes.flatMap((n): Node[] => {
+        if (!dragIds.has(n.id) || n.type !== 'card') return []
+        const by = shiftAt(n.position.x) + (insets.get(n.id) ?? 0)
+        return [
+          {
+            id: `origin:${n.id}`,
+            type: 'slot',
+            position: { x: n.position.x + by, y: n.position.y },
+            width: n.width ?? CARD_SIZE.w,
+            height: n.measured?.height ?? n.height ?? CARD_SIZE.h,
+            zIndex: 0,
+            selectable: false,
+            draggable: false,
+            focusable: false,
+            style: { pointerEvents: 'none' },
+            data: { label: '', day: true, active: false },
+          },
+        ]
+      }),
       ...nodes.flatMap((n): Node[] => {
         const grouped = group.has(n.id)
         const selected =
@@ -784,7 +819,7 @@ function BoardCanvas() {
         const branch = Boolean(card && branches(card))
         const stayUntil = stays.get(n.id)
         const sky = skies.get(n.id)
-        const shown =
+        const make = (): Node =>
           n.selected === selected &&
           !past &&
           !target &&
@@ -802,6 +837,20 @@ function BoardCanvas() {
                 className: cx(past && 'is-past', target && 'is-drop') || undefined,
                 data: { ...n.data, branch, grouped, stayUntil, sky },
               }
+        const key = JSON.stringify([
+          selected,
+          past,
+          target,
+          banded,
+          by,
+          branch,
+          grouped,
+          stayUntil,
+          sky,
+        ])
+        const hit = shownCache.current.get(n.id)
+        const shown = hit?.from === n && hit.key === key ? hit.node : make()
+        shownCache.current.set(n.id, { from: n, key, node: shown })
         if (!card || !branch) return [shown]
         const w = n.width ?? CARD_SIZE.w
         const h = n.height ?? CARD_SIZE.h
@@ -853,8 +902,10 @@ function BoardCanvas() {
       insets,
       fileCounts,
       stays,
+      skies,
       live,
       pinnedBand,
+      dragIds,
     ],
   )
 
@@ -969,8 +1020,24 @@ function BoardCanvas() {
     now,
   ])
 
+  // Tylko zmiany naszych węzłów i tylko prawdziwe. Ramki dni i inne węzły rysowane w locie React Flow
+  // mierzy od nowa przy każdym ich odtworzeniu; nowa tablica po takim pomiarze odtwarzałaby je znowu
+  // i Tablica renderowałaby się bez końca, także bezczynna.
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)),
+    (changes: NodeChange[]) =>
+      setNodes((ns) => {
+        const byId = new Map(ns.map((n) => [n.id, n]))
+        const real = changes.filter((c) => {
+          const n = 'id' in c ? byId.get(c.id) : undefined
+          if (!n) return false
+          if (c.type !== 'dimensions' || c.resizing !== undefined || c.setAttributes) return true
+          return (
+            c.dimensions !== undefined &&
+            (n.measured?.width !== c.dimensions.width || n.measured?.height !== c.dimensions.height)
+          )
+        })
+        return real.length ? applyNodeChanges(real, ns) : ns
+      }),
     [],
   )
 
@@ -1155,9 +1222,24 @@ function BoardCanvas() {
       // Grupa tylko się przesuwa; upuszczanie na dzień i na kartę dotyczy pojedynczej karty.
       const card = kind === 'card' && !many ? live.find((c) => c.id === id) : undefined
       const lead = kind === 'card' ? id : kind === 'widget' ? widgetNodeId(id) : frameNodeId(id)
-      drag.current = { start, dx: 0, dy: 0, lead, card }
+      // Warianty rozgałęzionej karty jadą z nią.
+      const moved = ids.flatMap((i) => [
+        i,
+        ...(live.some((c) => c.id === i && branches(c))
+          ? (variants.get(i) ?? []).map((v) => `variant:${v.id}`)
+          : []),
+      ])
+      const els = moved.flatMap((i) => {
+        const el = canvas.current?.querySelector<HTMLElement>(
+          `.react-flow__node[data-id="${CSS.escape(i)}"]`,
+        )
+        return el ? [{ el, z: el.style.zIndex }] : []
+      })
+      for (const { el } of els) el.style.zIndex = '1000'
+      drag.current = { start, dx: 0, dy: 0, lead, card, els }
       setBoardDragging(Boolean(card))
       setDragCard(card ?? null)
+      setDragIds(new Set(ids))
     },
     dragMove: (dx, dy) => {
       const d = drag.current
@@ -1168,22 +1250,22 @@ function BoardCanvas() {
       // Pod palcem 1:1; do siatki karta dosuwa się dopiero po puszczeniu.
       d.dx = dx / zoom
       d.dy = dy / zoom
-      setNodes((ns) =>
-        ns.map((n) => {
-          const s = d.start.get(n.id)
-          return s ? { ...n, position: { x: s.x + d.dx, y: s.y + d.dy } } : n
-        }),
-      )
+      // Samym CSS: ramka dnia i strzałki stoją, a Tablica się nie renderuje. Zapis po upuszczeniu.
+      const follow = () => {
+        for (const { el } of d.els) el.style.translate = `${d.dx}px ${d.dy}px`
+      }
       const s = d.card && d.start.get(d.card.id)
-      if (!d.card || !s) return
+      if (!d.card || !s) return follow()
       const center = {
         x: s.x + d.dx + (d.card.w ?? CARD_SIZE.w) / 2,
         y: s.y + d.dy + (d.card.h ?? CARD_SIZE.h) / 2,
       }
-      center.x += shiftAt(s.x + d.dx) + (insets.get(d.card.id) ?? 0)
+      // W ręku karta ma rozsunięcie dni z miejsca, z którego ją wzięto.
+      center.x += shiftAt(s.x) + (insets.get(d.card.id) ?? 0)
       const target = targetAt(rf.flowToScreenPosition(center), d.card)
       // W swoim dniu karta porusza się swobodnie.
       setDrop(target?.kind === 'day' && target.date === d.card.date ? null : target)
+      follow()
     },
     dragEnd: () => {
       const d = drag.current
@@ -1192,9 +1274,28 @@ function BoardCanvas() {
       setDrop(null)
       setBoardDragging(false)
       setDragCard(null)
+      setDragIds(NO_IDS)
+      // Przesunięcie znika razem z zapisem nowego miejsca; różnicę dojeżdża przejście `is-settling`.
+      for (const { el, z } of d?.els ?? []) {
+        el.style.translate = ''
+        el.style.zIndex = z
+      }
       const from = d?.start.get(d.lead)
       if (!d || !from || (!d.dx && !d.dy)) return
       settleNodes()
+      // Z celem miejsce zapisze `place`; do tego czasu (np. pytanie o wariant) karta wraca do siebie.
+      if (d.card && target) {
+        setUndo(null)
+        place(d.card, target)
+        return
+      }
+      // Pozycja do zapisania, która z rozsunięciem dni w nowym miejscu wypadnie tam, gdzie karta stoi.
+      if (d.card) {
+        const shownX = from.x + shiftAt(from.x) + d.dx
+        let x = from.x + d.dx
+        for (let i = 0; i < 4; i++) x = shownX - shiftAt(x)
+        d.dx = x - from.x
+      }
       d.dx = snapToGrid(from.x + d.dx) - from.x
       d.dy = snapToGrid(from.y + d.dy) - from.y
       // Od razu na siatce: zapis tego samego miejsca nie odświeża węzłów.
@@ -1205,11 +1306,6 @@ function BoardCanvas() {
         }),
       )
       if (!d.dx && !d.dy) return
-      if (d.card && target) {
-        setUndo(null)
-        place(d.card, target)
-        return
-      }
       const moves: { cards: Positions; frames: Positions; widgets: Positions } = {
         cards: {},
         frames: {},
@@ -1399,6 +1495,7 @@ function BoardCanvas() {
     }
     return best
   }
+  const moveEnd = useRef<ReturnType<typeof setTimeout>>(undefined)
   const dayInViewRef = useRef(dayInView)
   dayInViewRef.current = dayInView
   // Po wczytaniu i zmianie dni (węzły mierzą się chwilę po renderze).
@@ -1530,10 +1627,14 @@ function BoardCanvas() {
           }}
           onMoveStart={() => setMenu(null)}
           onMoveEnd={(_, viewport) => {
-            setShown(dayInView())
-            try {
-              localStorage.setItem(`planer-viewport-${trip.id}`, JSON.stringify(viewport))
-            } catch {}
+            // Przesuwanie od karty to seria krótkich ruchów; zapis i dzień w kadrze po ostatnim.
+            clearTimeout(moveEnd.current)
+            moveEnd.current = setTimeout(() => {
+              setShown(dayInViewRef.current())
+              try {
+                localStorage.setItem(`planer-viewport-${trip.id}`, JSON.stringify(viewport))
+              } catch {}
+            }, 120)
           }}
           defaultViewport={savedViewport ?? { x: 16, y: 120, zoom: 0.8 }}
           minZoom={0.15}
@@ -1544,7 +1645,12 @@ function BoardCanvas() {
           selectionKeyCode={null}
           multiSelectionKeyCode={null}
           proOptions={{ hideAttribution: true }}
-          className={cx('planer-board', arranging && 'is-arranging', settling && 'is-settling')}
+          className={cx(
+            'planer-board',
+            arranging && 'is-arranging',
+            settling && 'is-settling',
+            dragIds.size > 0 && 'is-lifting',
+          )}
         >
           <Background variant={BackgroundVariant.Dots} gap={GRID} size={1.4} />
         </ReactFlow>

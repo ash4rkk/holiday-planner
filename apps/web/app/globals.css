@@ -344,7 +344,18 @@ body {
 }
 /* Upuszczona karta dosuwa się do siatki albo do miejsca w dniu. */
 .planer-board.is-settling .react-flow__node {
-  transition: transform var(--spring-snappy-ms) var(--spring-snappy);
+  transition:
+    transform var(--spring-snappy-ms) var(--spring-snappy),
+    translate var(--spring-snappy-ms) var(--spring-snappy);
+}
+/* Karta w ręku: strzałki zostają na miejscu i przygasają, żeby nie zasłaniały miejsc upuszczenia. */
+.planer-board .react-flow__edges,
+.planer-board .react-flow__edgelabel-renderer {
+  transition: opacity 150ms ease-out;
+}
+.planer-board.is-lifting .react-flow__edges,
+.planer-board.is-lifting .react-flow__edgelabel-renderer {
+  opacity: 0.35;
 }
 .planer-board.is-arranging .order-arrow {
   stroke-dasharray: 1;

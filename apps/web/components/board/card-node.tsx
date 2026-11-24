@@ -75,7 +75,7 @@ export const CardNode = memo(function CardNode({
       {onAxis && (
         <TimeCell card={shown} className="pointer-events-none absolute top-2 right-full mr-2" />
       )}
-      {far && (hover || selected) && !grouped && <CardLens anchor={body} card={shown} />}
+      {far && (hover || selected) && !grouped && !lifted && <CardLens anchor={body} card={shown} />}
 
       {stacked && (
         <>
